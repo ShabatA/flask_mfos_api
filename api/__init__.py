@@ -1,0 +1,59 @@
+from flask import Flask
+from flask_restx import Api
+from .cases.views import case_namespace
+from .auth.views import auth_namespace
+from .regions.views import region_namespace
+from .accountfield.views import field_namespace
+from .projects.views import project_namespace
+from .questions.views import questions_namespace
+from .config.config import config_dict
+from .utils.db import db
+from .models.users import Users
+from .models.cases import Cases
+from .models.regions import Regions
+from .models.accountfields import AccountFields
+from .models.projects import Projects
+from .models.questions import Questions
+from .models.casequestionsmapping import CaseQuestionsMappings
+from .models.answerformat import AnswerFormats
+from flask_jwt_extended import JWTManager
+
+
+from flask_migrate import Migrate
+
+
+
+def create_app(config=config_dict['development']):
+    app = Flask(__name__)
+    app.config.from_object(config)
+
+    authorizations={
+        "Bearer Auth":{
+            'type':"apiKey",
+            'in':'header',
+            'name':"Authorization",
+            'description':"Add a JWT with ** Bearer &lt;JWT&gt; to authorize"
+        }
+    }
+
+
+
+    db.init_app(app)
+    jwt=JWTManager(app)
+
+    migrate = Migrate(app, db)
+
+    api = Api(app, title="MFOS API", version="1.0", authorizations= authorizations, security="Bearer Auth", description="MFOS API")
+    api.add_namespace(case_namespace)
+    api.add_namespace(region_namespace)
+    api.add_namespace(field_namespace)
+    api.add_namespace(project_namespace)
+    api.add_namespace(questions_namespace)
+    api.add_namespace(auth_namespace, path="/auth")
+    
+    @app.shell_context_processor
+    def make_shell_context():
+        return {'db': db, 'Users': Users, 'Cases': Cases, 'Regions': Regions, 'AccountFields': AccountFields,
+                 'Projects': Projects, 'Questions': Questions, 'CaseQuestionsMappings': CaseQuestionsMappings,
+                 'AnswerFormats': AnswerFormats}
+    return app
