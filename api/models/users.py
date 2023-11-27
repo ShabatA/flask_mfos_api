@@ -4,16 +4,30 @@ from datetime import datetime
 from .regions import Regions
 
 
-class UserRole(Enum):
-    ADMIN = "admin"
-    REGIONLEADER = "regionleader"
-    STAFF = "staff"
-    ORGANIZATION = "organization"
+# class UserRole(Enum):
+#     ADMIN = "admin"
+#     REGIONLEADER = "regionleader"
+#     STAFF = "staff"
+#     ORGANIZATION = "organization"
 
 class UserStatus(Enum):
-    PENDING = "pending"
+    PENDING = "pending" 
     APPROVED = "approved"
     REJECTED = "rejected"
+
+class PermissionLevel(Enum):
+    DASHBOARD = 'dashboard'
+    NOTIFICATIONS = 'notifications'
+    MESSAGES = 'messages'
+    SUGCASES = 'sugcases'
+    SUBCASES = 'subcases'
+    REPORTS = 'reports'
+    USERS = 'users'
+    SUGPROJECTS = 'sugprojects'
+    SUBPROJECTS = 'subprojects'
+    CUSER = 'cuser'
+    FINANCE = 'finance'
+    ALL = 'all'
 
 class Users(db.Model):
     __tablename__ = 'users'
@@ -25,16 +39,24 @@ class Users(db.Model):
     firstName = db.Column(db.String)
     lastName = db.Column(db.String)
     jobDescription = db.Column(db.String)
-    userRole = db.Column(db.Enum(UserRole))
     mobile = db.Column(db.String(255))
     active = db.Column(db.Boolean, default=False)
     UserStatus = db.Column(db.Enum(UserStatus), default=UserStatus.PENDING)
     date_created = db.Column(db.DateTime, default=datetime.utcnow)
     regionID = db.Column(db.Integer, db.ForeignKey('regions.regionID'))
 
+    # Relationship with Role
+    role_id = db.Column(db.Integer, db.ForeignKey('roles.RoleID'))
+    role = db.relationship('Role', back_populates='users')
+
+    permissions = db.relationship('UserPermissions', back_populates='user', cascade='all, delete-orphan')
+
+
+    cases = db.relationship('Cases', backref='user', lazy=True)
+    region = db.relationship('Regions', backref='users')
 
     def __repr__(self):
-        return f"<Users {self.UserID} {self.Username}>"
+        return f"<Users {self.userID} {self.username}>"
     
     def save(self):
         db.session.add(self)
@@ -47,3 +69,94 @@ class Users(db.Model):
     @classmethod
     def get_by_id(cls, userID):
         return cls.query.get_or_404(userID)
+    
+    def is_admin(self):
+        """
+        Check if the user has the 'admin' role.
+        :return: True if the user has the 'admin' role, False otherwise.
+        """
+        return self.role and self.role.RoleID == 1
+    
+    def update_permissions(self, permissions):
+        """
+        Update the user's permissions.
+        :param permissions: A list of permissions to be assigned to the user.
+        """
+        # self.permissions = []
+        for permission in permissions:
+            self.permissions.append(UserPermissions(user=self, permission_level=permission))
+        db.session.commit()
+    
+    def update(self, data):
+        for key, value in data.items():
+            if key == 'regionName':
+                # Handle 'regionName' separately
+                region = Regions.query.filter_by(regionName=value).first()
+                if region is not None:
+                    setattr(self, 'region', region)
+                else:
+                    # Handle the case where the region is not found
+                    raise ValueError('Region not found.')
+
+            else:
+                # For other fields, simply update them
+                setattr(self, key, value)
+
+        # Assuming db is an instance of SQLAlchemy
+        db.session.commit()
+    
+    def remove_permission(self, permission):
+        """
+        Remove a specific permission from the user's existing permissions.
+        :param permission: The permission to be removed from the user.
+        """
+        permission_to_remove = next(
+            (p for p in self.permissions if p.permission_level == permission),
+            None
+        )
+
+        if permission_to_remove:
+            self.permissions.remove(permission_to_remove)
+            db.session.commit()
+        else:
+            raise ValueError(f"Permission '{permission}' not found for the user.")
+
+# Role Model
+class Role(db.Model):
+    __tablename__ = 'roles'
+    RoleID = db.Column(db.Integer, primary_key=True)
+    RoleName = db.Column(db.String(50), nullable=False)
+    users = db.relationship('Users', back_populates='role')
+
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+    
+    @classmethod
+    def get_by_id(cls, RoleID):
+        return cls.query.get_or_404(RoleID)
+
+
+# RolePermissions Model
+class UserPermissions(db.Model):
+    __tablename__ = 'user_permissions'
+    UserID = db.Column(db.Integer, db.ForeignKey('users.userID'), primary_key=True)
+    permission_level = db.Column(db.Enum(PermissionLevel), primary_key=True, default=PermissionLevel.DASHBOARD)
+    user = db.relationship('Users', back_populates='permissions')
+
+
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+    
+    @classmethod
+    def get_by_ids(cls, user_id, permission_id):
+        return cls.query.get_or_404((user_id, permission_id))

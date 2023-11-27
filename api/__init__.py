@@ -6,16 +6,15 @@ from .regions.views import region_namespace
 from .accountfield.views import field_namespace
 from .projects.views import project_namespace
 from .questions.views import questions_namespace
+
 from .config.config import config_dict
 from .utils.db import db
-from .models.users import Users
+from .models.users import Users, Role, UserPermissions
 from .models.cases import Cases
 from .models.regions import Regions
 from .models.accountfields import AccountFields
 from .models.projects import Projects
-from .models.questions import Questions
-from .models.casequestionsmapping import CaseQuestionsMappings
-from .models.answerformat import AnswerFormats
+from .models.questions import Questions, CaseQuestionsMappings, AnswerFormats
 from flask_jwt_extended import JWTManager
 
 
@@ -37,13 +36,18 @@ def create_app(config=config_dict['development']):
     }
 
 
-
     db.init_app(app)
     jwt=JWTManager(app)
 
     migrate = Migrate(app, db)
 
-    api = Api(app, title="MFOS API", version="1.0", authorizations= authorizations, security="Bearer Auth", description="MFOS API")
+    api = Api(app, title="MFOS API",
+              version="1.0",
+              authorizations= authorizations,
+              security="Bearer Auth",
+              description="A REST API FOR MFOS"
+              )
+    
     api.add_namespace(case_namespace)
     api.add_namespace(region_namespace)
     api.add_namespace(field_namespace)
@@ -53,7 +57,8 @@ def create_app(config=config_dict['development']):
     
     @app.shell_context_processor
     def make_shell_context():
-        return {'db': db, 'Users': Users, 'Cases': Cases, 'Regions': Regions, 'AccountFields': AccountFields,
-                 'Projects': Projects, 'Questions': Questions, 'CaseQuestionsMappings': CaseQuestionsMappings,
-                 'AnswerFormats': AnswerFormats}
+        return {'db': db, 'Users': Users}
+                #  'Cases': Cases, 'Regions': Regions, 'AccountFields': AccountFields,
+                #  'Projects': Projects, 'Permissions': Permission, 'Questions': Questions, 'CaseQuestionsMappings': CaseQuestionsMappings,
+                #  'UserRoles': UserRoles, 'Role': Role, 'RolePermissions': RolePermissions}
     return app

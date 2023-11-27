@@ -1,7 +1,7 @@
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models.regions import Regions
-from ..models.users import Users, UserRole
+from ..models.users import Users
 from http import HTTPStatus
 from ..utils.db import db
 
@@ -16,6 +16,14 @@ region_model = region_namespace.model(
 
 @region_namespace.route('/region')
 class Region(Resource):
+
+    def is_admin(self, user):
+        """
+        Check if the user has the "admin" role.
+        """
+        return any(role.RoleName == 'admin' for role in user.roles)
+    
+
     @region_namespace.marshal_with(region_model)
     def get(self):
         """
@@ -33,7 +41,7 @@ class Region(Resource):
         """
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if current_admin.userRole != UserRole.ADMIN:
+        if self.is_admin(current_admin):
             print("Access forbidden. Only administrators can create regions.")
             return {'message': 'Access forbidden. Only administrators can create regions.'}, HTTPStatus.FORBIDDEN
         
@@ -52,7 +60,7 @@ class GetUpdateDelete(Resource):
         """
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if current_admin.userRole != UserRole.ADMIN:
+        if self.is_admin(current_admin):
             print("Access forbidden. Only administrators can create regions.")
             return {'message': 'Access forbidden. Only administrators can create regions.'}, HTTPStatus.FORBIDDEN
         
@@ -68,7 +76,7 @@ class GetUpdateDelete(Resource):
         """
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if current_admin.userRole != UserRole.ADMIN:
+        if self.is_admin(current_admin):
             print("Access forbidden. Only administrators can update regions.")
             return {'message': 'Access forbidden. Only administrators can update regions.'}, HTTPStatus.FORBIDDEN
 
@@ -86,7 +94,7 @@ class GetUpdateDelete(Resource):
         """
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if current_admin.userRole != UserRole.ADMIN:
+        if self.is_admin(current_admin):
             print("Access forbidden. Only administrators can delete regions.")
             return {'message': 'Access forbidden. Only administrators can delete regions.'}, HTTPStatus.FORBIDDEN
 

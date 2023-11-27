@@ -1,10 +1,10 @@
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
-from ..models.questions import Questions
-from ..models.casequestionsmapping import CaseQuestionsMappings
-from ..models.answerformat import AnswerFormats
-from ..models.users import Users, UserRole
+from ..models.questions import Questions, CaseQuestionsMappings, AnswerFormats
+# from ..models.casequestionsmapping import CaseQuestionsMappings
+# from ..models.answerformat import AnswerFormats
+from ..models.users import Users
 from ..models.cases import Cases
 from ..utils.db import db
 
@@ -37,6 +37,13 @@ case_questions_mapping_model = questions_namespace.model(
 
 @questions_namespace.route('/questions')
 class QuestionsResource(Resource):
+
+    def is_admin(self, user):
+        """
+        Check if the user has the "admin" role.
+        """
+        return any(role.RoleName == 'admin' for role in user.roles)
+    
     @questions_namespace.marshal_with(question_model)
     def get(self):
         """
@@ -54,7 +61,7 @@ class QuestionsResource(Resource):
         """
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if current_admin.userRole != UserRole.ADMIN:
+        if self.is_admin(current_admin):
             return {'message': 'Access forbidden. Only administrators can create questions.'}, HTTPStatus.FORBIDDEN
 
         data = questions_namespace.payload
@@ -65,6 +72,13 @@ class QuestionsResource(Resource):
 
 @questions_namespace.route('/questions/<int:questionID>')
 class QuestionResource(Resource):
+
+    def is_admin(self, user):
+        """
+        Check if the user has the "admin" role.
+        """
+        return any(role.RoleName == 'admin' for role in user.roles)
+    
     @questions_namespace.marshal_with(question_model)
     @jwt_required()
     def get(self, questionID):
@@ -73,7 +87,7 @@ class QuestionResource(Resource):
         """
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if current_admin.userRole != UserRole.ADMIN:
+        if self.is_admin(current_admin):
             return {'message': 'Access forbidden. Only administrators can access questions.'}, HTTPStatus.FORBIDDEN
 
         question = Questions.get_by_id(questionID)
@@ -88,7 +102,7 @@ class QuestionResource(Resource):
         """
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if current_admin.userRole != UserRole.ADMIN:
+        if self.is_admin(current_admin):
             return {'message': 'Access forbidden. Only administrators can update questions.'}, HTTPStatus.FORBIDDEN
 
         question = Questions.get_by_id(questionID)
@@ -109,7 +123,7 @@ class QuestionResource(Resource):
         """
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if current_admin.userRole != UserRole.ADMIN:
+        if self.is_admin(current_admin):
             return {'message': 'Access forbidden. Only administrators can delete questions.'}, HTTPStatus.FORBIDDEN
 
         question = Questions.get_by_id(questionID)
@@ -119,6 +133,14 @@ class QuestionResource(Resource):
 
 @questions_namespace.route('/questions/<int:questionID>/case-mapping')
 class CaseQuestionMappingResource(Resource):
+
+    def is_admin(self, user):
+        """
+        Check if the user has the "admin" role.
+        """
+        return any(role.RoleName == 'admin' for role in user.roles)
+    
+
     @questions_namespace.expect(case_questions_mapping_model)
     @questions_namespace.marshal_with(case_questions_mapping_model)
     @jwt_required()
@@ -128,13 +150,13 @@ class CaseQuestionMappingResource(Resource):
         """
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if current_admin.userRole != UserRole.ADMIN:
+        if self.is_admin(current_admin):
             return {'message': 'Access forbidden. Only administrators can map questions to cases.'}, HTTPStatus.FORBIDDEN
 
         question = Questions.get_by_id(questionID)
         data = questions_namespace.payload
 
-        case_mapping = CaseQuestionsMapping(
+        case_mapping = CaseQuestionsMappings(
             caseID=data['caseID'],
             questionID=questionID
         )

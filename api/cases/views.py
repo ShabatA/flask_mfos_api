@@ -1,29 +1,39 @@
 from flask_restx import Resource, Namespace, fields
-from flask_jwt_extended import jwt_required,get_jwt_identity
-from ..models.cases import Cases
-from ..models.users import Users
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from werkzeug.exceptions import NotFound
 from http import HTTPStatus
+from ..models.cases import Cases, CaseStatus
+from ..models.users import Users
 from ..utils.db import db
+from datetime import datetime
+from flask import jsonify
+from flask import request
+
 
 case_namespace = Namespace("Cases", description="Namespace for cases")
 
 case_model = case_namespace.model(
-    'Case',{
-        'id':fields.Integer(),
-        'name':fields.String(required=True,description="A case name"),
-        'budget_required':fields.Float(required=True,description="Budget required"),
-        'category':fields.String(required=True, enum=['A','B','C','D'],description="Case category"),
-        'status':fields.String(required=True,enum=['pending','approved','rejected'],description="Case status"),
+    'Case', {
+        'caseID': fields.Integer(),
+        'caseName': fields.String(required=True, description="A case name"),
+        'budgetRequired': fields.Float(required=True, description="Budget required"),
+        'budgetAvailable': fields.Float(required=True, description="Budget available"),
+        'caseCategory': fields.String(description="Case category"),
+        'caseStatus': fields.String(enum=[status.value for status in CaseStatus], description="Case status"),
+        'regionID': fields.Integer(required=True, description="Region ID"),
+        'userID': fields.Integer(required=True, description="User ID"),
+        'createdAt': fields.DateTime(description="Date and time of creation"),
     }
 )
 
-case_status_model = case_namespace.model(
-    'CaseStatus',{
-        'status':fields.String(required=True,description="Case status",
-        enum=['pending','approved','rejected'])
-
-    }
-)
+case_model_2 = case_namespace.model(
+    'Case2', {
+        'caseName': fields.String(required=True, description="A case name"),
+        'budgetRequired': fields.Float(required=True, description="Budget required"),
+        'budgetAvailable': fields.Float(required=True, description="Budget available"),
+        'caseCategory': fields.String(description="Case category"),
+        'caseStatus': fields.String(enum=[status.value for status in CaseStatus], description="Case status"),
+    })
 
 @case_namespace.route('/users/cases')
 class GetCasesByCurrentUser(Resource):
@@ -33,25 +43,13 @@ class GetCasesByCurrentUser(Resource):
         """
         Get cases based on the current user's role and region
         """
-        current_user_id = get_jwt_identity()
-
-        # Get the current user from the database
-        current_user = Users.query.get(current_user_id)
-
-        if current_user.userRole == 'admin':
-            # If the user is an admin, retrieve all cases
-            all_cases = Cases.query.all()
-        elif current_user.userRole == 'staff':
-            # If the user is a staff member, retrieve cases only from their region
-            all_cases = Cases.query.filter_by(regionID=current_user.regionID).all()
-        else:
-            return {'message': 'Invalid user role.'}, HTTPStatus.FORBIDDEN
-
+        all_cases = Cases.query.all()
         return all_cases, HTTPStatus.OK
-    
+
+
     @case_namespace.expect(case_model)
-    @case_namespace.marshal_with(case_model)
-    @case_namespace.doc(description="Create a new case")
+    @case_namespace.marshal_with(case_model_2)
+    # @case_namespace.doc(description="Create a new case")
     @jwt_required()
     def post(self):
         """
@@ -59,21 +57,24 @@ class GetCasesByCurrentUser(Resource):
         """
         username = get_jwt_identity()
         current_user = Users.query.filter_by(username=username).first()
-        data = case_namespace.payload
+        data = request.get_json()
 
         # Check if the regionID is provided in the case data; use staff member's region if not
-        region_id = data.get('regionID', current_user.regionID) if current_user.userRole == 'staff' else data.get('regionID', None)
+        region_id = data.get('regionID', current_user.regionID)
 
         new_case = Cases(
-            caseName=data['name'],
-            budgetRequired=data['budget_required'],
-            caseCategory=data['category'],
-            caseStatus=data['status'],
+            caseName=data.get('caseName'),
+            budgetRequired=float(data.get('budgetRequired', 0.0)),
+            budgetAvailable=float(data.get('budgetAvailable', 0.0)),
+            caseCategory=data.get('caseCategory'),
+            caseStatus=CaseStatus(data.get('caseStatus')),
+            # user=current_user,
             userID=current_user.userID,
-            regionID=region_id  # Use the determined region ID
+            regionID=region_id,
+            createdAt=datetime.utcnow(),  # Set the creation time
         )
+        # new_case.users = current_user
 
-        new_case.user = current_user
         new_case.save()
 
         return new_case, HTTPStatus.CREATED

@@ -1,7 +1,7 @@
 from api.config.config import Config
 from flask_restx import Resource, Namespace, fields
 from flask import request
-from ..models.users import Users, UserRole, UserStatus
+from ..models.users import Users, UserStatus, Role, UserPermissions, PermissionLevel
 from werkzeug.security import generate_password_hash, check_password_hash
 from http import HTTPStatus
 from flask_jwt_extended import (create_access_token,
@@ -10,6 +10,18 @@ from werkzeug.exceptions import Conflict, BadRequest
 from ..models.regions import Regions  # Import the Region model
 
 auth_namespace = Namespace('auth', description="a namespace for authentication")
+
+# Define a Swagger model for the users attribute
+users_model = auth_namespace.model('User', {
+    'userID': fields.Integer(),
+    'username': fields.String()
+})
+
+permission_model = auth_namespace.model(
+    'userpermission', {
+        'permission_level': fields.List(fields.String, required=True, description="List of permission names")
+    }
+)
 
 signup_model = auth_namespace.model(
     'SignUp', {
@@ -20,7 +32,8 @@ signup_model = auth_namespace.model(
         'email': fields.String(required=True, description="An email"),
         'password': fields.String(required=True, description="A password"),
         'regionName': fields.String(required=True, description="Region Name"),  # Changed to regionName
-        'userRole': fields.String(enum=[role.value for role in UserRole] ,required=True, description="User Role"),
+        'RoleName': fields.String(required=True, description="Role Name"),  # Added roleName
+        'permissionNames': fields.List(fields.String, required=True, description="List of permission names"),
     }
 )
 
@@ -33,7 +46,27 @@ user_model = auth_namespace.model(
         'active': fields.Boolean(description="This shows that User is active", default=True),
         'UserStatus': fields.String(description="This shows of staff status"),
         'regionID': fields.Integer(description="Region ID"),  # Added regionID field
-        'userRole': fields.String(enum=[role.value for role in UserRole], required=True, description="User Role"),
+        'regionName': fields.String(description="Region Name"),  # Added regionName field
+        'RoleName': fields.String(required=True, description="Role Name"),  # Added roleName
+        'permissionNames': fields.List(fields.String, required=True, description="List of permission names"),
+
+    }
+)
+
+
+user2_model = auth_namespace.model(
+    'Users', {
+        'userID': fields.Integer(),
+        'username': fields.String(required=True, description="A username"),
+        'email': fields.String(required=True, description="An email"),
+        'password': fields.String(required=True, description="A password"),
+    }
+)
+
+role_model = auth_namespace.model(
+    'Role', {
+        'RoleID': fields.Integer(),
+        'RoleName': fields.String()
     }
 )
 
@@ -45,14 +78,37 @@ login_model = auth_namespace.model(
 )
 
 
+@auth_namespace.route('/roles')
+class RoleResource(Resource):
+    @auth_namespace.expect(role_model)
+    @auth_namespace.marshal_with(role_model)
+    @auth_namespace.doc(
+        description="Create a new role such as admin, staff, etc",
+    )
+    def post(self):
+        data = request.get_json()
+
+        # Check if the role name is already taken
+        existing_role = Role.query.filter_by(RoleName=data.get('roleName')).first()
+        if existing_role:
+            return {'message': 'Role name already taken'}, HTTPStatus.BAD_REQUEST
+
+        new_role = Role(RoleName=data.get('RoleName'))
+        new_role.save()
+
+        return new_role, HTTPStatus.CREATED
+
 @auth_namespace.route('/signup')
+@auth_namespace.doc(
+    description="Create a new user account",
+)
 class SignUp(Resource):
 
     @auth_namespace.expect(signup_model)
-    @auth_namespace.marshal_with(user_model)
+    @auth_namespace.marshal_with(user2_model)
     def post(self):
         """
-            Create a new user account 
+        Create a new user account 
         """
 
         data = request.get_json()
@@ -62,28 +118,74 @@ class SignUp(Resource):
             region = Regions.query.filter_by(regionName=region_name).first()
 
             if not region:
-                raise BadRequest(f"Region with name {region_name} not found")
+                # If the region does not exist, create it
+                region = Regions(regionName=region_name)
+                region.save()  # Assuming you have a method to save the new region
+
+            existing_user = Users.query.filter_by(email=data.get('email')).first()
+
+            if existing_user:
+                raise Conflict(f"User with email {data.get('email')} already exists")
+            
+            role_name = data.get('RoleName')
+            role = Role.query.filter_by(RoleName=role_name).first()
+            if not role:
+                return {'message': f'Role "{role_name}" not found'}, 400
+
+            # Create UserPermissions entries based on the user's permissions
+            permission_names = data.get('permissionNames', [])
+            user_permissions = []
 
             new_user = Users(
                 username=data.get('username'),
                 email=data.get('email'),
+                firstName=data.get('firstName'),
+                lastName=data.get('lastName'),
                 password=generate_password_hash(data.get('password')),
                 regionID=region.regionID,
-                userRole=UserRole(data.get('userRole'))
+                role=role  # Set the user's role
             )
-
             new_user.save()
+
+            if role_name == 'admin':
+                permission_level = PermissionLevel.ALL
+                user_permission = UserPermissions(
+                    user=new_user,
+                    permission_level=permission_level
+                )
+                user_permissions.append(user_permission)
+            else:
+                for permission_name in permission_names:
+                    # Check if the permission name is a valid PermissionLevel enum value
+                    permission_level = PermissionLevel[permission_name]
+
+                    user_permission = UserPermissions(
+                        user=new_user,
+                        permission_level=permission_level
+                    )
+                    user_permissions.append(user_permission)
+
+            # Save all UserPermissions entries
+            for user_permission in user_permissions:
+                user_permission.save()
 
             return new_user, HTTPStatus.CREATED
 
+        except Conflict as e:
+            raise e  # Re-raise the Conflict exception for specific handling
         except Exception as e:
-            raise Conflict(f"User with email {data.get('email')} exists")
+            raise BadRequest(f"Error creating user: {str(e)}")
+
 
 
 @auth_namespace.route('/login')
+
 class Login(Resource):
 
     @auth_namespace.expect(login_model)
+    @auth_namespace.doc(
+    description="Generate a JWT and Login"
+    )
     def post(self):
         """
             Generate a JWT
@@ -116,6 +218,9 @@ class Login(Resource):
 class Refresh(Resource):
 
     @jwt_required(refresh=True)
+    @auth_namespace.doc(
+        description="Refresh a JWT",
+    )
     def post(self):
         username = get_jwt_identity()
 
@@ -128,59 +233,68 @@ class Refresh(Resource):
 class AdminOnlyResource(Resource):
 
     @jwt_required()
+    @auth_namespace.doc(
+        description="Access only for admins",
+    )
     def get(self):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if current_user.userRole != UserRole.ADMIN:
-            return {'message': 'Access forbidden. Admins only.'}, HTTPStatus.FORBIDDEN
+        if current_user.is_admin():
+            return {'message': 'Welcome, Admin!'}, HTTPStatus.FORBIDDEN
 
-        return {'message': 'Welcome, Admin!'}, HTTPStatus.OK
+        return {'message': 'Access forbidden. Admins only.'}, HTTPStatus.OK
 
 @auth_namespace.route('/admin/update-user/<int:user_id>')
 class UpdateUserByAdmin(Resource):
     @auth_namespace.expect(user_model)
-    @auth_namespace.marshal_with(user_model)
+    @auth_namespace.doc(
+        description="Update a user's details",
+        params={'user_id': 'Specify the user ID'}
+    )
+
     @jwt_required()
     def put(self, user_id):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+        # current_user = Users.query.filter_by(username=get_jwt_identity(), is_admin=True).first()
 
-        if current_user.userRole != UserRole.ADMIN:
+        if not current_user.is_admin():
             return {'message': 'Access forbidden. Admins only.'}, HTTPStatus.FORBIDDEN
 
         user_to_update = Users.get_by_id(user_id)
-        if user_to_update:
-            # Update user fields here
-            data = request.get_json()
-            # Update only the fields that are present in the request
-            if 'username' in data:
-                user_to_update.username = data['username']
-            if 'email' in data:
-                user_to_update.email = data['email']
-            if 'password' in data:
-                user_to_update.password = generate_password_hash(data['password'])
-            if 'active' in data:
-                user_to_update.active = data['active']
-            if 'UserStatus' in data:
-                user_to_update.UserStatus = UserStatus(data['UserStatus'])
-            if 'regionID' in data:
-                user_to_update.regionID = data['regionID']
-            if 'userRole' in data:
-                user_to_update.userRole = UserRole(data['userRole'])
-
-
-            user_to_update.save()
-            return user_to_update, HTTPStatus.OK
-        else:
+        if not user_to_update:
             return {'message': 'User not found.'}, HTTPStatus.NOT_FOUND
+
+        try:
+            data = request.get_json(force=True, silent=True)
+
+            if not data:
+                return {'message': 'Invalid JSON data.'}, HTTPStatus.BAD_REQUEST
+
+            # Update user fields using the update method
+            user_to_update.update(data)
+            
+            # Save the updated user
+            user_to_update.save()
+
+            # Return the updated user without using marshal_with
+            return auth_namespace.marshal(user_to_update, user_model), HTTPStatus.OK
+
+        except Exception as e:
+            return {'message': f'Error updating user: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 @auth_namespace.route('/admin/remove-user/<int:user_id>')
 class RemoveUserByAdmin(Resource):
 
     @jwt_required()
+    @auth_namespace.doc(
+        description="Remove a user",
+        params={'user_id': 'Specify the user ID'}
+    )
     def delete(self, user_id):
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if current_admin.userRole != UserRole.ADMIN:
+        if not current_admin.is_admin():
             return {'message': 'Access forbidden. Admins only.'}, HTTPStatus.FORBIDDEN
 
         user_to_remove = Users.get_by_id(user_id)
@@ -194,3 +308,67 @@ class RemoveUserByAdmin(Resource):
             return {'message': 'User removed successfully.'}, HTTPStatus.OK
         else:
             return {'message': 'User not found.'}, HTTPStatus.NOT_FOUND
+
+@auth_namespace.route('/admin/update-user-permissions/<int:user_id>')
+class UpdateUserPermissionsByAdmin(Resource):
+    @auth_namespace.expect(permission_model)
+    @jwt_required()
+    @auth_namespace.doc(
+        description="Update a user's permissions",
+        params={'user_id': 'Specify the user ID'}
+    )
+    def put(self, user_id):
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        if not current_user.is_admin():
+            return {'message': 'Access forbidden. Admins only.'}, HTTPStatus.FORBIDDEN
+
+        user_to_update = Users.get_by_id(user_id)
+        if not user_to_update:
+            return {'message': 'User not found.'}, HTTPStatus.NOT_FOUND
+
+        try:
+            data = request.get_json(force=True, silent=True)
+
+            if not data:
+                return {'message': 'Invalid JSON data.'}, HTTPStatus.BAD_REQUEST
+
+            # Update user permissions using the update_permissions method
+            user_to_update.update_permissions(data.get('permission_level', []))
+
+            # Return the updated user without using marshal_with
+            return auth_namespace.marshal(user_to_update, user_model), HTTPStatus.OK
+
+        except Exception as e:
+            return {'message': f'Error updating user permissions: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@auth_namespace.route('/admin/remove-permission/<int:user_id>/<string:permission_name>')
+class RemovePermissionByAdmin(Resource):
+    @jwt_required()
+    @auth_namespace.doc(
+        description="Remove a permission from a user",
+        params={'user_id': 'Specify the user ID',
+                'permission_name': 'Specify the permission level'}
+    )
+    def delete(self, user_id, permission_name):
+        current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        if not current_admin.is_admin():
+            return {'message': 'Access forbidden. Admins only.'}, HTTPStatus.FORBIDDEN
+
+        user_to_update = Users.get_by_id(user_id)
+        if not user_to_update:
+            return {'message': 'User not found.'}, HTTPStatus.NOT_FOUND
+
+        try:
+            # Check if the permission name is a valid PermissionLevel enum value
+            permission_level = PermissionLevel[permission_name]
+
+            # Remove the specified permission from the user's existing permissions
+            user_to_update.remove_permission(permission_level)
+
+            return {'message': f'Permission "{permission_name}" removed successfully.'}, HTTPStatus.OK
+
+        except ValueError as e:
+            return {'message': str(e)}, HTTPStatus.BAD_REQUEST
