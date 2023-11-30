@@ -84,3 +84,6 @@ class Cases(db.Model):
         if case is None:
             raise NotFound(f"Case with ID {caseID} not found.")
         return case
+
+
+
