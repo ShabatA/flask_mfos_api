@@ -22,6 +22,14 @@ project_input_model = project_namespace.model('ProjectInput', {
     'dueDate': fields.Date(description='Due date of the project')
 })
 
+
+question_input_model = project_namespace.model('QuestionInput', {
+    'questionText': fields.String(required=True, description='Text of the question'),
+    'questionType': fields.String(required=True, description='Type of the question'),
+    'points': fields.Integer(required=True, description='Points for the question'),
+    'choices': fields.List(fields.String, description='List of choices for multiple-choice questions')
+})
+
 @project_namespace.route('/add')
 class ProjectAddResource(Resource):
     @jwt_required()  # Requires a valid JWT token
@@ -32,7 +40,6 @@ class ProjectAddResource(Resource):
 
         # Parse the input data
         project_data = request.json
-        # project_data['userID'] = current_user.userID
 
         # Create a new project instance
         new_project = Projects(
@@ -55,3 +62,46 @@ class ProjectAddResource(Resource):
         except Exception as e:
             # Handle exceptions (e.g., database errors) appropriately
             return {'message': f'Error adding project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
+        
+@project_namespace.route('/add_questions')
+class ProjectAddQuestionsResource(Resource):
+    @jwt_required()  # Requires a valid JWT token
+    @project_namespace.expect([question_input_model])  # Expecting input in the specified format
+    def post(self):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Parse the input data for questions
+        questions_data = request.json
+
+        # Add questions to the database
+        try:
+            for question_data in questions_data:
+                new_question = Questions(
+                    questionText=question_data['questionText'],
+                    questionType=question_data['questionType'],
+                    points=question_data['points']
+                )
+
+                # If the question is multiple choice, add choices
+                if question_data['questionType'] == 'multiple_choice':
+                    choices_data = question_data.get('choices', [])
+                    for choice_text in choices_data:
+                        new_choice = QuestionChoices(
+                            question=new_question,
+                            choiceText=choice_text
+                        )
+                        db.session.add(new_choice)
+
+                db.session.add(new_question)
+
+            db.session.commit()
+
+            return {'message': 'Questions added successfully'}, HTTPStatus.CREATED
+        except Exception as e:
+            # Handle exceptions (e.g., database errors) appropriately
+            db.session.rollback()
+            return {'message': f'Error adding questions: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        finally:
+            db.session.close()

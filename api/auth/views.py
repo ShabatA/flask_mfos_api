@@ -30,6 +30,8 @@ signup_model = auth_namespace.model(
         'firstName': fields.String(required=True, description="A first name"),
         'lastName': fields.String(required=True, description="A last name"),
         'email': fields.String(required=True, description="An email"),
+        # job description
+        'jobDescription': fields.String(description='Job title'),
         'password': fields.String(required=True, description="A password"),
         'regionName': fields.String(required=True, description="Region Name"),  # Changed to regionName
         'RoleName': fields.String(required=True, description="Role Name"),  # Added roleName
@@ -372,3 +374,114 @@ class RemovePermissionByAdmin(Resource):
 
         except ValueError as e:
             return {'message': str(e)}, HTTPStatus.BAD_REQUEST
+        
+
+
+@auth_namespace.route('/current-user-permissions')
+class CurrentUserPermissions(Resource):
+    @jwt_required()
+    @auth_namespace.doc(
+        description='Returns all permissions for the currently logged in user',
+        )
+    def get(self):
+        try:
+            current_user_identity = get_jwt_identity()
+
+            # Assuming Users has a method to get user by username
+            current_user = Users.query.filter_by(username=current_user_identity).first()
+
+            if current_user:
+                # Extract permissions from the current user
+                permissions = [permission.permission_level.value for permission in current_user.permissions]
+
+                return {'permissions': permissions}, HTTPStatus.OK
+            else:
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting current user permissions: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@auth_namespace.route('/user-permissions/<int:user_id>')
+class UserPermissions(Resource):
+    @jwt_required()
+    @auth_namespace.doc(
+        description = "Returns all permissions for a specific user",
+        params={'user_id': 'The ID of the user whose permissions you want to retrieve'},
+    )
+    def get(self, user_id):
+        try:
+            # Ensure the requesting user is an admin or the requested user
+            current_user_identity = get_jwt_identity()
+            current_user = Users.query.filter_by(username=current_user_identity).first()
+
+            if not current_user.is_admin() and current_user.userID != user_id:
+                return {'message': 'Access forbidden. Admins or the user only.'}, HTTPStatus.FORBIDDEN
+
+            # Get the user by user_id
+            user = Users.get_by_id(user_id)
+
+            if user:
+                # Extract permissions from the user
+                permissions = [permission.permission_level.value for permission in user.permissions]
+
+                return {'permissions': permissions}, HTTPStatus.OK
+            else:
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting user permissions: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@auth_namespace.route('/current-user-role')
+class CurrentUserRole(Resource):
+    @jwt_required()
+    @auth_namespace.doc(description="Returns the role of the currently logged in user.")
+    def get(self):
+        try:
+            current_user_identity = get_jwt_identity()
+
+            # Assuming Users has a method to get user by username
+            current_user = Users.query.filter_by(username=current_user_identity).first()
+
+            if current_user:
+                role_name = current_user.role.RoleName if current_user.role else None
+
+                return {'roleName': role_name}, HTTPStatus.OK
+            else:
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting current user role: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@auth_namespace.route('/user-role/<int:user_id>')
+class UserRole(Resource):
+    @jwt_required()
+    @auth_namespace.doc(
+        description = "Returns all permissions for a specific user",
+        params={'user_id': 'The ID of the user whose permissions you want to retrieve'}
+        )
+    def get(self, user_id):
+        try:
+            # Ensure the requesting user is an admin or the requested user
+            current_user_identity = get_jwt_identity()
+            current_user = Users.query.filter_by(username=current_user_identity).first()
+
+            if not current_user.is_admin() and current_user.userID != user_id:
+                return {'message': 'Access forbidden. Admins or the user only.'}, HTTPStatus.FORBIDDEN
+
+            # Get the user by user_id
+            user = Users.get_by_id(user_id)
+
+            if user:
+                role_name = user.role.RoleName if user.role else None
+
+                return {'roleName': role_name}, HTTPStatus.OK
+            else:
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting user role: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR

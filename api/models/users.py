@@ -125,7 +125,7 @@ class Users(db.Model):
 class Role(db.Model):
     __tablename__ = 'roles'
     RoleID = db.Column(db.Integer, primary_key=True)
-    RoleName = db.Column(db.String(50), nullable=False)
+    RoleName = db.Column(db.String(50), nullable=False, default = "staff")
     users = db.relationship('Users', back_populates='role')
 
     def save(self):
