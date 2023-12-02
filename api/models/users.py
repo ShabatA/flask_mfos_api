@@ -85,6 +85,7 @@ class Users(db.Model):
         # self.permissions = []
         for permission in permissions:
             self.permissions.append(UserPermissions(user=self, permission_level=permission))
+        db.session.add(self)
         db.session.commit()
     
     def update(self, data):
@@ -147,7 +148,6 @@ class UserPermissions(db.Model):
     UserID = db.Column(db.Integer, db.ForeignKey('users.userID'), primary_key=True)
     permission_level = db.Column(db.Enum(PermissionLevel), primary_key=True, default=PermissionLevel.DASHBOARD)
     user = db.relationship('Users', back_populates='permissions')
-
 
     def save(self):
         db.session.add(self)

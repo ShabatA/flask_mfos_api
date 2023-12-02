@@ -30,6 +30,8 @@ signup_model = auth_namespace.model(
         'firstName': fields.String(required=True, description="A first name"),
         'lastName': fields.String(required=True, description="A last name"),
         'email': fields.String(required=True, description="An email"),
+        # mobile
+        'mobile': fields.String(description='Mobile phone'),
         # job description
         'jobDescription': fields.String(description='Job title'),
         'password': fields.String(required=True, description="A password"),
@@ -143,6 +145,8 @@ class SignUp(Resource):
                 email=data.get('email'),
                 firstName=data.get('firstName'),
                 lastName=data.get('lastName'),
+                jobDescription = data.get('jobDescription'),
+                mobile = data.get('mobile'),
                 password=generate_password_hash(data.get('password')),
                 regionID=region.regionID,
                 role=role  # Set the user's role
