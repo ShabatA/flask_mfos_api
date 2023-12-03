@@ -1,13 +1,14 @@
 from api.config.config import Config
 from flask_restx import Resource, Namespace, fields
 from flask import request
-from ..models.users import Users, UserStatus, Role, UserPermissions, PermissionLevel
+from ..models.users import Users, Role, UserPermissions, PermissionLevel
 from werkzeug.security import generate_password_hash, check_password_hash
 from http import HTTPStatus
 from flask_jwt_extended import (create_access_token,
                                 create_refresh_token, jwt_required, get_jwt_identity)
 from werkzeug.exceptions import Conflict, BadRequest
 from ..models.regions import Regions  # Import the Region model
+from ..utils.db import db
 
 auth_namespace = Namespace('auth', description="a namespace for authentication")
 
@@ -138,7 +139,7 @@ class SignUp(Resource):
 
             # Create UserPermissions entries based on the user's permissions
             permission_names = data.get('permissionNames', [])
-            user_permissions = []
+            # user_permissions = []
 
             new_user = Users(
                 username=data.get('username'),
@@ -151,29 +152,18 @@ class SignUp(Resource):
                 regionID=region.regionID,
                 role=role  # Set the user's role
             )
+            # new_user.save()
+
+            new_user.assign_role_and_permissions(role_name, permission_names)
+
             new_user.save()
 
-            if role_name == 'admin':
-                permission_level = PermissionLevel.ALL
-                user_permission = UserPermissions(
-                    user=new_user,
-                    permission_level=permission_level
-                )
-                user_permissions.append(user_permission)
-            else:
-                for permission_name in permission_names:
-                    # Check if the permission name is a valid PermissionLevel enum value
-                    permission_level = PermissionLevel[permission_name]
-
-                    user_permission = UserPermissions(
-                        user=new_user,
-                        permission_level=permission_level
-                    )
-                    user_permissions.append(user_permission)
-
             # Save all UserPermissions entries
-            for user_permission in user_permissions:
-                user_permission.save()
+            # for user_permission in user_permissions:
+            #     user_permission.save()
+
+            # db.session.add(new_user)
+            # db.session.commit()
 
             return new_user, HTTPStatus.CREATED
 

@@ -21,3 +21,8 @@ class Regions(db.Model):
     def get_by_id(cls, regionID):
         return cls.query.get_or_404(regionID)
     
+    @classmethod
+    def get_all_regions(cls):
+        regions = cls.query.all()
+        return [region.regionName for region in regions]
+    

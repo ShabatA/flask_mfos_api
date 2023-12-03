@@ -32,8 +32,9 @@ class Projects(db.Model):
     dueDate = db.Column(db.Date, nullable=True)
 
     # Relationship with Questions
-    questions = db.relationship('Questions', backref='project', lazy=True)
+    # questions = db.relationship('Questions', backref='project', lazy=True)
     users = db.relationship('Users', secondary='project_users', backref='projects', lazy='dynamic')
+    answers = db.relationship('Answers', backref='project', lazy=True)
 
     def __repr__(self):
         return f"<Project {self.projectID} {self.projectName}>"
@@ -50,7 +51,7 @@ class Questions(db.Model):
     __tablename__ = 'questions'
 
     questionID = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
+    # projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
     questionText = db.Column(db.String, nullable=False)
     questionType = db.Column(db.String, nullable=False)  # Text input, multiple choice, etc.
     points = db.Column(db.Integer, nullable=False)
@@ -60,16 +61,34 @@ class Questions(db.Model):
 
     def __repr__(self):
         return f"<Question {self.questionID} {self.questionText}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    @classmethod
+    def get_by_id(cls, questionID):
+        return cls.query.get_or_404(questionID)
+    
 
 class Answers(db.Model):
     __tablename__ = 'answers'
 
     answerID = db.Column(db.Integer, primary_key=True)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
     questionID = db.Column(db.Integer, db.ForeignKey('questions.questionID'), nullable=False)
     answerText = db.Column(db.String, nullable=True)  # Adjust based on the answer format
 
     def __repr__(self):
         return f"<Answer {self.answerID} {self.answerText}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    @classmethod
+    def get_by_id(cls, answerID):
+        return cls.query.get_or_404(answerID)
 
 class QuestionChoices(db.Model):
     __tablename__ = 'question_choices'
@@ -81,6 +100,15 @@ class QuestionChoices(db.Model):
     def __repr__(self):
         return f"<Choice {self.choiceID} {self.choiceText}>"
     
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    @classmethod
+    def get_by_id(cls, choiceID):
+        return cls.query.get_or_404(choiceID)
+    
+    
 
 class ProjectUser(db.Model):
     __tablename__ = 'project_users'
@@ -91,3 +119,7 @@ class ProjectUser(db.Model):
 
     def __repr__(self):
         return f"<ProjectUser {self.id} ProjectID: {self.projectID}, UserID: {self.userID}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()

@@ -28,6 +28,8 @@ class PermissionLevel(Enum):
     CUSER = 'cuser'
     FINANCE = 'finance'
     ALL = 'all'
+    #add user
+    #manage user
 
 class Users(db.Model):
     __tablename__ = 'users'
@@ -58,6 +60,23 @@ class Users(db.Model):
     def __repr__(self):
         return f"<Users {self.userID} {self.username}>"
     
+    def assign_role_and_permissions(self, role_name, permission_names):
+        role = Role.query.filter_by(RoleName=role_name).first()
+        if not role:
+            raise ValueError(f'Role "{role_name}" not found')
+
+        self.role = role
+
+        if role_name == 'admin':
+            permission_level = PermissionLevel.ALL
+            user_permission = UserPermissions(user=self, permission_level=permission_level)
+            self.permissions.append(user_permission)
+        else:
+            for permission_name in permission_names:
+                permission_level = PermissionLevel[permission_name]
+                user_permission = UserPermissions(user=self, permission_level=permission_level)
+                self.permissions.append(user_permission)
+    
     def save(self):
         db.session.add(self)
         db.session.commit()
@@ -78,14 +97,12 @@ class Users(db.Model):
         return self.role and self.role.RoleID == 1
     
     def update_permissions(self, permissions):
-        """
-        Update the user's permissions.
-        :param permissions: A list of permissions to be assigned to the user.
-        """
-        # self.permissions = []
+        self.permissions = []
+
         for permission in permissions:
-            self.permissions.append(UserPermissions(user=self, permission_level=permission))
-        db.session.add(self)
+            new_permission = UserPermissions(user=self, permission_level=permission)
+            db.session.add(new_permission)
+
         db.session.commit()
     
     def update(self, data):
@@ -148,10 +165,6 @@ class UserPermissions(db.Model):
     UserID = db.Column(db.Integer, db.ForeignKey('users.userID'), primary_key=True)
     permission_level = db.Column(db.Enum(PermissionLevel), primary_key=True, default=PermissionLevel.DASHBOARD)
     user = db.relationship('Users', back_populates='permissions')
-
-    def save(self):
-        db.session.add(self)
-        db.session.commit()
     
     def delete(self):
         db.session.delete(self)

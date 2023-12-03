@@ -69,8 +69,12 @@ class ProjectAddQuestionsResource(Resource):
     @jwt_required()  # Requires a valid JWT token
     @project_namespace.expect([question_input_model])  # Expecting input in the specified format
     def post(self):
-        # Get the current user ID from the JWT token
+        # Get the current user from the JWT token
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Check if the current user is an admin
+        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+            return {'message': 'Unauthorized. Only admin users can add questions.'}, HTTPStatus.FORBIDDEN
 
         # Parse the input data for questions
         questions_data = request.json
@@ -81,7 +85,8 @@ class ProjectAddQuestionsResource(Resource):
                 new_question = Questions(
                     questionText=question_data['questionText'],
                     questionType=question_data['questionType'],
-                    points=question_data['points']
+                    points=question_data['points'],
+                    # projectID=None  # This will be updated later
                 )
 
                 # If the question is multiple choice, add choices
@@ -95,6 +100,12 @@ class ProjectAddQuestionsResource(Resource):
                         db.session.add(new_choice)
 
                 db.session.add(new_question)
+
+            db.session.commit()
+
+            # # Update the projectID in each question
+            # for new_question in Questions.query.filter_by(projectID=None):
+            #     new_question.projectID = current_project.projectID
 
             db.session.commit()
 
