@@ -32,6 +32,10 @@ project_input_model = project_namespace.model('ProjectInput', {
     'answers': fields.List(fields.Nested(answers_model), description='List of answers for the project')
 })
 
+project_status = project_namespace.model('ProjectStatus',{
+    'projectStatus': fields.String(required=True, enum=['initialized', 'closed', 'pending', 'in progress', 'rejected'], description='Status of the project'),
+})
+
 edited_answers_model = project_namespace.model('EditedAnswers', {
     'answer_id': fields.Integer(required=True, description='ID of the answer'),
     'new_answer_text': fields.String(description='Text-based answer for a text question'),
@@ -372,3 +376,38 @@ class ProjectUsersResource(Resource):
             return {'project_users': users_data}, HTTPStatus.OK
         else:
             return {'message': 'Unauthorized. You do not have permission to view users for this project.'}, HTTPStatus.FORBIDDEN
+
+@project_namespace.route('/change_status/<int:project_id>', methods=['PUT'])
+class ProjectChangeStatusResource(Resource):
+    @jwt_required()
+    @project_namespace.expect(project_status)
+    def put(self, project_id):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Get the project by ID
+        project = Projects.query.get(project_id)
+        if not project:
+            return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
+
+        # Check if the current user has permission to change the status
+        if current_user.is_admin or current_user.userID == project.userID:
+            # Parse the new status from the request
+            new_status = request.json['projectStatus']
+
+            # Check if the new status is valid
+            if new_status not in ['INITIALIZED', 'CLOSED', 'PENDING', 'IN_PROGRESS', 'REJECTED']:
+                return {'message': 'Invalid project status'}, HTTPStatus.BAD_REQUEST
+
+            # Update the project status
+            project.projectStatus = new_status
+
+            # Save the updated project status to the database
+            try:
+                db.session.commit()
+                return {'message': 'Project status changed successfully', 'new_status': new_status}, HTTPStatus.OK
+            except Exception as e:
+                db.session.rollback()
+                return {'message': f'Error changing project status: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        else:
+            return {'message': 'Unauthorized. You do not have permission to change the status of this project.'}, HTTPStatus.FORBIDDEN
