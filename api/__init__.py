@@ -43,7 +43,7 @@ def create_app(config=config_dict['development']):
 
     migrate = Migrate(app, db)
 
-    api = Api(app, title="MFOS API",
+    api = Api(app, title="MOFS API",
               version="1.0",
               authorizations= authorizations,
               security="Bearer Auth",
