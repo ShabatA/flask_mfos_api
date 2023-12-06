@@ -25,11 +25,15 @@ class PermissionLevel(Enum):
     USERS = 'users'
     SUGPROJECTS = 'sugprojects'
     SUBPROJECTS = 'subprojects'
+    # region access
+    # Edit cases
+    # edit project
     CUSER = 'cuser'
     FINANCE = 'finance'
+    # level of finance
     ALL = 'all'
-    #add user
-    #manage user
+    ADDUSER = 'adduser'
+    MANAGEUSER = 'manageuser'
 
 class Users(db.Model):
     __tablename__ = 'users'
