@@ -1,6 +1,6 @@
 from api.config.config import Config
 from flask_restx import Resource, Namespace, fields
-from flask import request
+from flask import request, current_app
 from ..models.users import Users, Role, UserPermissions, PermissionLevel
 from werkzeug.security import generate_password_hash, check_password_hash
 from http import HTTPStatus
@@ -478,4 +478,26 @@ class UserRole(Resource):
 
         except Exception as e:
             current_app.logger.error(f"Error getting user role: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
+@auth_namespace.route('/current-user-id')
+class CurrentUserId(Resource):
+    @jwt_required()
+    @auth_namespace.doc(
+        description='Returns the ID of the currently logged in user.',
+    )
+    def get(self):
+        try:
+            current_user_identity = get_jwt_identity()
+
+            # Assuming Users has a method to get user by username
+            current_user = Users.query.filter_by(username=current_user_identity).first()
+
+            if current_user:
+                return {'userID': current_user.userID}, HTTPStatus.OK
+            else:
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting current user ID: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
