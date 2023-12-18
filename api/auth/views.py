@@ -501,3 +501,65 @@ class CurrentUserId(Resource):
         except Exception as e:
             current_app.logger.error(f"Error getting current user ID: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@auth_namespace.route('/all-users')
+class AllUsers(Resource):
+    @jwt_required()
+    @auth_namespace.doc(
+        description='Returns information for all users.',
+    )
+    def get(self):
+        try:
+            # Fetch all users from the database
+            all_users = Users.query.all()
+
+            # Create a list to store user data
+            users_data = []
+
+            # Iterate through each user and extract relevant information
+            for user in all_users:
+                user_data = {
+                    'userID': user.userID,
+                    'username': user.username,
+                    'email': user.email,
+                    'firstName': user.firstName,
+                    'lastName': user.lastName,
+                    'jobDescription': user.jobDescription,
+                    'mobile': user.mobile,
+                    'active': user.active,
+                    'userStatus': user.UserStatus.value,
+                    'date_created': user.date_created.isoformat(),
+                    'regionID': user.regionID,
+                    'role': {
+                        'roleID': user.role.RoleID,
+                        'roleName': user.role.RoleName
+                    },
+                    'permissions': [permission.permission_level.value for permission in user.permissions]
+                }
+                users_data.append(user_data)
+
+            # Return the user data as JSON
+            return {'users': users_data}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting all users: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+
+# function to return users
+        # username
+        # email
+        # password
+        #
+
+# function current user info
+        # username
+        # email
+        # password
+        # region
+        # role
+        # permissions
+
+        
