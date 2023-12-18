@@ -1,4 +1,4 @@
-from flask import request
+from flask import request, current_app
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
@@ -412,6 +412,42 @@ class ProjectChangeStatusResource(Resource):
         else:
             return {'message': 'Unauthorized. You do not have permission to change the status of this project.'}, HTTPStatus.FORBIDDEN
 
+@project_namespace.route('/link-user/<int:project_id>/<string:username>')
+class LinkUserToProjectResource(Resource):
+    @jwt_required()
+    def post(self, project_id, username):
+        try:
+            # Get the current user from the JWT token
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            # Check if the current user has the necessary permissions (e.g., project owner or admin)
+            # Adjust the condition based on your specific requirements
+            if not current_user.is_admin():
+                return {'message': 'Unauthorized. You do not have permission to link users to projects.'}, HTTPStatus.FORBIDDEN
+
+            # Get the project by ID
+            project = Projects.query.get(project_id)
+            if not project:
+                return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
+
+            # Get the user by username
+            user = Users.query.filter_by(username=username).first()
+            if not user:
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+
+            # Check if the user is already linked to the project
+            if ProjectUser.query.filter_by(projectID=project_id, userID=user.userID).first():
+                return {'message': 'User is already linked to the project'}, HTTPStatus.BAD_REQUEST
+
+            # Link the user to the project
+            project_user = ProjectUser(projectID=project_id, userID=user.userID)
+            project_user.save()
+
+            return {'message': 'User linked to the project successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error linking user to project: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 # project with username

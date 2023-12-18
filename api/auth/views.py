@@ -546,6 +546,26 @@ class AllUsers(Resource):
             current_app.logger.error(f"Error getting all users: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@auth_namespace.route('/get-user-id/<string:username>')
+class GetUserId(Resource):
+    @jwt_required()
+    @auth_namespace.doc(
+        description='Returns the ID of the specified user.',
+        params={'username': 'The username of the user whose ID you want to retrieve'}
+    )
+    def get(self, username):
+        try:
+            # Fetch the user by username from the database
+            user = Users.query.filter_by(username=username).first()
+
+            if user:
+                return {'userID': user.userID}, HTTPStatus.OK
+            else:
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting user ID: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 # function to return users
