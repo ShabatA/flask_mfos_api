@@ -4,6 +4,8 @@ from .users import Users
 from enum import Enum
 from flask import jsonify
 from http import HTTPStatus
+from datetime import datetime
+
 
 class ProjectStatus(Enum):
     INITIALIZED = 'initialized'
@@ -11,6 +13,9 @@ class ProjectStatus(Enum):
     PENDING = 'pending'
     IN_PROGRESS = 'in progress'
     REJECTED = 'rejected'
+    
+    def to_dict(self):
+        return {'status': self.value}
 
 class ProjectCategory(Enum):
     A = 'A'
@@ -37,6 +42,7 @@ class Projects(db.Model):
     # questions = db.relationship('Questions', backref='project', lazy=True)
     users = db.relationship('Users', secondary='project_users', backref='projects', lazy='dynamic')
     answers = db.relationship('Answers', backref='project', lazy=True)
+    tasks = db.relationship('ProjectTask', backref='project', lazy=True)
 
     def __repr__(self):
         return f"<Project {self.projectID} {self.projectName}>"
@@ -226,4 +232,72 @@ class ProjectUser(db.Model):
     def save(self):
         db.session.add(self)
         db.session.commit()
+
+
+
+
+
+
+
+
+
+class Stage(db.Model):
+    __tablename__ = 'stages'
+
+    stageID = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, nullable=False)
+    status = db.Column(db.String, nullable=False)  # You can use this field to indicate if the stage is 'started', 'completed', etc.
+
+    def __repr__(self):
+        return f"<Stage {self.stageID} {self.name}>"
+
+
+class ProjectStage(db.Model):
+    __tablename__ = 'project_stages'
+
+    projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), primary_key=True)
+    stageID = db.Column(db.Integer, db.ForeignKey('stages.stageID'), primary_key=True)
+    started = db.Column(db.Boolean, default=False)
+    completed = db.Column(db.Boolean, default=False)
+    completionDate = db.Column(db.Date, nullable=True)
+
+    project = db.relationship('Projects', backref='project_stages', lazy=True)
+    stage = db.relationship('Stage', backref='project_stages', lazy=True)
+
+
+class ProjectTask(db.Model):
+    __tablename__ = 'project_tasks'
+
+    taskID = db.Column(db.Integer, primary_key=True)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
+    title = db.Column(db.String, nullable=False)
+    deadline = db.Column(db.Date, nullable=False)
+    assignedTo = db.relationship('Users', secondary='task_assigned_to', backref='assigned_tasks', lazy='dynamic')
+    cc = db.relationship('Users', secondary='task_cc', backref='cc_tasks', lazy='dynamic')
+    description = db.Column(db.String, nullable=True)
+    createdBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
+    attachedFiles = db.Column(db.String, nullable=True)
+    stageID = db.Column(db.Integer, db.ForeignKey('stages.stageID'), nullable=False)
+    completed = db.Column(db.Boolean, default=False)
+    completionDate = db.Column(db.Date, nullable=True)
+
+    stage = db.relationship('Stage', backref='tasks', lazy=True)
+
+    def is_overdue(self):
+        return self.deadline < datetime.today().date() if not self.completed else False
+
+    def __repr__(self):
+        return f"<ProjectTask {self.taskID} {self.title}>"
+
+
+# Association tables for many-to-many relationships
+task_assigned_to = db.Table('task_assigned_to',
+                           db.Column('task_id', db.Integer, db.ForeignKey('project_tasks.taskID')),
+                           db.Column('user_id', db.Integer, db.ForeignKey('users.userID'))
+                           )
+
+task_cc = db.Table('task_cc',
+                   db.Column('task_id', db.Integer, db.ForeignKey('project_tasks.taskID')),
+                   db.Column('user_id', db.Integer, db.ForeignKey('users.userID'))
+                   )
 

@@ -2,10 +2,11 @@ from flask import request, current_app
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
-from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser
+from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage
 from ..utils.db import db
 from ..models.users import Users
 from flask import jsonify
+
 
 
 project_namespace = Namespace('project', description="A namespace for projects")
@@ -196,7 +197,7 @@ class AllProjectsResource(Resource):
         projects = Projects.query.all()
 
         # Convert the list of projects to a JSON response
-        projects_data = [{'projectID': project.projectID, 'projectName': project.projectName} for project in projects]
+        projects_data = [{'projectID': project.projectID, 'projectName': project.projectName, 'projectStatus': project.projectStatus.value} for project in projects]
 
         return jsonify({'projects': projects_data})
 
@@ -405,7 +406,26 @@ class ProjectChangeStatusResource(Resource):
             # Save the updated project status to the database
             try:
                 db.session.commit()
+                # Check if the new status is 'Approved' and add stages if true
+                if new_status == 'Approved':
+                    # Add three stages for the project
+                    initiated_stage = Stage(name='Project Initiated', status='in progress')
+                    in_progress_stage = Stage(name='In Progress', status='in progress')
+                    closed_stage = Stage(name='Project Closed', status='pending')
+
+                    # Add the stages to the project
+                    project_stages = [
+                        ProjectStage(project=project, stage=initiated_stage, started=True),
+                        ProjectStage(project=project, stage=in_progress_stage, started=True),
+                        ProjectStage(project=project, stage=closed_stage)
+                    ]
+
+                    # Commit the new stages to the database
+                    db.session.add_all(project_stages)
+                    db.session.commit()
+
                 return {'message': 'Project status changed successfully', 'new_status': new_status}, HTTPStatus.OK
+
             except Exception as e:
                 db.session.rollback()
                 return {'message': f'Error changing project status: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
@@ -447,6 +467,58 @@ class LinkUserToProjectResource(Resource):
 
         except Exception as e:
             current_app.logger.error(f"Error linking user to project: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@project_namespace.route('/all_with_answers', methods=['GET'])
+class AllProjectsWithAnswersResource(Resource):
+    def get(self):
+        try:
+            # Get all projects
+            projects = Projects.query.all()
+
+            # Initialize a list to store project data
+            projects_data = []
+
+            # Iterate through each project
+            for project in projects:
+                # Get project details
+                project_details = {
+                    'projectID': project.projectID,
+                    'projectName': project.projectName,
+                    'projectStatus': project.projectStatus.value,
+                    'startDate': project.startDate,
+                    'dueDate': project.dueDate
+                }
+
+                # Get answers associated with the project
+                text_answers = Answers.query.filter_by(projectID=project.projectID, choiceID=None).all()
+                choice_answers = Answers.query.filter(Answers.projectID == project.projectID,
+                                                     Answers.choiceID.isnot(None)).all()
+
+                # Include text-based answers in the project details
+                text_answers_data = [{'answerID': answer.answerID, 'questionID': answer.questionID,
+                                      'answerText': answer.answerText} for answer in text_answers]
+
+                # Include choice-based answers in the project details, including choice details
+                choice_answers_data = [{
+                    'answerID': answer.answerID,
+                    'questionID': answer.questionID,
+                    'choiceID': answer.choiceID,
+                    'choiceText': answer.choice.choiceText,  # Include choice details in the response
+                    'points': answer.choice.points
+                } for answer in choice_answers]
+
+                # Add answers data to project details
+                project_details['text_answers'] = text_answers_data
+                project_details['choice_answers'] = choice_answers_data
+
+                # Append project details to the list
+                projects_data.append(project_details)
+
+            return jsonify({'projects_with_answers': projects_data})
+
+        except Exception as e:
+            current_app.logger.error(f"Error retrieving projects with answers: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
