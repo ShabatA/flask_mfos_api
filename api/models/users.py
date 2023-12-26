@@ -58,7 +58,7 @@ class Users(db.Model):
     permissions = db.relationship('UserPermissions', back_populates='user', cascade='all, delete-orphan')
 
 
-    cases = db.relationship('Cases', backref='user', lazy=True)
+    # cases = db.relationship('Cases', backref='user', lazy=True)
     region = db.relationship('Regions', backref='users')
 
     def __repr__(self):

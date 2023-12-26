@@ -6,12 +6,18 @@ from ..models.projects import Projects, Questions, QuestionChoices, Answers, Pro
 from ..utils.db import db
 from ..models.users import Users
 from flask import jsonify
+import json
 
 
 
 project_namespace = Namespace('project', description="A namespace for projects")
+stage_namespace = Namespace('project stages', description="A namespace for project stage")
 
-
+stage_model = stage_namespace.model(
+    'Stage', {
+        'name': fields.String(required=True, description='Name of the stage'),
+    }
+)
 answers_model = project_namespace.model('Answers', {
     'question_id': fields.Integer(required=True, description='ID of the answer'),
     'answer_text': fields.String(description='Text-based answer for a text question'),
@@ -521,6 +527,119 @@ class AllProjectsWithAnswersResource(Resource):
             current_app.logger.error(f"Error retrieving projects with answers: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@project_namespace.route('/all_questions', methods=['GET'])
+class AllQuestionsResource(Resource):
+    def get(self):
+        try:
+            # Get all questions
+            questions = Questions.query.all()
 
-# project with username
+            # Initialize a list to store question data
+            questions_data = []
+
+            # Iterate through each question
+            for question in questions:
+                # Get question details
+                question_details = {
+                    'questionID': question.questionID,
+                    'questionText': question.questionText,
+                    'questionType': question.questionType,
+                    'points': question.points
+                }
+
+                # If the question is a multiple-choice question, include choices
+                if question.questionType == 'single choice':
+                    choices = QuestionChoices.query.filter_by(questionID=question.questionID).all()
+                    choices_data = [{'choiceID': choice.choiceID, 'choiceText': choice.choiceText, 'points': choice.points} for choice in choices]
+                    question_details['choices'] = choices_data
+
+                # Append question details to the list
+                questions_data.append(question_details)
+
+            return jsonify({'questions': json.loads(json.dumps(questions_data, sort_keys=True))})
+
+        except Exception as e:
+            current_app.logger.error(f"Error retrieving questions: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+#####################################################
+# STAGE ENDPOINTS
+#####################################################
+@stage_namespace.route('/add_stage', methods=['POST'])
+class AddStageResource(Resource):
+    @jwt_required()
+    @project_namespace.expect(stage_model)
+    def post(self):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Check if the current user has permission to add a stage
+        if not current_user.is_admin:  # Adjust the condition based on your specific requirements
+            return {'message': 'Unauthorized. Only admin users can add stages.'}, HTTPStatus.FORBIDDEN
+
+        # Parse input data
+        stage_data = request.json
+
+        # Create a new stage instance
+        new_stage = Stage(
+            name=stage_data['name']
+            # status=stage_data['status']
+        )
+
+        # Save the stage to the database
+        try:
+            # db.session.add(new_stage)
+            # db.session.commit()
+            new_stage.save()
+
+            return {'message': 'Stage added successfully'}, HTTPStatus.CREATED
+        except Exception as e:
+            db.session.rollback()
+            return {'message': f'Error adding stage: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+    
+@stage_namespace.route('/delete_stage/<int:stage_id>', methods=['DELETE'])
+class DeleteStageResource(Resource):
+    @jwt_required()
+    def delete(self, stage_id):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Check if the current user has permission to delete a stage
+        if not current_user.is_admin:  # Adjust the condition based on your specific requirements
+            return {'message': 'Unauthorized. Only admin users can delete stages.'}, HTTPStatus.FORBIDDEN
+
+        # Get the stage by ID
+        stage_to_delete = Stage.query.get(stage_id)
+
+        # Check if the stage exists
+        if not stage_to_delete:
+            return {'message': 'Stage not found'}, HTTPStatus.NOT_FOUND
+
+        # Delete the stage from the database
+        try:
+            stage_to_delete.delete()
+
+            return {'message': 'Stage deleted successfully'}, HTTPStatus.OK
+        except Exception as e:
+            db.session.rollback()
+            return {'message': f'Error deleting stage: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
+@stage_namespace.route('/all_stages', methods=['GET'])
+class AllStagesResource(Resource):
+    def get(self):
+        try:
+            # Get all stages
+            stages = Stage.query.all()
+
+            # Convert the list of stages to a JSON response
+            stages_data = [{'stageID': stage.stageID, 'name': stage.name} for stage in stages]
+
+            return jsonify({'stages': stages_data})
+
+        except Exception as e:
+            current_app.logger.error(f"Error retrieving stages: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
         

@@ -13,7 +13,7 @@ class ProjectStatus(Enum):
     PENDING = 'pending'
     IN_PROGRESS = 'in progress'
     REJECTED = 'rejected'
-    
+
     def to_dict(self):
         return {'status': self.value}
 
@@ -41,8 +41,8 @@ class Projects(db.Model):
     # Relationship with Questions
     # questions = db.relationship('Questions', backref='project', lazy=True)
     users = db.relationship('Users', secondary='project_users', backref='projects', lazy='dynamic')
-    answers = db.relationship('Answers', backref='project', lazy=True)
-    tasks = db.relationship('ProjectTask', backref='project', lazy=True)
+    answers = db.relationship('Answers', backref='projects', lazy=True)
+    tasks = db.relationship('ProjectTask', backref='projects', lazy=True)
 
     def __repr__(self):
         return f"<Project {self.projectID} {self.projectName}>"
@@ -234,22 +234,23 @@ class ProjectUser(db.Model):
         db.session.commit()
 
 
-
-
-
-
-
-
-
 class Stage(db.Model):
     __tablename__ = 'stages'
 
     stageID = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
-    status = db.Column(db.String, nullable=False)  # You can use this field to indicate if the stage is 'started', 'completed', etc.
+    # status = db.Column(db.String, nullable=False)  # You can use this field to indicate if the stage is 'started', 'completed', etc.
 
     def __repr__(self):
         return f"<Stage {self.stageID} {self.name}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
 
 
 class ProjectStage(db.Model):
