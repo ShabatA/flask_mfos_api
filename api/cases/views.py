@@ -58,6 +58,26 @@ case_model_2 = case_namespace.model(
         'caseStatus': fields.String(enum=[status.value for status in CaseStatus], description="Case status"),
     })
 
+edited_answers_model = case_namespace.model('EditedAnswers', {
+    'answer_id': fields.Integer(required=True, description='ID of the answer'),
+    'new_answer_text': fields.String(description='Text-based answer for a text question'),
+    'new_choice_id': fields.Integer(description='ID of the selected choice for a single-choice question')
+})
+
+case_edit_model = case_namespace.model('CaseEdit', {
+    'caseName': fields.String(required=True, description='Name of the case'),
+    'regionID': fields.Integer(required=True, description='ID of the region'),
+    'budgetRequired': fields.Float(required=True, description='Required budget for the case'),
+    'budgetAvailable': fields.Float(required=True, description='Available budget for the case'),
+    'caseStatus': fields.String(required=True, enum=['initialized', 'closed', 'pending', 'in progress', 'rejected'], description='Status of the case'),
+    # 'projectScope': fields.String(description='Scope of the project'),
+    'caseCategory': fields.String(enum=['A', 'B', 'C', 'D'], description='Category of the case'),
+    'userID': fields.Integer(description='ID of the user associated with the case'),
+    'startDate': fields.Date(description='Start date of the case'),
+    'dueDate': fields.Date(description='Due date of the case'),
+    'edited_answers': fields.List(fields.Nested(edited_answers_model), description='List of edited answers for the case')
+})
+
 
 @case_namespace.route('/add')
 class CaseAddResource(Resource):
@@ -262,10 +282,154 @@ class AllProjectsWithAnswersResource(Resource):
             current_app.logger.error(f"Error retrieving projects with answers: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@case_namespace.route('/<int:case_id>/answers', methods=['GET'])
+class CaseAnswersResource(Resource):
+    def get(self, case_id):
+        # Get the project by ID
+        case = Cases.get_by_id(case_id)
 
+        if not case:
+            return jsonify({'message': 'Project not found'}), HTTPStatus.NOT_FOUND
 
+        # Fetch both text-based and choice-based answers associated with the project
+        text_answers = CAnswers.query.filter_by(caseID=case_id, choiceID=None).all()
+        choice_answers = CAnswers.query.filter(CAnswers.caseID == case_id, CAnswers.choiceID.isnot(None)).all()
 
+        # Convert the list of text answers to a JSON response
+        text_answers_data = [{'answerID': answer.answerID, 'questionID': answer.questionID, 'answerText': answer.answerText} for answer in text_answers]
 
+        # Convert the list of choice answers to a JSON response, including choice details
+        choice_answers_data = [{
+            'answerID': answer.answerID,
+            'questionID': answer.questionID,
+            'choiceID': answer.choiceID,
+            'choiceText': answer.choice.choiceText,  # Include choice details in the response
+            'points': answer.choice.points
+        } for answer in choice_answers]
+
+        return jsonify({'text_answers': text_answers_data, 'choice_answers': choice_answers_data})
+    
+
+@case_namespace.route('/edit_answers/<int:case_id>', methods=['PUT'])
+class CaseEditAnswersResource(Resource):
+    @jwt_required()
+    @case_namespace.expect(case_edit_model)
+    def put(self, case_id):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Get the case by ID
+        case = Cases.query.get_or_404(case_id)
+
+        # Ensure the current user is authorized to edit the project
+        if current_user.userID != case.userID:
+            return {'message': 'Unauthorized. You do not have permission to edit this project.'}, HTTPStatus.FORBIDDEN
+
+        # Parse the input data
+        project_data = request.json
+        edited_answers_data = project_data.pop('edited_answers', [])  # Extract edited answers from project_data
+
+        # Update the case details
+        case.projectName = project_data.get('caseName', case.caseName)
+        case.regionID = project_data.get('regionID', case.regionID)
+        case.budgetRequired = project_data.get('budgetRequired', case.budgetRequired)
+        case.budgetAvailable = project_data.get('budgetAvailable', case.budgetAvailable)
+        case.projectStatus = project_data.get('projectStatus', case.projectStatus)
+        case.caseCategory = project_data.get('caseCategory', case.caseCategory)
+        case.startDate = project_data.get('startDate', case.startDate)
+        case.dueDate = project_data.get('dueDate', case.dueDate)
+
+        # Save the updated project details to the database
+        try:
+            db.session.commit()
+
+            # Update the answers for the project
+            case.edit_answers(edited_answers_data)
+
+            return {'message': 'Project details and answers updated successfully'}, HTTPStatus.OK
+        except Exception as e:
+            db.session.rollback()
+            return {'message': f'Error updating project details and answers: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_namespace.route('/delete/<int:case_id>')
+class CaseDeleteResource(Resource):
+    @jwt_required()  
+    def delete(self, case_id):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Check if the project exists and belongs to the current user
+        if current_user.is_admin:
+            case_to_delete = Cases.query.filter_by(caseID=case_id).first()
+        else:
+            case_to_delete = Cases.query.filter_by(caseID=case_id, userID=current_user.userID).first()
+        if not case_to_delete:
+            return {'message': 'case not found or unauthorized'}, HTTPStatus.NOT_FOUND
+
+        # Delete the answers related to the project
+        CAnswers.query.filter_by(caseID=case_id).delete()
+
+        # Delete the project from the database
+        try:
+            case_to_delete.delete()
+
+            return {'message': 'Case and associated answers deleted successfully'}, HTTPStatus.OK
+        except Exception as e:
+            # Handle exceptions (e.g., database errors) appropriately
+            return {'message': f'Error deleting case: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+    
+@case_namespace.route('/delete_question/<int:question_id>')
+class QuestionDeleteResource(Resource):
+    @jwt_required()  
+    def delete(self, question_id):
+        # Check if the question exists
+        question_to_delete = CQuestions.query.get(question_id)
+        if not question_to_delete:
+            return {'message': 'Question not found'}, HTTPStatus.NOT_FOUND
+
+        # Delete the answers related to the question
+        CAnswers.query.filter_by(questionID=question_id).delete()
+
+        # Delete the question from the database
+        try:
+            question_to_delete.delete()
+
+            return {'message': 'Question and associated answers deleted successfully'}, HTTPStatus.OK
+        except Exception as e:
+            # Handle exceptions (e.g., database errors) appropriately
+            return {'message': f'Error deleting question: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_namespace.route('/give_access/<int:case_id>/<int:user_id>')
+class GiveAccessResource(Resource):
+    @jwt_required()
+    def post(self, case_id, user_id):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+        # Get the project by ID
+        case_to_access = Cases.query.get(case_id)
+        # Check if the current user has the necessary permissions (e.g., project owner or admin)
+        # Adjust the condition based on your specific requirements
+        if not current_user.is_admin and current_user.userID != case_to_access.userID:
+            return {'message': 'Unauthorized. You do not have permission to give access to this case.'}, HTTPStatus.FORBIDDEN
+
+        
+        if not case_to_access:
+            return {'message': 'case not found'}, HTTPStatus.NOT_FOUND
+
+        # Get the user by ID
+        user_to_give_access = Users.query.get(user_id)
+        if not user_to_give_access:
+            return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+
+        # Check if the user already has access to the project
+        if CaseUser.query.filter_by(caseID=case_id, userID=user_id).first():
+            return {'message': 'User already has access to the case'}, HTTPStatus.BAD_REQUEST
+
+        # Add the user to the project's list of users
+        case_user = CaseUser(caseID=case_id, userID=user_id)
+        case_user.save()
+
+        return {'message': 'User granted access to the case successfully'}, HTTPStatus.OK
 
 
 

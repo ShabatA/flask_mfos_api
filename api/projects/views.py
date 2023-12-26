@@ -284,7 +284,10 @@ class ProjectDeleteResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Check if the project exists and belongs to the current user
-        project_to_delete = Projects.query.filter_by(projectID=project_id, userID=current_user.userID).first()
+        if current_user.is_admin:
+            project_to_delete = Projects.query.filter_by(projectID=project_id).first()
+        else:
+            project_to_delete = Projects.query.filter_by(projectID=project_id, userID=current_user.userID).first()
         if not project_to_delete:
             return {'message': 'Project not found or unauthorized'}, HTTPStatus.NOT_FOUND
 
@@ -329,13 +332,15 @@ class GiveAccessResource(Resource):
         # Get the current user ID from the JWT token
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
+        project_to_access = Projects.query.get(project_id)
+
         # Check if the current user has the necessary permissions (e.g., project owner or admin)
         # Adjust the condition based on your specific requirements
-        if not current_user.is_admin and current_user.userID != project_to_access.ownerID:
+        if not current_user.is_admin and current_user.userID != project_to_access.userID:
             return {'message': 'Unauthorized. You do not have permission to give access to this project.'}, HTTPStatus.FORBIDDEN
 
         # Get the project by ID
-        project_to_access = Projects.query.get(project_id)
+        
         if not project_to_access:
             return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
 
