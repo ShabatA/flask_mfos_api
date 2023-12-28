@@ -48,15 +48,15 @@ class Cases(db.Model):
     users = db.relationship('Users', secondary='case_users', backref='cases', lazy='dynamic')
     answers = db.relationship('CAnswers', backref='cases', lazy=True)
 
-    def __init__(self, caseName, budgetRequired, budgetAvailable, caseStatus, caseCategory, userID, regionID, createdAt=None):
-        self.caseName = caseName
-        self.budgetRequired = budgetRequired
-        self.budgetAvailable = budgetAvailable
-        self.caseStatus = caseStatus
-        self.caseCategory = caseCategory
-        self.userID = userID
-        self.regionID = regionID
-        self.createdAt = createdAt or datetime.utcnow()
+    # def __init__(self, caseName, budgetRequired, budgetAvailable, caseStatus, caseCategory, userID, regionID, createdAt=None):
+    #     self.caseName = caseName
+    #     self.budgetRequired = budgetRequired
+    #     self.budgetAvailable = budgetAvailable
+    #     self.caseStatus = caseStatus
+    #     self.caseCategory = caseCategory
+    #     self.userID = userID
+    #     self.regionID = regionID
+    #     self.createdAt = createdAt or datetime.utcnow()
 
     def __repr__(self):
         return f"<Case {self.caseID} {self.caseName}>"

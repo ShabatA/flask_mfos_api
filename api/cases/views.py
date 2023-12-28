@@ -42,7 +42,8 @@ case_model = case_namespace.model(
         'budgetAvailable': fields.Float(required=True, description="Budget available"),
         'caseCategory': fields.String(description="Case category"),
         'caseStatus': fields.String(enum=[status.value for status in CaseStatus], description="Case status"),
-        'regionName': fields.Integer(required=True, description="Region Name"),
+        'serviceRequired': fields.String(description="Service Required"),
+        'regionName': fields.String(required=True, description="Region Name"),
         'answers': fields.List(fields.Nested(answers_model), description='List of answers for the case')
     }
 )
@@ -83,6 +84,32 @@ case_edit_model = case_namespace.model('CaseEdit', {
 class CaseAddResource(Resource):
     @jwt_required()  
     @case_namespace.expect(case_model)
+    @case_namespace.doc(
+        description='Add a new case',
+        responses={
+            201: 'Case added successfully',
+            409: 'Case with the same name already exists',
+            500: 'Internal Server Error'
+        },
+        body=case_model,
+        examples={
+            'success': {
+                'description': 'Case added successfully',
+                'summary': 'Successful Response',
+                'value': {'message': 'Case added successfully'}
+            },
+            'conflict': {
+                'description': 'Case with this name already exists',
+                'summary': 'Conflict Response',
+                'value': {'message': 'Case with this name already exists'}
+            },
+            'error': {
+                'description': 'Error adding case: Internal Server Error',
+                'summary': 'Internal Server Error Response',
+                'value': {'message': 'Error adding case: Internal Server Error'}
+            }
+        }
+    )
     def post(self):
         # Get the current user ID from the JWT token
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
