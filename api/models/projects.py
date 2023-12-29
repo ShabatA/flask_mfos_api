@@ -78,28 +78,28 @@ class Projects(db.Model):
 
     def assign_answers(self, answers):
         for answer_data in answers:
-            question_id = answer_data['question_id']
-            answer_text = answer_data.get('answer_text')
-            choice_id = answer_data.get('choice_id')
+            questionID = answer_data['questionID']
+            answerText = answer_data.get('answerText')
+            choiceID = answer_data.get('choiceID')
 
             # Assuming you have a method to get a Question by ID
-            question = Questions.get_by_id(question_id)
+            question = Questions.get_by_id(questionID)
 
             if question.questionType == 'single choice':
                 # For single-choice questions, associate the choice with the answer
-                choice = QuestionChoices.get_by_id(choice_id)
+                choice = QuestionChoices.get_by_id(choiceID)
                 new_answer = Answers(
                     projectID=self.projectID,
-                    questionID=question_id,
-                    choiceID=choice_id,
+                    questionID=questionID,
+                    choiceID=choiceID,
                     answerText=None  # Set answerText to None for single-choice questions
                 )
             else:
                 # For text-based questions, associate the answer text with the answer
                 new_answer = Answers(
                     projectID=self.projectID,
-                    questionID=question_id,
-                    answerText=answer_text,
+                    questionID=questionID,
+                    answerText=answerText,
                     choiceID=None  # Set choiceID to None for text-based questions
                 )
 

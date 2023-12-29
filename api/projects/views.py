@@ -21,9 +21,9 @@ stage_model = stage_namespace.model(
     }
 )
 answers_model = project_namespace.model('Answers', {
-    'question_id': fields.Integer(required=True, description='ID of the answer'),
-    'answer_text': fields.String(description='Text-based answer for a text question'),
-    'choice_id': fields.Integer(description='ID of the selected choice for a single-choice question')
+    'questionID': fields.Integer(required=True, description='ID of the answer'),
+    'answerText': fields.String(description='Text-based answer for a text question'),
+    'choiceID': fields.Integer(description='ID of the selected choice for a single-choice question')
 })
 
 # Define a model for the input data (assuming JSON format)
@@ -514,7 +514,10 @@ class AllProjectsWithAnswersResource(Resource):
 
             # Iterate through each project
             for project in projects:
-                # Get project details
+                # Get answers associated with the project
+                answers = Answers.query.filter_by(projectID=project.projectID).all()
+
+                # Include answers and corresponding questions in the project details
                 project_details = {
                     'projectID': project.projectID,
                     'projectName': project.projectName,
@@ -526,31 +529,12 @@ class AllProjectsWithAnswersResource(Resource):
                     'budgetRequired': project.budgetRequired,
                     'budgetAvailable': project.budgetAvailable,
                     'projectScope': project.projectScope,
-                    'category': project.category.value
-
+                    'category': project.category.value,
+                    'answers': [{'answerID': answer.answerID,
+                                 'questionText': answer.question.questionText,
+                                 'answerText': answer.answerText
+                                 } for answer in answers]
                 }
-
-                # Get answers associated with the project
-                text_answers = Answers.query.filter_by(projectID=project.projectID, choiceID=None).all()
-                choice_answers = Answers.query.filter(Answers.projectID == project.projectID,
-                                                     Answers.choiceID.isnot(None)).all()
-
-                # Include text-based answers in the project details
-                text_answers_data = [{'answerID': answer.answerID, 'questionID': answer.questionID,
-                                      'answerText': answer.answerText} for answer in text_answers]
-
-                # Include choice-based answers in the project details, including choice details
-                choice_answers_data = [{
-                    'answerID': answer.answerID,
-                    'questionID': answer.questionID,
-                    'choiceID': answer.choiceID,
-                    'choiceText': answer.choice.choiceText,  # Include choice details in the response
-                    'points': answer.choice.points
-                } for answer in choice_answers]
-
-                # Add answers data to project details
-                project_details['text_answers'] = text_answers_data
-                project_details['choice_answers'] = choice_answers_data
 
                 # Append project details to the list
                 projects_data.append(project_details)
@@ -560,7 +544,6 @@ class AllProjectsWithAnswersResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error retrieving projects with answers: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
-
 @project_namespace.route('/all_questions', methods=['GET'])
 class AllQuestionsResource(Resource):
     def get(self):
