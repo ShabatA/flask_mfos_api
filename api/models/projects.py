@@ -78,13 +78,24 @@ class Projects(db.Model):
         for answer_data in answers:
             questionID = answer_data['questionID']
             answerText = answer_data.get('answerText')
-            choiceIDs = answer_data.get('choiceID', [])
+            
 
             # Assuming you have a method to get a Question by ID
             question = Questions.get_by_id(questionID)
 
             if question.questionType == 'single choice':
+                choiceID = answer_data.get('choiceID')
                 # For single-choice questions, associate the choice with the answer
+                new_answer = Answers(
+                    projectID=self.projectID,
+                    questionID=questionID,
+                    choiceID=choiceID,
+                    answerText=None  # Set answerText to None for multiple-choice questions
+                )
+                new_answer.save()
+            elif question.questionType == 'multi choice':
+                choiceIDs = answer_data.get('choiceID', [])
+                # For multiple-choice questions, associate the choices with the answer
                 for choiceID in choiceIDs:
                     choice = QuestionChoices.get_by_id(choiceID)
                     new_answer = Answers(

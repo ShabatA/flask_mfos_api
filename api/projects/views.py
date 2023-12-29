@@ -183,6 +183,15 @@ class ProjectAddQuestionsResource(Resource):
 
                 # If the question is multiple choice, add choices
                 if question_data['questionType'] == 'single choice':
+                    choices_data = question_data.get('choices',[])
+                    for choice_data in choices_data:
+                        new_choice = QuestionChoices(
+                            question=new_question,
+                            choiceText=choice_data['choiceText'],
+                            points=choice_data['points']
+                        )
+                        db.session.add(new_choice)
+                elif question_data['questionType'] == 'multi choice':
                     choices_data = question_data.get('choices', [])
                     for choice_data in choices_data:
                         new_choice = QuestionChoices(
