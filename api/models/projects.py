@@ -8,10 +8,8 @@ from datetime import datetime
 
 
 class ProjectStatus(Enum):
-    INITIALIZED = 'initialized'
-    CLOSED = 'closed'
     PENDING = 'pending'
-    IN_PROGRESS = 'in progress'
+    APPROVED = 'approved'
     REJECTED = 'rejected'
 
     def to_dict(self):
@@ -80,20 +78,22 @@ class Projects(db.Model):
         for answer_data in answers:
             questionID = answer_data['questionID']
             answerText = answer_data.get('answerText')
-            choiceID = answer_data.get('choiceID')
+            choiceIDs = answer_data.get('choiceID', [])
 
             # Assuming you have a method to get a Question by ID
             question = Questions.get_by_id(questionID)
 
             if question.questionType == 'single choice':
                 # For single-choice questions, associate the choice with the answer
-                choice = QuestionChoices.get_by_id(choiceID)
-                new_answer = Answers(
-                    projectID=self.projectID,
-                    questionID=questionID,
-                    choiceID=choiceID,
-                    answerText=None  # Set answerText to None for single-choice questions
-                )
+                for choiceID in choiceIDs:
+                    choice = QuestionChoices.get_by_id(choiceID)
+                    new_answer = Answers(
+                        projectID=self.projectID,
+                        questionID=questionID,
+                        choiceID=choiceID,
+                        answerText=None  # Set answerText to None for multiple-choice questions
+                    )
+                    new_answer.save()
             else:
                 # For text-based questions, associate the answer text with the answer
                 new_answer = Answers(
@@ -102,9 +102,10 @@ class Projects(db.Model):
                     answerText=answerText,
                     choiceID=None  # Set choiceID to None for text-based questions
                 )
+                new_answer.save()
 
             # Save the answer to the database
-            new_answer.save()
+            # new_answer.save()
 
     @classmethod
     def get_by_id(cls, projectID):

@@ -23,7 +23,7 @@ stage_model = stage_namespace.model(
 answers_model = project_namespace.model('Answers', {
     'questionID': fields.Integer(required=True, description='ID of the answer'),
     'answerText': fields.String(description='Text-based answer for a text question'),
-    'choiceID': fields.Integer(description='ID of the selected choice for a single-choice question')
+    'choiceID': fields.List(fields.Integer, description='List of choices')
 })
 
 # Define a model for the input data (assuming JSON format)
@@ -44,7 +44,7 @@ project_input_model = project_namespace.model('ProjectInput', {
     'regionID': fields.Integer(required=True, description='ID of the region'),
     'budgetRequired': fields.Float(required=True, description='Required budget for the project'),
     'budgetAvailable': fields.Float(required=True, description='Available budget for the project'),
-    'projectStatus': fields.String(required=True, enum=['initialized', 'closed', 'pending', 'in progress', 'rejected'], description='Status of the project'),
+    'projectStatus': fields.String(required=True, enum=['approved', 'pending','rejected'], description='Status of the project'),
     'projectScope': fields.String(description='Scope of the project'),
     'category': fields.String(enum=['A', 'B', 'C', 'D'], description='Category of the project'),
     'userID': fields.Integer(description='ID of the user associated with the project'),
@@ -54,7 +54,7 @@ project_input_model = project_namespace.model('ProjectInput', {
 })
 
 project_status = project_namespace.model('ProjectStatus',{
-    'projectStatus': fields.String(required=True, enum=['initialized', 'closed', 'pending', 'in progress', 'rejected'], description='Status of the project'),
+    'projectStatus': fields.String(required=True, enum=['approved', 'pending','rejected'], description='Status of the project'),
 })
 
 edited_answers_model = project_namespace.model('EditedAnswers', {
@@ -68,7 +68,7 @@ project_edit_model = project_namespace.model('ProjectEdit', {
     'regionID': fields.Integer(required=True, description='ID of the region'),
     'budgetRequired': fields.Float(required=True, description='Required budget for the project'),
     'budgetAvailable': fields.Float(required=True, description='Available budget for the project'),
-    'projectStatus': fields.String(required=True, enum=['initialized', 'closed', 'pending', 'in progress', 'rejected'], description='Status of the project'),
+    'projectStatus': fields.String(required=True, enum=['approved', 'pending','rejected'], description='Status of the project'),
     'projectScope': fields.String(description='Scope of the project'),
     'category': fields.String(enum=['A', 'B', 'C', 'D'], description='Category of the project'),
     'userID': fields.Integer(description='ID of the user associated with the project'),
@@ -143,7 +143,7 @@ class ProjectAddResource(Resource):
 
 @project_namespace.route('/add_questions')
 class ProjectAddQuestionsResource(Resource):
-    #[
+#     [
 #   {
 #     "questionText": "How satisfied are you with our service?",
 #     "questionType": "single choice",
@@ -531,8 +531,10 @@ class AllProjectsWithAnswersResource(Resource):
                     'projectScope': project.projectScope,
                     'category': project.category.value,
                     'answers': [{'answerID': answer.answerID,
+                                 'questionID': answer.questionID,
                                  'questionText': answer.question.questionText,
-                                 'answerText': answer.answerText
+                                 'answerText': answer.answerText,
+                                 'choiceID': answer.choiceID
                                  } for answer in answers]
                 }
 
