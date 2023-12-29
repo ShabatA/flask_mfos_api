@@ -520,7 +520,14 @@ class AllProjectsWithAnswersResource(Resource):
                     'projectName': project.projectName,
                     'projectStatus': project.projectStatus.value,
                     'startDate': project.startDate,
-                    'dueDate': project.dueDate
+                    'dueDate': project.dueDate,
+                    'userID': project.userID,
+                    'regionID': project.regionID,
+                    'budgetRequired': project.budgetRequired,
+                    'budgetAvailable': project.budgetAvailable,
+                    'projectScope': project.projectScope,
+                    'category': project.category.value
+
                 }
 
                 # Get answers associated with the project
