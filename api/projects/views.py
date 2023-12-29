@@ -2,16 +2,18 @@ from flask import request, current_app
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
-from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage
+from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask
 from ..utils.db import db
 from ..models.users import Users
 from flask import jsonify
 import json
+from datetime import datetime
 
 
 
 project_namespace = Namespace('project', description="A namespace for projects")
 stage_namespace = Namespace('project stages', description="A namespace for project stage")
+task_namespace = Namespace('Project Tasks', description="A namespace for project Tasks")
 
 stage_model = stage_namespace.model(
     'Stage', {
@@ -22,6 +24,18 @@ answers_model = project_namespace.model('Answers', {
     'question_id': fields.Integer(required=True, description='ID of the answer'),
     'answer_text': fields.String(description='Text-based answer for a text question'),
     'choice_id': fields.Integer(description='ID of the selected choice for a single-choice question')
+})
+
+# Define a model for the input data (assuming JSON format)
+new_task_model = task_namespace.model('NewTaskModel', {
+    'title': fields.String(required=True, description='Title of the task'),
+    'deadline': fields.Date(required=True, description='Deadline of the task (YYYY-MM-DD)'),
+    'description': fields.String(description='Description of the task'),
+    'assigned_to': fields.List(fields.Integer, description='List of user IDs assigned to the task'),
+    'cc': fields.List(fields.Integer, description='List of user IDs to be CCed on the task'),
+    # 'created_by': fields.Integer(required=True, description='User ID of the task creator'),
+    'attached_files': fields.String(description='File attachments for the task'),
+    # 'stage_id': fields.Integer(required=True, description='ID of the linked stage'),
 })
 
 # Define the expected input model using Flask-RESTx fields
@@ -69,6 +83,14 @@ question_input_model = project_namespace.model('QuestionInput', {
     'questionType': fields.String(required=True, description='Type of the question'),
     'points': fields.Integer(required=True, description='Points for the question'),
     'choices': fields.List(fields.String, description='List of choices for multiple-choice questions')
+})
+
+# Define a model for the input data (assuming JSON format)
+link_project_to_stage_model = stage_namespace.model('LinkProjectToStageModel', {
+    'project_id': fields.Integer(required=True, description='ID of the project'),
+    'stage_id': fields.Integer(required=True, description='ID of the stage'),
+    'started': fields.Boolean(required=True, description="If the stages started"),
+    'completed': fields.Boolean(required=True, description="If the stages completed")
 })
 
 @project_namespace.route('/add')
@@ -646,5 +668,153 @@ class AllStagesResource(Resource):
             current_app.logger.error(f"Error retrieving stages: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@stage_namespace.route('/link_project_to_stage', methods=['POST'])
+class LinkProjectToStageResource(Resource):
+    @stage_namespace.expect(link_project_to_stage_model, validate=True)
+    def post(self):
+        try:
+            # Get project and stage IDs from the request data
+            data = stage_namespace.payload
+            project_id = data.get('project_id')
+            stage_id = data.get('stage_id')
+            started = data.get('started')
+            completed = data.get('completed')
 
+            # Check if both project and stage IDs are provided
+            if project_id is None or stage_id is None:
+                return {'message': 'Both project_id and stage_id must be provided'}, HTTPStatus.BAD_REQUEST
+
+            # Check if the project and stage exist in the database
+            project = Projects.query.get(project_id)
+            stage = Stage.query.get(stage_id)
+
+            if project is None or stage is None:
+                return {'message': 'Project or stage not found'}, HTTPStatus.NOT_FOUND
+
+            # Check if the project is already linked to the stage
+            existing_link = ProjectStage.query.filter_by(projectID=project_id, stageID=stage_id).first()
+
+            if existing_link:
+                return {'message': 'Project is already linked to the specified stage'}, HTTPStatus.BAD_REQUEST
+
+            # Create a new link between the project and stage
+            project_stage_link = ProjectStage(projectID=project_id, stageID=stage_id,
+                                              started=started, completed=completed)
+            db.session.add(project_stage_link)
+            db.session.commit()
+
+            return {'message': 'Project linked to stage successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error linking project to stage: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+    
+@stage_namespace.route('/stages_for_project/<int:project_id>', methods=['GET'])
+class StagesForProjectResource(Resource):
+    def get(self, project_id):
+        try:
+            # Check if the project exists in the database
+            project = Projects.query.get(project_id)
+
+            if project is None:
+                return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
+
+            # Get all stages linked to the project
+            linked_stages = ProjectStage.query.filter_by(projectID=project_id).all()
+
+            # Convert the list of linked stages to a JSON response
+            linked_stages_data = [{'stageID': stage.stage.stageID, 'name': stage.stage.name,
+                                   'started': stage.started, 'completed': stage.completed,
+                                   'completionDate': stage.completionDate} for stage in linked_stages]
+
+            return jsonify({'linked_stages': linked_stages_data})
+
+        except Exception as e:
+            current_app.logger.error(f"Error retrieving linked stages for project: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
         
+@stage_namespace.route('/complete_stage_for_project/<int:project_id>/<int:stage_id>', methods=['PUT'])
+@stage_namespace.doc(
+    params={
+        'project_id': 'Specify the ID of the project',
+        'stage_id': 'Specify the ID of the stage'
+    },
+    description = "Change the stage to complete"
+)
+class CompleteStageForProjectResource(Resource):
+    def put(self, project_id, stage_id):
+        try:
+            # Check if the project exists in the database
+            project = Projects.query.get(project_id)
+
+            if project is None:
+                return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
+
+            # Check if the linked stage exists for the project
+            linked_stage = ProjectStage.query.filter_by(projectID=project_id, stageID=stage_id).first()
+
+            if linked_stage is None:
+                return {'message': 'Stage not linked to the specified project'}, HTTPStatus.NOT_FOUND
+
+            # Update the linked stage as completed
+            linked_stage.completed = True
+            linked_stage.completionDate = datetime.today().date()
+
+            # Commit the changes to the database
+            db.session.commit()
+
+            return {'message': 'Linked stage marked as completed successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error marking linked stage as completed: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@task_namespace.route('/add_task_for_stage/<int:project_id>/<int:stage_id>', methods=['POST'])
+class AddTaskForStageResource(Resource):
+    @task_namespace.expect(new_task_model, validate=True)
+    @jwt_required()
+    def post(self, project_id, stage_id):
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+        try:
+            # Check if the linked stage exists for the project
+            linked_stage = ProjectStage.query.filter_by(projectID=project_id, stageID=stage_id).first()
+
+            if linked_stage is None:
+                return {'message': 'Stage not linked to the specified project'}, HTTPStatus.NOT_FOUND
+
+            # Extract task data from the request payload
+            data = task_namespace.payload
+            title = data.get('title')
+            deadline = data.get('deadline')
+            description = data.get('description')
+            assigned_to_ids = data.get('assigned_to', [])
+            cc_ids = data.get('cc', [])
+            created_by = current_user.userID
+            attached_files = data.get('attached_files')
+
+            # Fetch user instances based on IDs
+            assigned_to_users = Users.query.filter(Users.userID.in_(assigned_to_ids)).all()
+            cc_users = Users.query.filter(Users.userID.in_(cc_ids)).all()
+
+            # Create a new task for the linked stage
+            new_task = ProjectTask(
+                projectID=project_id,
+                title=title,
+                deadline=deadline,
+                description=description,
+                assignedTo=assigned_to_users,
+                cc=cc_users,
+                createdBy=created_by,
+                attachedFiles=attached_files,
+                stageID=stage_id
+            )
+
+            # Save the new task to the database
+            db.session.add(new_task)
+            db.session.commit()
+
+            return {'message': 'Task added for the linked stage successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error adding task for linked stage: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
