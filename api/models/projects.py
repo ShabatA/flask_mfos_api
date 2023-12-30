@@ -183,6 +183,10 @@ class Questions(db.Model):
             new_choice = QuestionChoices(questionID=self.questionID, choiceText=choice_text, points=points)
             new_choice.save()
     
+    def add_choice(self, choice_text, points):
+        new_choice = QuestionChoices(questionID=self.questionID, choiceText=choice_text, points=points)
+        new_choice.save()
+    
 
 class Answers(db.Model):
     __tablename__ = 'answers'

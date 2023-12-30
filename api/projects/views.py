@@ -437,9 +437,11 @@ class ProjectChangeStatusResource(Resource):
         if current_user.is_admin or current_user.userID == project.userID:
             # Parse the new status from the request
             new_status = request.json['projectStatus']
+            st = ['APPROVED', 'PENDING','REJECTED']
+            # st = [s.upper() for s in st]
 
             # Check if the new status is valid
-            if new_status not in ['INITIALIZED', 'CLOSED', 'PENDING', 'IN_PROGRESS', 'REJECTED']:
+            if new_status not in st:
                 return {'message': 'Invalid project status'}, HTTPStatus.BAD_REQUEST
 
             # Update the project status
@@ -449,7 +451,7 @@ class ProjectChangeStatusResource(Resource):
             try:
                 db.session.commit()
                 # Check if the new status is 'Approved' and add stages if true
-                if new_status == 'Approved':
+                if new_status == 'APPROVED':
                     # Add three stages for the project
                     initiated_stage = Stage(name='Project Initiated', status='in progress')
                     in_progress_stage = Stage(name='In Progress', status='in progress')
