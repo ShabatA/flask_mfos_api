@@ -2,7 +2,7 @@ from flask import request, current_app
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
-from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask
+from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus
 from ..utils.db import db
 from ..models.users import Users
 from flask import jsonify
@@ -63,6 +63,17 @@ edited_answers_model = project_namespace.model('EditedAnswers', {
     'new_choice_id': fields.Integer(description='ID of the selected choice for a single-choice question')
 })
 
+edit_choice = project_namespace.model(
+    'EditChoice', {
+        'new_choice_text': fields.String(required=True, description='New choice text'),
+        'points': fields.Integer(required=True, description='New points')
+    }
+)
+
+edit_choice_with_choice_id = project_namespace.model('EditChoiceWithChoiceID', {
+    'choiceID': fields.Integer(description='ID of the added choice')
+})
+
 project_edit_model = project_namespace.model('ProjectEdit', {
     'projectName': fields.String(required=True, description='Name of the project'),
     'regionID': fields.Integer(required=True, description='ID of the region'),
@@ -90,8 +101,11 @@ link_project_to_stage_model = stage_namespace.model('LinkProjectToStageModel', {
     'project_id': fields.Integer(required=True, description='ID of the project'),
     'stage_id': fields.Integer(required=True, description='ID of the stage'),
     'started': fields.Boolean(required=True, description="If the stages started"),
-    'completed': fields.Boolean(required=True, description="If the stages completed")
+    'completed': fields.Boolean(required=True, description="If the stages completed"),
+    'completionDate': fields.Date(description="Completion Date")
 })
+
+
 
 @project_namespace.route('/add')
 class ProjectAddResource(Resource):
@@ -423,7 +437,9 @@ class ProjectUsersResource(Resource):
 @project_namespace.route('/change_status/<int:project_id>', methods=['PUT'])
 class ProjectChangeStatusResource(Resource):
     @jwt_required()
-    @project_namespace.expect(project_status)
+    @project_namespace.expect(project_namespace.model('ProjectStatus', {
+        'projectStatus': fields.String(required=True, description='New project status')
+    }))
     def put(self, project_id):
         # Get the current user ID from the JWT token
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
@@ -436,13 +452,12 @@ class ProjectChangeStatusResource(Resource):
         # Check if the current user has permission to change the status
         if current_user.is_admin or current_user.userID == project.userID:
             # Parse the new status from the request
-            new_status = request.json['projectStatus']
-            st = ['APPROVED', 'PENDING','REJECTED']
-            # st = [s.upper() for s in st]
+            new_status = request.json.get('projectStatus')
+            # valid_statuses = [status for status in ProjectStatus]
 
             # Check if the new status is valid
-            if new_status not in st:
-                return {'message': 'Invalid project status'}, HTTPStatus.BAD_REQUEST
+            # if new_status not in valid_statuses:
+            #     return {'message': 'Invalid project status'}, HTTPStatus.BAD_REQUEST
 
             # Update the project status
             project.projectStatus = new_status
@@ -451,17 +466,13 @@ class ProjectChangeStatusResource(Resource):
             try:
                 db.session.commit()
                 # Check if the new status is 'Approved' and add stages if true
-                if new_status == 'APPROVED':
+                if new_status == "APPROVED":
                     # Add three stages for the project
-                    initiated_stage = Stage(name='Project Initiated', status='in progress')
-                    in_progress_stage = Stage(name='In Progress', status='in progress')
-                    closed_stage = Stage(name='Project Closed', status='pending')
+                    initiated_stage = Stage.query.filter_by(name='Project Initiated').first()
 
                     # Add the stages to the project
                     project_stages = [
-                        ProjectStage(project=project, stage=initiated_stage, started=True),
-                        ProjectStage(project=project, stage=in_progress_stage, started=True),
-                        ProjectStage(project=project, stage=closed_stage)
+                        ProjectStage(project=project, stage=initiated_stage, started=True)
                     ]
 
                     # Commit the new stages to the database
@@ -557,6 +568,8 @@ class AllProjectsWithAnswersResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error retrieving projects with answers: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
+
 @project_namespace.route('/all_questions', methods=['GET'])
 class AllQuestionsResource(Resource):
     def get(self):
@@ -592,6 +605,40 @@ class AllQuestionsResource(Resource):
             current_app.logger.error(f"Error retrieving questions: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+
+@project_namespace.route('/add_choice/<int:question_id>', methods=['POST'])
+class AddChoiceToQuestionResource(Resource):
+    @project_namespace.expect(edit_choice)
+    @project_namespace.doc(
+        params={
+            'question_id': 'Specify the ID of the question'
+        },
+        description = "Add a choice to a question"
+    )
+    @project_namespace.marshal_with(edit_choice_with_choice_id, code=201)
+    def post(self, question_id):
+        try:
+            # Get the existing question by ID
+            question = Questions.query.get_or_404(question_id)
+
+            # Extract choice data from the request
+            data = request.get_json()
+            choice_text = data.get('new_choice_text')
+            points = data.get('points')
+
+            # Validate input
+            if not choice_text or not points:
+                return jsonify({'error': 'Choice text and points are required'}), 400
+
+            # Create and add the new choice to the question
+            new_choice = question.add_choice(choice_text, points)
+            # question.add_choice(choice_text, points)
+
+            return new_choice, 201
+
+        except Exception as e:
+            current_app.logger.error(f"Error adding choice to question: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 #####################################################
 # STAGE ENDPOINTS
@@ -674,6 +721,9 @@ class AllStagesResource(Resource):
 @stage_namespace.route('/link_project_to_stage', methods=['POST'])
 class LinkProjectToStageResource(Resource):
     @stage_namespace.expect(link_project_to_stage_model, validate=True)
+    @stage_namespace.doc(
+        description = "Link a project to a stage"
+    )
     def post(self):
         try:
             # Get project and stage IDs from the request data
@@ -682,6 +732,7 @@ class LinkProjectToStageResource(Resource):
             stage_id = data.get('stage_id')
             started = data.get('started')
             completed = data.get('completed')
+            completionDate = data.get('completionDate')
 
             # Check if both project and stage IDs are provided
             if project_id is None or stage_id is None:
@@ -702,7 +753,8 @@ class LinkProjectToStageResource(Resource):
 
             # Create a new link between the project and stage
             project_stage_link = ProjectStage(projectID=project_id, stageID=stage_id,
-                                              started=started, completed=completed)
+                                              started=started, completed=completed,
+                                              completionDate=completionDate)
             db.session.add(project_stage_link)
             db.session.commit()
 
@@ -772,6 +824,10 @@ class CompleteStageForProjectResource(Resource):
             current_app.logger.error(f"Error marking linked stage as completed: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+
+#####################################################
+# STAGE Tasks ENDPOINTS
+#####################################################
 @task_namespace.route('/add_task_for_stage/<int:project_id>/<int:stage_id>', methods=['POST'])
 class AddTaskForStageResource(Resource):
     @task_namespace.expect(new_task_model, validate=True)
@@ -820,4 +876,41 @@ class AddTaskForStageResource(Resource):
 
         except Exception as e:
             current_app.logger.error(f"Error adding task for linked stage: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@task_namespace.route('/get_tasks_for_stage/<int:project_id>/<int:stage_id>', methods=['GET'])
+class GetTasksForStageResource(Resource):
+    @jwt_required()
+    def get(self, project_id, stage_id):
+        try:
+            # Check if the linked stage exists for the project
+            linked_stage = ProjectStage.query.filter_by(projectID=project_id, stageID=stage_id).first()
+
+            if linked_stage is None:
+                return {'message': 'Stage not linked to the specified project'}, HTTPStatus.NOT_FOUND
+
+            # Fetch all tasks for the linked stage
+            tasks = ProjectTask.query.filter_by(projectID=project_id, stageID=stage_id).all()
+
+            # Convert tasks to a list of dictionaries for response
+            tasks_list = [
+                {
+                    'taskID': task.taskID,
+                    'title': task.title,
+                    'deadline': str(task.deadline),
+                    'description': task.description,
+                    'assignedTo': [user.username for user in task.assignedTo],
+                    'cc': [user.username for user in task.cc],
+                    'createdBy': task.createdBy,
+                    'attachedFiles': task.attachedFiles,
+                    'completed': task.completed,
+                    'completionDate': str(task.completionDate) if task.completionDate else None
+                }
+                for task in tasks
+            ]
+
+            return {'tasks': tasks_list}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting tasks for linked stage: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
