@@ -556,7 +556,8 @@ class AllProjectsWithAnswersResource(Resource):
                                  'questionID': answer.questionID,
                                  'questionText': answer.question.questionText,
                                  'answerText': answer.answerText,
-                                 'choiceID': answer.choiceID
+                                 'choiceID': answer.choiceID,
+                                 'choiceText': answer.choice.choiceText if answer.choice else None,
                                  } for answer in answers]
                 }
 
@@ -568,7 +569,7 @@ class AllProjectsWithAnswersResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error retrieving projects with answers: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
-        
+
 
 @project_namespace.route('/all_questions', methods=['GET'])
 class AllQuestionsResource(Resource):
