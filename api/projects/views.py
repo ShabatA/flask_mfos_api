@@ -578,7 +578,7 @@ class AllQuestionsResource(Resource):
                 }
 
                 # If the question is a multiple-choice question, include choices
-                if question.questionType == 'single choice':
+                if question.questionType == 'single choice' or  question.questionType == 'multi choice':
                     choices = QuestionChoices.query.filter_by(questionID=question.questionID).all()
                     choices_data = [{'choiceID': choice.choiceID, 'choiceText': choice.choiceText, 'points': choice.points} for choice in choices]
                     question_details['choices'] = choices_data
