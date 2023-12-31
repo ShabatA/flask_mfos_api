@@ -825,7 +825,26 @@ class CompleteStageForProjectResource(Resource):
             current_app.logger.error(f"Error marking linked stage as completed: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@stage_namespace.route('/remove_stage/<int:project_id>/<int:stage_id>', methods=['DELETE'])
+class RemoveStageResource(Resource):
+    @jwt_required()
+    def delete(self, project_id, stage_id):
+        try:
+            # Check if the linked stage exists for the project
+            linked_stage = ProjectStage.query.filter_by(projectID=project_id, stageID=stage_id).first()
 
+            if linked_stage is None:
+                return {'message': 'Stage not linked to the specified project'}, HTTPStatus.NOT_FOUND
+
+            # Remove the linked stage
+            db.session.delete(linked_stage)
+            db.session.commit()
+
+            return {'message': 'Stage removed successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error removing stage: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 #####################################################
 # STAGE Tasks ENDPOINTS
 #####################################################
@@ -915,3 +934,4 @@ class GetTasksForStageResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error getting tasks for linked stage: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        

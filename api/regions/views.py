@@ -41,7 +41,7 @@ class Region(Resource):
         """
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if self.is_admin(current_admin):
+        if not current_admin.is_admin:
             print("Access forbidden. Only administrators can create regions.")
             return {'message': 'Access forbidden. Only administrators can create regions.'}, HTTPStatus.FORBIDDEN
         
@@ -60,7 +60,7 @@ class GetUpdateDelete(Resource):
         """
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if self.is_admin(current_admin):
+        if not current_admin.is_admin:
             print("Access forbidden. Only administrators can create regions.")
             return {'message': 'Access forbidden. Only administrators can create regions.'}, HTTPStatus.FORBIDDEN
         
@@ -76,7 +76,7 @@ class GetUpdateDelete(Resource):
         """
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if self.is_admin(current_admin):
+        if not current_admin.is_admin:
             print("Access forbidden. Only administrators can update regions.")
             return {'message': 'Access forbidden. Only administrators can update regions.'}, HTTPStatus.FORBIDDEN
 
@@ -94,7 +94,7 @@ class GetUpdateDelete(Resource):
         """
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        if self.is_admin(current_admin):
+        if not current_admin.is_admin:
             print("Access forbidden. Only administrators can delete regions.")
             return {'message': 'Access forbidden. Only administrators can delete regions.'}, HTTPStatus.FORBIDDEN
 

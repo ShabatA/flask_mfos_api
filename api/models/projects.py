@@ -318,3 +318,23 @@ task_cc = db.Table('task_cc',
                    db.Column('user_id', db.Integer, db.ForeignKey('users.userID'))
                    )
 
+class RequirementType(Enum):
+    MARKETING_CAMPAIGN = 'marketing_campaign'
+    DOCUMENTATION = 'documentation'
+    # Add more types as needed
+
+class Requirements(db.Model):
+    __tablename__ = 'requirements'
+
+    requirementID = db.Column(db.Integer, primary_key=True)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
+    description = db.Column(db.String, nullable=False)
+    status = db.Column(db.String, nullable=False)  # You can adjust this field based on your needs, e.g., pending, approved, rejected
+    type = db.Column(db.Enum(RequirementType), nullable=False)
+
+    def __repr__(self):
+        return f"<Requirement {self.requirementID} {self.description}>"
+
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
