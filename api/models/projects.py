@@ -130,10 +130,8 @@ class Projects(db.Model):
 
             # Get the existing answer by ID
             existing_answer = Answers.query.get_or_404(answer_id)
-
-            # Check if the answer belongs to the current project
-            if existing_answer.projectID != self.projectID:
-                response = jsonify({'message': 'Answer not found for the specified project'})
+            if not existing_answer:
+                response = jsonify({'message': 'Answer not found'})
                 response.status_code = HTTPStatus.NOT_FOUND
                 return response
 
@@ -148,6 +146,7 @@ class Projects(db.Model):
         db.session.commit()
 
         return jsonify({'message': 'Answers updated successfully'})
+
 
 
 class Questions(db.Model):

@@ -75,6 +75,10 @@ edit_choice_with_choice_id = project_namespace.model('EditChoiceWithChoiceID', {
 })
 
 project_edit_model = project_namespace.model('ProjectEdit', {
+    'edited_answers': fields.List(fields.Nested(edited_answers_model), description='List of edited answers for the project')
+})
+
+project_edit_details_model = project_namespace.model('ProjectEditDetails', {
     'projectName': fields.String(required=True, description='Name of the project'),
     'regionID': fields.Integer(required=True, description='ID of the region'),
     'budgetRequired': fields.Float(required=True, description='Required budget for the project'),
@@ -82,11 +86,10 @@ project_edit_model = project_namespace.model('ProjectEdit', {
     'projectStatus': fields.String(required=True, enum=['approved', 'pending','rejected'], description='Status of the project'),
     'projectScope': fields.String(description='Scope of the project'),
     'category': fields.String(enum=['A', 'B', 'C', 'D'], description='Category of the project'),
-    'userID': fields.Integer(description='ID of the user associated with the project'),
     'startDate': fields.Date(description='Start date of the project'),
-    'dueDate': fields.Date(description='Due date of the project'),
-    'edited_answers': fields.List(fields.Nested(edited_answers_model), description='List of edited answers for the project')
-})
+    'dueDate': fields.Date(description='Due date of the project')
+}
+)
 
 
 question_input_model = project_namespace.model('QuestionInput', {
@@ -291,7 +294,7 @@ class ProjectEditAnswersResource(Resource):
         project = Projects.query.get_or_404(project_id)
 
         # Ensure the current user is authorized to edit the project
-        if current_user.userID != project.userID:
+        if current_user.userID != project.userID and not current_user.is_admin:
             return {'message': 'Unauthorized. You do not have permission to edit this project.'}, HTTPStatus.FORBIDDEN
 
         # Parse the input data
@@ -299,27 +302,62 @@ class ProjectEditAnswersResource(Resource):
         edited_answers_data = project_data.pop('edited_answers', [])  # Extract edited answers from project_data
 
         # Update the project details
-        project.projectName = project_data.get('projectName', project.projectName)
-        project.regionID = project_data.get('regionID', project.regionID)
-        project.budgetRequired = project_data.get('budgetRequired', project.budgetRequired)
-        project.budgetAvailable = project_data.get('budgetAvailable', project.budgetAvailable)
-        project.projectStatus = project_data.get('projectStatus', project.projectStatus)
-        project.projectScope = project_data.get('projectScope', project.projectScope)
-        project.category = project_data.get('category', project.category)
-        project.startDate = project_data.get('startDate', project.startDate)
-        project.dueDate = project_data.get('dueDate', project.dueDate)
+        # project.projectName = project_data.get('projectName', project.projectName)
+        # project.regionID = project_data.get('regionID', project.regionID)
+        # project.budgetRequired = project_data.get('budgetRequired', project.budgetRequired)
+        # project.budgetAvailable = project_data.get('budgetAvailable', project.budgetAvailable)
+        # project.projectStatus = project_data.get('projectStatus', project.projectStatus)
+        # project.projectScope = project_data.get('projectScope', project.projectScope)
+        # project.category = project_data.get('category', project.category)
+        # project.startDate = project_data.get('startDate', project.startDate)
+        # project.dueDate = project_data.get('dueDate', project.dueDate)
 
         # Save the updated project details to the database
         try:
-            db.session.commit()
+            # 
 
             # Update the answers for the project
             project.edit_answers(edited_answers_data)
+            db.session.commit()
 
             return {'message': 'Project details and answers updated successfully'}, HTTPStatus.OK
         except Exception as e:
             db.session.rollback()
             return {'message': f'Error updating project details and answers: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@project_namespace.route('/edit_details/<int:project_id>', methods=['PATCH'])
+class ProjectEditDetailsResource(Resource):
+    @jwt_required()
+    @project_namespace.expect(project_edit_details_model)
+    def patch(self, project_id):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Get the project by ID
+        project = Projects.query.get_or_404(project_id)
+
+        # Ensure the current user is authorized to edit the project
+        if current_user.userID != project.userID and not current_user.is_admin:
+            return {'message': 'Unauthorized. You do not have permission to edit this project.'}, HTTPStatus.FORBIDDEN
+
+        # Parse the input data
+        project_data = request.json
+
+        # Update the project details conditionally
+        for field in ['projectName', 'regionID', 'budgetRequired', 'budgetAvailable', 'projectStatus',
+                      'projectScope', 'category', 'startDate', 'dueDate']:
+            if field in project_data:
+                setattr(project, field, project_data[field])
+
+        # Save the updated project details to the database
+        try:
+            db.session.commit()
+            return {'message': 'Project details updated successfully'}, HTTPStatus.OK
+        except Exception as e:
+            db.session.rollback()
+            return {'message': f'Error updating project details: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 @project_namespace.route('/delete/<int:project_id>')
 class ProjectDeleteResource(Resource):
