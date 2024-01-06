@@ -5,6 +5,7 @@ from enum import Enum
 from flask import jsonify
 from http import HTTPStatus
 from datetime import datetime
+from sqlalchemy.dialects.postgresql import JSONB
 
 
 class ProjectStatus(Enum):
@@ -22,7 +23,7 @@ class ProjectCategory(Enum):
     D = 'D'
 
 class Projects(db.Model):
-    __tablename__ = 'projects'
+    _tablename_ = 'projects'
 
     projectID = db.Column(db.Integer, primary_key=True)
     projectName = db.Column(db.String, nullable=False)
@@ -38,24 +39,29 @@ class Projects(db.Model):
 
     # Relationship with Questions
     # questions = db.relationship('Questions', backref='project', lazy=True)
-    users = db.relationship('Users', secondary='project_users', backref='projects', lazy='dynamic')
+    users = db.relationship('Users', secondary='project_user', backref='projects', lazy='dynamic')
     answers = db.relationship('Answers', backref='projects', lazy=True)
     tasks = db.relationship('ProjectTask', backref='projects', lazy=True)
+    status_data = db.relationship('ProjectStatusData', backref='projects', uselist=False, lazy=True)
 
-    def __repr__(self):
+    def _repr_(self):
         return f"<Project {self.projectID} {self.projectName}>"
     
     def delete(self):
         db.session.delete(self)
         db.session.commit()
 
-    def save(self, answers=None):
+    def save(self, answers=None, status_data=None):
         db.session.add(self)
         db.session.commit()
 
         # If answers are provided, create and assign them to the project
         if answers:
             self.assign_answers(answers)
+
+        # If status_data is provided, create and assign it to the project
+        if status_data:
+            self.assign_status_data(status_data)
     
     def calculate_total_points(self):
         total_points = 0
@@ -72,6 +78,10 @@ class Projects(db.Model):
                 total_points += answer.choice.points
 
         return total_points
+    
+    def assign_status_data(self, status_data):
+        new_status_data = ProjectStatusData(projectID=self.projectID, status=self.projectStatus.value, data=status_data)
+        new_status_data.save()
 
 
     def assign_answers(self, answers):
@@ -150,7 +160,7 @@ class Projects(db.Model):
 
 
 class Questions(db.Model):
-    __tablename__ = 'questions'
+    _tablename_ = 'questions'
 
     questionID = db.Column(db.Integer, primary_key=True)
     # projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
@@ -161,7 +171,7 @@ class Questions(db.Model):
     # If the question is multiple choice, store choices in a separate table
     choices = db.relationship('QuestionChoices', backref='question', lazy=True, uselist=True)
 
-    def __repr__(self):
+    def _repr_(self):
         return f"<Question {self.questionID} {self.questionText}>"
     
     def save(self):
@@ -188,7 +198,7 @@ class Questions(db.Model):
     
 
 class Answers(db.Model):
-    __tablename__ = 'answers'
+    _tablename_ = 'answers'
 
     answerID = db.Column(db.Integer, primary_key=True)
     projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
@@ -202,7 +212,7 @@ class Answers(db.Model):
     # Define a relationship with the choices table
     choice = db.relationship('QuestionChoices', foreign_keys=[choiceID], backref='answer', lazy=True)
 
-    def __repr__(self):
+    def _repr_(self):
         return f"<Answer {self.answerID} {self.answerText}>"
     
     def save(self):
@@ -214,14 +224,14 @@ class Answers(db.Model):
         return cls.query.get_or_404(answerID)
 
 class QuestionChoices(db.Model):
-    __tablename__ = 'question_choices'
+    _tablename_ = 'question_choices'
 
     choiceID = db.Column(db.Integer, primary_key=True)
     questionID = db.Column(db.Integer, db.ForeignKey('questions.questionID'), nullable=False)
     choiceText = db.Column(db.String, nullable=False)
     points = db.Column(db.Integer, nullable=False)
 
-    def __repr__(self):
+    def _repr_(self):
         return f"<Choice {self.choiceID} {self.choiceText}>"
     
     def save(self):
@@ -235,13 +245,13 @@ class QuestionChoices(db.Model):
     
 
 class ProjectUser(db.Model):
-    __tablename__ = 'project_users'
+    _tablename_ = 'project_user'
 
     id = db.Column(db.Integer, primary_key=True)
     projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
     userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
 
-    def __repr__(self):
+    def _repr_(self):
         return f"<ProjectUser {self.id} ProjectID: {self.projectID}, UserID: {self.userID}>"
     
     def save(self):
@@ -250,13 +260,13 @@ class ProjectUser(db.Model):
 
 
 class Stage(db.Model):
-    __tablename__ = 'stages'
+    _tablename_ = 'stages'
 
     stageID = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
     # status = db.Column(db.String, nullable=False)  # You can use this field to indicate if the stage is 'started', 'completed', etc.
 
-    def __repr__(self):
+    def _repr_(self):
         return f"<Stage {self.stageID} {self.name}>"
     
     def save(self):
@@ -269,10 +279,10 @@ class Stage(db.Model):
 
 
 class ProjectStage(db.Model):
-    __tablename__ = 'project_stages'
+    _tablename_ = 'project_stages'
 
     projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), primary_key=True)
-    stageID = db.Column(db.Integer, db.ForeignKey('stages.stageID'), primary_key=True)
+    stageID = db.Column(db.Integer, db.ForeignKey('stage.stageID'), primary_key=True)
     started = db.Column(db.Boolean, default=False)
     completed = db.Column(db.Boolean, default=False)
     completionDate = db.Column(db.Date, nullable=True)
@@ -282,7 +292,7 @@ class ProjectStage(db.Model):
 
 
 class ProjectTask(db.Model):
-    __tablename__ = 'project_tasks'
+    _tablename_ = 'project_tasks'
 
     taskID = db.Column(db.Integer, primary_key=True)
     projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
@@ -293,7 +303,7 @@ class ProjectTask(db.Model):
     description = db.Column(db.String, nullable=True)
     createdBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
     attachedFiles = db.Column(db.String, nullable=True)
-    stageID = db.Column(db.Integer, db.ForeignKey('stages.stageID'), nullable=False)
+    stageID = db.Column(db.Integer, db.ForeignKey('stage.stageID'), nullable=False)
     completed = db.Column(db.Boolean, default=False)
     completionDate = db.Column(db.Date, nullable=True)
 
@@ -302,38 +312,50 @@ class ProjectTask(db.Model):
     def is_overdue(self):
         return self.deadline < datetime.today().date() if not self.completed else False
 
-    def __repr__(self):
+    def _repr_(self):
         return f"<ProjectTask {self.taskID} {self.title}>"
 
 
 # Association tables for many-to-many relationships
 task_assigned_to = db.Table('task_assigned_to',
-                           db.Column('task_id', db.Integer, db.ForeignKey('project_tasks.taskID')),
+                           db.Column('task_id', db.Integer, db.ForeignKey('project_task.taskID')),
                            db.Column('user_id', db.Integer, db.ForeignKey('users.userID'))
                            )
 
 task_cc = db.Table('task_cc',
-                   db.Column('task_id', db.Integer, db.ForeignKey('project_tasks.taskID')),
+                   db.Column('task_id', db.Integer, db.ForeignKey('project_task.taskID')),
                    db.Column('user_id', db.Integer, db.ForeignKey('users.userID'))
                    )
 
-class RequirementType(Enum):
-    MARKETING_CAMPAIGN = 'marketing_campaign'
-    DOCUMENTATION = 'documentation'
-    # Add more types as needed
+class ProjectStatusData(db.Model):
+    _tablename_ = 'project_status_data'
 
-class Requirements(db.Model):
-    __tablename__ = 'requirements'
-
-    requirementID = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
-    description = db.Column(db.String, nullable=False)
-    status = db.Column(db.String, nullable=False)  # You can adjust this field based on your needs, e.g., pending, approved, rejected
-    type = db.Column(db.Enum(RequirementType), nullable=False)
+    status = db.Column(db.String, nullable=False)
+    data = db.Column(JSONB, nullable=True)  # You can adjust the type based on the data you want to store
 
-    def __repr__(self):
-        return f"<Requirement {self.requirementID} {self.description}>"
+    project = db.relationship('Projects', backref='project_status_data', lazy=True)
+
+    def _repr_(self):
+        return f"<ProjectStatusData {self.id} ProjectID: {self.projectID}, Status: {self.status}>"
 
     def save(self):
         db.session.add(self)
         db.session.commit()
+    
+    @staticmethod
+    def get_status_data_by_project_id(project_id):
+        try:
+            # Retrieve the project status data based on the project ID
+            status_data = ProjectStatusData.query.filter_by(projectID=project_id).first()
+
+            if status_data:
+                return status_data.data
+            else:
+                return None  # or an appropriate value indicating no data found
+
+        except Exception as e:
+            # Handle exceptions (e.g., database errors) appropriately
+            print(f'Error retrieving project status data: {str(e)}')
+            return None  # or raise an exception, depending on your error handling strategy

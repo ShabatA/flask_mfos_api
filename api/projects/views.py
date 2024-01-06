@@ -2,7 +2,7 @@ from flask import request, current_app
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
-from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus
+from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData
 from ..utils.db import db
 from ..models.users import Users
 from flask import jsonify
@@ -51,6 +51,16 @@ project_input_model = project_namespace.model('ProjectInput', {
     'startDate': fields.Date(description='Start date of the project'),
     'dueDate': fields.Date(description='Due date of the project'),
     'answers': fields.List(fields.Nested(answers_model), description='List of answers for the project')
+})
+
+project_update_status_model = project_namespace.model('ProjectUpdateStatus', {
+    'projectStatus': fields.String(required=True, enum=['approved', 'pending','rejected'], description='Status of the project'),
+    'status_data': fields.Raw(description='Status data associated with the project'),
+})
+
+project_input_model2 = project_namespace.model('ProjectInput2', {
+    
+    'status_data': fields.Raw(description='Status data associated with the project'),
 })
 
 project_status = project_namespace.model('ProjectStatus',{
@@ -156,6 +166,87 @@ class ProjectAddResource(Resource):
         except Exception as e:
             # Handle exceptions (e.g., database errors) appropriately
             return {'message': f'Error adding project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@project_namespace.route('/add/requirements/<int:project_id>')
+class ProjectAddResource(Resource):
+    @jwt_required()
+    @project_namespace.expect(project_input_model2)
+    def post(self, project_id):
+        try:
+            # Get the current user ID from the JWT token
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            project = Projects.get_by_id(project_id)
+            # Parse the input data
+            project_data = request.json
+            status_data = project_data.pop('status_data', {})  # Assuming status_data is part of the input
+
+            
+           
+
+            # Assign status data to the project
+            project.assign_status_data(status_data)
+
+            # Add the current user to the ProjectUsers table for the new project
+            project_user = ProjectUser(projectID=project.projectID, userID=current_user.userID)
+            project_user.save()
+
+            return {'message': 'Project added successfully'}, HTTPStatus.CREATED
+        except Exception as e:
+            # Handle exceptions (e.g., database errors) appropriately
+            return {'message': f'Error adding project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@project_namespace.route('/get/requirements/<int:project_id>')
+class ProjectRequirementResource(Resource):
+   
+    
+    def get(self, project_id):
+        try:
+            # Retrieve JSONB data based on project ID
+            status_data = ProjectStatusData.get_status_data_by_project_id(project_id)
+
+            if status_data is not None:
+                return {'status_data': status_data}, HTTPStatus.OK
+            else:
+                return {'message': 'No status data found for the project'}, HTTPStatus.NOT_FOUND
+
+        except Exception as e:
+            # Handle exceptions (e.g., database errors) appropriately
+            return {'message': f'Error retrieving status data: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+
+@project_namespace.route('/update_status/<int:project_id>')
+class ProjectUpdateStatusResource(Resource):
+    @jwt_required()
+    @project_namespace.expect(project_update_status_model)
+    def post(self, project_id):
+        try:
+            # Get the current user ID from the JWT token
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            # Retrieve the project by ID
+            project = Projects.query.get_or_404(project_id)
+
+            # Check if the current user has the necessary permissions to update the project status
+            # Add your own logic for permission checks
+            if not current_user.is_admin:
+                return {'message': 'Unauthorized. You do not have permission to update the project status.'}, HTTPStatus.FORBIDDEN
+
+            # Parse the input data
+            status_data = request.json.get('status_data', {})
+            project_status = request.json.get('projectStatus')
+
+            # Update the project status if provided
+            if project_status:
+                project.projectStatus = project_status
+
+            # Update the project status data
+            project.assign_status_data(status_data)
+
+            return {'message': 'Project status updated successfully'}, HTTPStatus.OK
+        except Exception as e:
+            # Handle exceptions (e.g., database errors) appropriately
+            return {'message': f'Error updating project status: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 @project_namespace.route('/add_questions')
@@ -972,4 +1063,3 @@ class GetTasksForStageResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error getting tasks for linked stage: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
-        
