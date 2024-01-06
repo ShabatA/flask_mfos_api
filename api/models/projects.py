@@ -16,6 +16,12 @@ class ProjectStatus(Enum):
     def to_dict(self):
         return {'status': self.value}
 
+class TaskStatus(Enum):
+    TODO = 'To Do'
+    INPROGRESS = 'In Progress'
+    DONE = 'Done'
+    OVERDUE = 'Overdue'
+
 class ProjectCategory(Enum):
     A = 'A'
     B = 'B'
@@ -257,6 +263,10 @@ class ProjectUser(db.Model):
     def save(self):
         db.session.add(self)
         db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
 
 
 class Stage(db.Model):
@@ -304,17 +314,41 @@ class ProjectTask(db.Model):
     createdBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
     attachedFiles = db.Column(db.String, nullable=True)
     stageID = db.Column(db.Integer, db.ForeignKey('stage.stageID'), nullable=False)
-    completed = db.Column(db.Boolean, default=False)
+    status = db.Column(db.Enum(TaskStatus), nullable=False)
     completionDate = db.Column(db.Date, nullable=True)
 
     stage = db.relationship('Stage', backref='tasks', lazy=True)
 
     def is_overdue(self):
-        return self.deadline < datetime.today().date() if not self.completed else False
+        return self.deadline < datetime.today().date() if not self.status.DONE else False
 
     def _repr_(self):
         return f"<ProjectTask {self.taskID} {self.title}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    @classmethod
+    def get_by_id(cls, taskID):
+        return cls.query.get_or_404(taskID)
 
+class TaskComments(db.Model):
+    _tablename_ = 'task_comments'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
+    taskID = db.Column(db.Integer, db.ForeignKey('project_task.taskID'), nullable=False)
+    comment = db.Column(db.String, nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    
+    def __repr__(self) -> str:
+        return f"<TaskComments {self.id} userID: {self.userID} taskID: {self.taskID} comment: {self.comment}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+        
 
 # Association tables for many-to-many relationships
 task_assigned_to = db.Table('task_assigned_to',

@@ -2,7 +2,7 @@ from flask import request, current_app
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
-from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData
+from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData, TaskComments, TaskStatus
 from ..utils.db import db
 from ..models.users import Users
 from flask import jsonify
@@ -24,6 +24,12 @@ answers_model = project_namespace.model('Answers', {
     'questionID': fields.Integer(required=True, description='ID of the answer'),
     'answerText': fields.String(description='Text-based answer for a text question'),
     'choiceID': fields.List(fields.Integer, description='List of choices')
+})
+
+comments_model = task_namespace.model('TaskComments',{
+    'taskID': fields.Integer(required=True, description='Id of the task the comment belongs to'),
+    'comment': fields.String(required=True, description= 'The comment written by the user'),
+    'date': fields.Date(required=True, description='Date on which the comment was made')
 })
 
 # Define a model for the input data (assuming JSON format)
@@ -168,7 +174,7 @@ class ProjectAddResource(Resource):
             return {'message': f'Error adding project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @project_namespace.route('/add/requirements/<int:project_id>')
-class ProjectAddResource(Resource):
+class ProjectAddRequirementsResource(Resource):
     @jwt_required()
     @project_namespace.expect(project_input_model2)
     def post(self, project_id):
@@ -460,8 +466,10 @@ class ProjectDeleteResource(Resource):
         # Check if the project exists and belongs to the current user
         if current_user.is_admin:
             project_to_delete = Projects.query.filter_by(projectID=project_id).first()
+            project_users_to_delete = ProjectUser.query.filter_by(projectID=project_id).all()
         else:
             project_to_delete = Projects.query.filter_by(projectID=project_id, userID=current_user.userID).first()
+            project_users_to_delete = ProjectUser.query.filter_by(projectID=project_id).all()
         if not project_to_delete:
             return {'message': 'Project not found or unauthorized'}, HTTPStatus.NOT_FOUND
 
@@ -470,6 +478,11 @@ class ProjectDeleteResource(Resource):
 
         # Delete the project from the database
         try:
+            #Delete the linked projects
+            if project_users_to_delete:
+                for pu in project_users_to_delete:
+                    pu.delete()
+                    
             project_to_delete.delete()
 
             return {'message': 'Project and associated answers deleted successfully'}, HTTPStatus.OK
@@ -1014,7 +1027,8 @@ class AddTaskForStageResource(Resource):
                 cc=cc_users,
                 createdBy=created_by,
                 attachedFiles=attached_files,
-                stageID=stage_id
+                stageID=stage_id,
+                status = TaskStatus.TODO
             )
 
             # Save the new task to the database
@@ -1026,6 +1040,122 @@ class AddTaskForStageResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error adding task for linked stage: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@task_namespace.route('/mark_as_started/<int:task_id>',methods=['PUT'])
+class MarkTaskAsStartedResource(Resource):
+    @jwt_required()
+    @task_namespace.doc(
+        description = "Assign the In Progress status to the provided task"
+    )
+    def put(self, task_id):
+        try:
+            task = ProjectTask.get_by_id(task_id)
+            task.status = TaskStatus.INPROGRESS
+            task.save()
+        except Exception as e:
+            current_app.logger.error(f"Error marking task: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR  
+        
+
+@task_namespace.route('/mark_as_done/<int:task_id>',methods=['PUT'])
+class MarkTaskAsDoneResource(Resource):
+    @jwt_required()
+    @task_namespace.doc(
+        description = "Assign the In Progress status to the provided task"
+    )
+    def put(self, task_id):
+        try:
+            task = ProjectTask.get_by_id(task_id)
+            task.status = TaskStatus.DONE
+            task.save()
+        except Exception as e:
+            current_app.logger.error(f"Error marking task: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@task_namespace.route('/mark_as_overdue/<int:task_id>',methods=['PUT'])
+class MarkTaskAsOverdueResource(Resource):
+    @jwt_required()
+    @task_namespace.doc(
+        description = "Assign the In Progress status to the provided task"
+    )
+    def put(self, task_id):
+        try:
+            task = ProjectTask.get_by_id(task_id)
+            if task.is_overdue:
+                task.status = TaskStatus.OVERDUE
+            task.save()
+        except Exception as e:
+            current_app.logger.error(f"Error marking task: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@task_namespace.route('/add_comment_for_task', methods=['POST'])
+class AddTaskComments(Resource):
+    @jwt_required()
+    @task_namespace.expect(comments_model, validate=True)
+    @task_namespace.doc(
+        description = "Post comments to a Task"
+    )
+    def post(self):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Parse the input data
+        comment_data = request.json
+        
+        #get data from json
+        taskID = comment_data['taskID']
+        comment = comment_data['comment']
+        date = comment_data['date']
+        
+        new_comment = TaskComments(
+            taskID = taskID,
+            userID = current_user.userID,
+            comment = comment,
+            date = date
+        )
+        
+        try:
+            # db.session.add(new_stage)
+            # db.session.commit()
+            new_comment.save()
+
+            return {'message': 'Comment added successfully'}, HTTPStatus.CREATED
+        except Exception as e:
+            db.session.rollback()
+            return {'message': f'Error adding comment: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
+@task_namespace.route('/get/task_comments/<int:task_id>',methods=['GET'])
+class GetTaskCommentsResource(Resource):
+    @jwt_required()
+    def get(self, task_id):
+        try:
+            comments = TaskComments.query.filter_by(taskID=task_id).all()
+            
+            comments_list = []
+            
+            for comment in comments:
+                # Fetch user's name based on userID
+                user = Users.query.get(comment.userID)
+                user_name = user.username if user else "Unknown User"
+                
+                # Convert TaskComments instance to dictionary
+                comment_dict = {
+                    'taskID': comment.taskID,
+                    'user': user_name,
+                    'comment': comment.comment,
+                    'date': comment.date.strftime('%Y-%m-%d') if comment.date else None,
+                }
+                
+                # Append the dictionary to comments_list
+                comments_list.append(comment_dict)
+
+            return {'comments': comments_list}, HTTPStatus.OK
+            
+        except Exception as e:
+            current_app.logger.error(f"Error task comments: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            
+        
 
 @task_namespace.route('/get_tasks_for_stage/<int:project_id>/<int:stage_id>', methods=['GET'])
 class GetTasksForStageResource(Resource):
@@ -1052,7 +1182,7 @@ class GetTasksForStageResource(Resource):
                     'cc': [user.username for user in task.cc],
                     'createdBy': task.createdBy,
                     'attachedFiles': task.attachedFiles,
-                    'completed': task.completed,
+                    'status': task.status.value,
                     'completionDate': str(task.completionDate) if task.completionDate else None
                 }
                 for task in tasks
