@@ -25,12 +25,8 @@ class PermissionLevel(Enum):
     USERS = 'users'
     SUGPROJECTS = 'sugprojects'
     SUBPROJECTS = 'subprojects'
-    # region access
-    # Edit cases
-    # edit project
     CUSER = 'cuser'
     FINANCE = 'finance'
-    # level of finance
     ALL = 'all'
     ADDUSER = 'adduser'
     MANAGEUSER = 'manageuser'
@@ -46,7 +42,7 @@ class Users(db.Model):
     lastName = db.Column(db.String)
     jobDescription = db.Column(db.String)
     mobile = db.Column(db.String(255))
-    active = db.Column(db.Boolean, default=False)
+    active = db.Column(db.Boolean, default=True)
     UserStatus = db.Column(db.Enum(UserStatus), default=UserStatus.PENDING)
     date_created = db.Column(db.DateTime, default=datetime.utcnow)
     regionID = db.Column(db.Integer, db.ForeignKey('regions.regionID'))
@@ -81,6 +77,18 @@ class Users(db.Model):
                 user_permission = UserPermissions(user=self, permission_level=permission_level)
                 self.permissions.append(user_permission)
     
+    def update_permissions(self, permission_names):
+        # Remove existing permissions
+        self.permissions = []
+
+        # Add new permissions
+        for permission_name in permission_names:
+            permission_level = PermissionLevel[permission_name]
+            user_permission = UserPermissions(user=self, permission_level=permission_level)
+            self.permissions.append(user_permission)
+
+        db.session.commit()
+    
     def save(self):
         db.session.add(self)
         db.session.commit()
@@ -88,6 +96,9 @@ class Users(db.Model):
     def delete(self):
         db.session.delete(self)
         db.session.commit()
+    
+    def is_active(self):
+        return self.active
     
     @classmethod
     def get_by_id(cls, userID):
@@ -100,15 +111,6 @@ class Users(db.Model):
         """
         return self.role and self.role.RoleID == 1
     
-    def update_permissions(self, permissions):
-        self.permissions = []
-
-        for permission in permissions:
-            new_permission = UserPermissions(user=self, permission_level=permission)
-            db.session.add(new_permission)
-
-        db.session.commit()
-    
     def update(self, data):
         for key, value in data.items():
             if key == 'regionName':
@@ -119,6 +121,8 @@ class Users(db.Model):
                 else:
                     # Handle the case where the region is not found
                     raise ValueError('Region not found.')
+            elif key == 'permission_level':
+                self.update_permissions(value)
 
             else:
                 # For other fields, simply update them

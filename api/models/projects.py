@@ -267,6 +267,7 @@ class ProjectUser(db.Model):
     def delete(self):
         db.session.delete(self)
         db.session.commit()
+    
 
 
 class Stage(db.Model):

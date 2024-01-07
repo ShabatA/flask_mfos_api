@@ -629,42 +629,7 @@ class ProjectChangeStatusResource(Resource):
         else:
             return {'message': 'Unauthorized. You do not have permission to change the status of this project.'}, HTTPStatus.FORBIDDEN
 
-@project_namespace.route('/link-user/<int:project_id>/<string:username>')
-class LinkUserToProjectResource(Resource):
-    @jwt_required()
-    def post(self, project_id, username):
-        try:
-            # Get the current user from the JWT token
-            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
-            # Check if the current user has the necessary permissions (e.g., project owner or admin)
-            # Adjust the condition based on your specific requirements
-            if not current_user.is_admin():
-                return {'message': 'Unauthorized. You do not have permission to link users to projects.'}, HTTPStatus.FORBIDDEN
-
-            # Get the project by ID
-            project = Projects.query.get(project_id)
-            if not project:
-                return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
-
-            # Get the user by username
-            user = Users.query.filter_by(username=username).first()
-            if not user:
-                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
-
-            # Check if the user is already linked to the project
-            if ProjectUser.query.filter_by(projectID=project_id, userID=user.userID).first():
-                return {'message': 'User is already linked to the project'}, HTTPStatus.BAD_REQUEST
-
-            # Link the user to the project
-            project_user = ProjectUser(projectID=project_id, userID=user.userID)
-            project_user.save()
-
-            return {'message': 'User linked to the project successfully'}, HTTPStatus.OK
-
-        except Exception as e:
-            current_app.logger.error(f"Error linking user to project: {str(e)}")
-            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @project_namespace.route('/all_with_answers', methods=['GET'])
 class AllProjectsWithAnswersResource(Resource):
@@ -1050,8 +1015,12 @@ class MarkTaskAsStartedResource(Resource):
     def put(self, task_id):
         try:
             task = ProjectTask.get_by_id(task_id)
-            task.status = TaskStatus.INPROGRESS
-            task.save()
+            if(task.status == TaskStatus.TODO):
+                task.status = TaskStatus.INPROGRESS
+                task.save()
+                return {'message': 'Task has been marked as In Progress successfully'}, HTTPStatus.OK
+            else:
+                return {'message': 'Not allowed. A task must be in a TODO state to mark at as In Progress'}, HTTPStatus.BAD_REQUEST
         except Exception as e:
             current_app.logger.error(f"Error marking task: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR  
@@ -1061,13 +1030,18 @@ class MarkTaskAsStartedResource(Resource):
 class MarkTaskAsDoneResource(Resource):
     @jwt_required()
     @task_namespace.doc(
-        description = "Assign the In Progress status to the provided task"
+        description = "Assign the DONE status to the provided task."
     )
     def put(self, task_id):
         try:
             task = ProjectTask.get_by_id(task_id)
-            task.status = TaskStatus.DONE
-            task.save()
+            #
+            if(task.status == TaskStatus.INPROGRESS or task.status == TaskStatus.OVERDUE):
+                task.status = TaskStatus.DONE
+                task.save()
+                return {'message': 'Task marked as done successfully.'}, HTTPStatus.OK
+            else:
+                return {'message': 'Cannot mark a Task as done if it was not IN PROGRESS.'}, HTTPStatus.BAD_REQUEST
         except Exception as e:
             current_app.logger.error(f"Error marking task: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
@@ -1076,14 +1050,22 @@ class MarkTaskAsDoneResource(Resource):
 class MarkTaskAsOverdueResource(Resource):
     @jwt_required()
     @task_namespace.doc(
-        description = "Assign the In Progress status to the provided task"
+        description = "Assign the OVERDUE status to the provided task"
     )
     def put(self, task_id):
         try:
             task = ProjectTask.get_by_id(task_id)
-            if task.is_overdue:
-                task.status = TaskStatus.OVERDUE
-            task.save()
+            #only mark the task as overdue if it neither DONE nor already OVERDUE
+            if(task.status != TaskStatus.DONE or task.status != TaskStatus.OVERDUE):
+                if task.is_overdue:
+                    task.status = TaskStatus.OVERDUE
+                    task.save()
+                    return {'message': 'Task has been marked as overdue'}, HTTPStatus.OK
+                else:
+                    return {'message': 'Ingored, Task is not yet overdue'}, HTTPStatus.OK
+            else:
+                return {'message': 'Cannot mark Task as OVERDUE, it is either DONE or already OVERDUE'}, HTTPStatus.BAD_REQUEST
+                
         except Exception as e:
             current_app.logger.error(f"Error marking task: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR

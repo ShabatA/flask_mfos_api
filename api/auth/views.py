@@ -2,6 +2,7 @@ from api.config.config import Config
 from flask_restx import Resource, Namespace, fields
 from flask import request, current_app
 from ..models.users import Users, Role, UserPermissions, PermissionLevel
+from ..models.projects import Projects, ProjectUser, ProjectTask
 from werkzeug.security import generate_password_hash, check_password_hash
 from http import HTTPStatus
 from flask_jwt_extended import (create_access_token,
@@ -11,6 +12,8 @@ from ..models.regions import Regions  # Import the Region model
 from ..utils.db import db
 
 auth_namespace = Namespace('auth', description="a namespace for authentication")
+
+user_management_namespace = Namespace('User Management', description="A namespace to assign/reassign projects and/or cases to users.")
 
 # Define a Swagger model for the users attribute
 users_model = auth_namespace.model('User', {
@@ -44,7 +47,6 @@ signup_model = auth_namespace.model(
 
 user_model = auth_namespace.model(
     'Users', {
-        'userID': fields.Integer(),
         'username': fields.String(required=True, description="A username"),
         'email': fields.String(required=True, description="An email"),
         'password': fields.String(required=True, description="A password"),
@@ -279,29 +281,49 @@ class UpdateUserByAdmin(Resource):
             return {'message': f'Error updating user: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@auth_namespace.route('/admin/remove-user/<int:user_id>')
-class RemoveUserByAdmin(Resource):
+@auth_namespace.route('/admin/deactivate/<int:user_id>')
+class DeactivateUserByAdmin(Resource):
 
     @jwt_required()
     @auth_namespace.doc(
-        description="Remove a user",
+        description="Deactivate a user",
         params={'user_id': 'Specify the user ID'}
     )
-    def delete(self, user_id):
+    def put(self, user_id):
         current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
 
         if not current_admin.is_admin():
             return {'message': 'Access forbidden. Admins only.'}, HTTPStatus.FORBIDDEN
 
-        user_to_remove = Users.get_by_id(user_id)
-        if user_to_remove:
-            # Check if the current admin is trying to remove their own account
-            if current_admin.userID == user_to_remove.userID:
-                return {'message': 'Admin cannot remove their own account.'}, HTTPStatus.FORBIDDEN
+        user_to_update = Users.get_by_id(user_id)
+        if user_to_update:
+            
+            user_to_update.active = False
+            user_to_update.save()
+            return {'message': 'User deactivated successfully.'}, HTTPStatus.OK
+        else:
+            return {'message': 'User not found.'}, HTTPStatus.NOT_FOUND
 
-            # Remove the user
-            user_to_remove.delete()
-            return {'message': 'User removed successfully.'}, HTTPStatus.OK
+@auth_namespace.route('/admin/activate/<int:user_id>')
+class ActivateUserByAdmin(Resource):
+
+    @jwt_required()
+    @auth_namespace.doc(
+        description="Activate a user",
+        params={'user_id': 'Specify the user ID'}
+    )
+    def put(self, user_id):
+        current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        if not current_admin.is_admin():
+            return {'message': 'Access forbidden. Admins only.'}, HTTPStatus.FORBIDDEN
+
+        user_to_update = Users.get_by_id(user_id)
+        if user_to_update:
+            
+            user_to_update.active = True
+            user_to_update.save()
+            return {'message': 'User activated successfully.'}, HTTPStatus.OK
         else:
             return {'message': 'User not found.'}, HTTPStatus.NOT_FOUND
 
@@ -568,18 +590,155 @@ class GetUserId(Resource):
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-# function to return users
-        # username
-        # email
-        # password
-        #
 
-# function current user info
-        # username
-        # email
-        # password
-        # region
-        # role
-        # permissions
+######### User Management ############
 
+
+@user_management_namespace.route('/assign-user/<int:project_id>/<string:username>')
+class AssignUserToProjectResource(Resource):
+    @jwt_required()
+    @user_management_namespace.doc(
+        description= 'When a user is given access/responsibility to an existing project.',
+        params={
+            'project_id': 'The project to re-assign',
+            'username': 'The Username of the User to give the project to.'
+            }
+    )
+    def post(self, project_id, username):
+        try:
+            # Get the current user from the JWT token
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            # Check if the current user has the necessary permissions (e.g., project owner or admin)
+            # Adjust the condition based on your specific requirements
+            if not current_user.is_admin():
+                return {'message': 'Unauthorized. You do not have permission to link users to projects.'}, HTTPStatus.FORBIDDEN
+
+            # Get the project by ID
+            project = Projects.query.get(project_id)
+            if not project:
+                return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
+
+            # Get the user by username
+            user = Users.query.filter_by(username=username).first()
+            if not user or user.is_active == False:
+                return {'message': 'User not found or the user has been deactivated'}, HTTPStatus.BAD_REQUEST
+
+            # Check if the user is already linked to the project
+            if ProjectUser.query.filter_by(projectID=project_id, userID=user.userID).first():
+                return {'message': 'User is already linked to the project'}, HTTPStatus.BAD_REQUEST
+
+            # Link the user to the project
+            project_user = ProjectUser(projectID=project_id, userID=user.userID)
+            project_user.save()
+
+            return {'message': 'User linked to the project successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error linking user to project: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@user_management_namespace.route('/reassign-user/<int:project_id>/from/<string:fromusername>/to/<string:tousername>')
+class ReassignUserToProjectResource(Resource):
+    @jwt_required()
+    @user_management_namespace.doc(
+        description= 'If necessary a project needs to be given to another user.',
+        params={
+            'project_id': 'The project to re-assign',
+            'fromusername': 'The Username of the User to take the project from.',
+            'tousername': 'The Username of the User to give the project to.'
+            }
+    )
+
+    def put(self, project_id, fromusername, tousername):
+        try:
+            # Get the current user from the JWT token
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            # Check if the current user has the necessary permissions (e.g., project owner or admin)
+            # Adjust the condition based on your specific requirements
+            if not current_user.is_admin():
+                return {'message': 'Unauthorized. You do not have permission to link users to projects.'}, HTTPStatus.FORBIDDEN
+
+            # Get the project by ID
+            project = Projects.query.get(project_id)
+            if not project:
+                return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
+
+            # Get the user by username
+            fromuser = Users.query.filter_by(username=fromusername).first()
+            touser = Users.query.filter_by(username=tousername).first()
+            if not fromuser or not touser:
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+            
+            if touser.is_active == False:
+                return {'message': 'The user you are trying to assign to has been deactivated'}, HTTPStatus.BAD_REQUEST
+
+            
+            # Link the user to the project
+            project_user = ProjectUser.query.filter_by(projectID=project_id, userID=fromuser.userID).first()
+            project_user.userID = touser.userID
+            project_user.save()
+
+            return {'message': 'project has been reassigned successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error linking user to project: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
+
+@user_management_namespace.route('/takeover-all/from/<string:fromusername>/to/<string:tousername>')
+class TakeoverResource(Resource):
+    @jwt_required()
+    @user_management_namespace.doc(
+        description= 'When a user is deactivated, all resources must be given to another user.',
+        params={
+            'fromusername': 'The Username of the User to take all resources from.',
+            'tousername': 'The Username of the User to give all resources to.'
+            }
+    )
+    def put(self, fromusername, tousername):
+        try:
+            # Get the current user from the JWT token
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            # Check if the current user has the necessary permissions (e.g., project owner or admin)
+            # Adjust the condition based on your specific requirements
+            if not current_user.is_admin():
+                return {'message': 'Unauthorized. You do not have permission to link users to projects.'}, HTTPStatus.FORBIDDEN
+            
+            # Get the user by username
+            fromuser = Users.query.filter_by(username=fromusername).first()
+            touser = Users.query.filter_by(username=tousername).first()
+            if not fromuser or not touser:
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+            
+            if touser.is_active == False:
+                return {'message': 'The user you are trying to assign to has been deactivated'}, HTTPStatus.BAD_REQUEST
+            
+            if fromuser.is_active:
+                return {'message': 'The user you are trying to takeover from is active. You need to deactivate this user first.'}, HTTPStatus.BAD_REQUEST
+
+            #find all the projects the deactivated user created,
+            #and reassign them to the new user
+            projects = Projects.query.filter_by(userID=fromuser.userID).all()
+            if projects:
+                for project in projects:
+                    project.userID = touser.userID
+                    project.save()
+
+            
+            #find all the projects the deactivated user is responsible for,
+            #and reassign them to the new user
+            project_users = ProjectUser.query.filter_by( userID=fromuser.userID).all()
+            if project_users:
+                for project_user in project_users:
+                    project_user.userID = touser.userID
+                    project_user.save()
+
+            return {'message': 'Takeover successfull.'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error in performing takeover: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
         
