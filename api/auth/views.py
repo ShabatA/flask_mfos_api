@@ -619,10 +619,18 @@ class AssignUserToProjectResource(Resource):
             if not project:
                 return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
 
+            
+
             # Get the user by username
             user = Users.query.filter_by(username=username).first()
-            if not user or user.is_active == False:
-                return {'message': 'User not found or the user has been deactivated'}, HTTPStatus.BAD_REQUEST
+            print(f'user.is_active: {user.is_active()}')
+            print(f'Type of user.is_active: {type(user.is_active())}')
+
+            if not user: 
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+            elif  not user.is_active():
+                return {'message': 'User is deactivated'}, HTTPStatus.BAD_REQUEST
+            
 
             # Check if the user is already linked to the project
             if ProjectUser.query.filter_by(projectID=project_id, userID=user.userID).first():
@@ -671,7 +679,7 @@ class ReassignUserToProjectResource(Resource):
             if not fromuser or not touser:
                 return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
             
-            if touser.is_active == False:
+            if  not touser.is_active():
                 return {'message': 'The user you are trying to assign to has been deactivated'}, HTTPStatus.BAD_REQUEST
 
             
@@ -713,10 +721,10 @@ class TakeoverResource(Resource):
             if not fromuser or not touser:
                 return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
             
-            if touser.is_active == False:
+            if not touser.is_active():
                 return {'message': 'The user you are trying to assign to has been deactivated'}, HTTPStatus.BAD_REQUEST
             
-            if fromuser.is_active:
+            if fromuser.is_active():
                 return {'message': 'The user you are trying to takeover from is active. You need to deactivate this user first.'}, HTTPStatus.BAD_REQUEST
 
             #find all the projects the deactivated user created,

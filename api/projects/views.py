@@ -2,7 +2,7 @@ from flask import request, current_app
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
-from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData, TaskComments, TaskStatus
+from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData, TaskComments, TaskStatus, task_assigned_to, task_cc
 from ..utils.db import db
 from ..models.users import Users
 from flask import jsonify
@@ -465,30 +465,41 @@ class ProjectDeleteResource(Resource):
 
         # Check if the project exists and belongs to the current user
         if current_user.is_admin:
-            project_to_delete = Projects.query.filter_by(projectID=project_id).first()
-            project_users_to_delete = ProjectUser.query.filter_by(projectID=project_id).all()
+            project_to_delete = Projects.query.get_or_404(project_id)
         else:
             project_to_delete = Projects.query.filter_by(projectID=project_id, userID=current_user.userID).first()
-            project_users_to_delete = ProjectUser.query.filter_by(projectID=project_id).all()
-        if not project_to_delete:
-            return {'message': 'Project not found or unauthorized'}, HTTPStatus.NOT_FOUND
 
-        # Delete the answers related to the project
-        Answers.query.filter_by(projectID=project_id).delete()
+            if not project_to_delete:
+                return {'message': 'Project not found or unauthorized'}, HTTPStatus.NOT_FOUND
 
-        # Delete the project from the database
         try:
-            #Delete the linked projects
-            if project_users_to_delete:
-                for pu in project_users_to_delete:
-                    pu.delete()
-                    
+            # Delete associated data
+            self.delete_associated_data(project_to_delete)
+
+            # Delete the project
             project_to_delete.delete()
 
             return {'message': 'Project and associated answers deleted successfully'}, HTTPStatus.OK
         except Exception as e:
             # Handle exceptions (e.g., database errors) appropriately
             return {'message': f'Error deleting project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+    def delete_associated_data(self, project):
+        # Delete associated data (use this method to handle relationships)
+        Answers.query.filter_by(projectID=project.projectID).delete()
+
+        # Delete linked projects
+        ProjectUser.query.filter_by(projectID=project.projectID).delete()
+        
+        #Delete linked stages
+        ProjectStage.query.filter_by(projectID=project.projectID).delete()
+        
+        #Delete Tasks
+        ProjectTask.query.filter_by(projectID=project.projectID).delete()
+
+        #Delete Project Status Data
+        ProjectStatusData.filter_by(projectID=project.projectID).delete()
+    
     
 
 @project_namespace.route('/delete_question/<int:question_id>')
@@ -503,14 +514,18 @@ class QuestionDeleteResource(Resource):
         # Delete the answers related to the question
         Answers.query.filter_by(questionID=question_id).delete()
 
+        # Delete the choices related to the question
+        QuestionChoices.query.filter_by(questionID=question_id).delete()
+
         # Delete the question from the database
         try:
             question_to_delete.delete()
 
-            return {'message': 'Question and associated answers deleted successfully'}, HTTPStatus.OK
+            return {'message': 'Question and associated answers and choices deleted successfully'}, HTTPStatus.OK
         except Exception as e:
             # Handle exceptions (e.g., database errors) appropriately
             return {'message': f'Error deleting question: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+    
 
 @project_namespace.route('/give_access/<int:project_id>/<int:user_id>')
 class GiveAccessResource(Resource):

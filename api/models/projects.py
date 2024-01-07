@@ -6,6 +6,7 @@ from flask import jsonify
 from http import HTTPStatus
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import text
 
 
 class ProjectStatus(Enum):
@@ -225,6 +226,10 @@ class Answers(db.Model):
         db.session.add(self)
         db.session.commit()
     
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+    
     @classmethod
     def get_by_id(cls, answerID):
         return cls.query.get_or_404(answerID)
@@ -242,6 +247,10 @@ class QuestionChoices(db.Model):
     
     def save(self):
         db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
         db.session.commit()
     
     @classmethod
@@ -300,6 +309,10 @@ class ProjectStage(db.Model):
 
     project = db.relationship('Projects', backref='project_stages', lazy=True)
     stage = db.relationship('Stage', backref='project_stages', lazy=True)
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
 
 
 class ProjectTask(db.Model):
@@ -330,6 +343,19 @@ class ProjectTask(db.Model):
         db.session.add(self)
         db.session.commit()
     
+    def delete(self):
+        # Delete related TaskComments
+        TaskComments.query.filter_by(taskID=self.taskID).delete()
+
+        self.assignedTo = []
+        self.cc = []
+        delete_task_assigned_to_by_task_id(self.taskID)
+        delete_task_cc_by_task_id(self.taskID)
+        db.session.delete(self)
+        db.session.commit()
+        
+        
+    
     @classmethod
     def get_by_id(cls, taskID):
         return cls.query.get_or_404(taskID)
@@ -349,6 +375,21 @@ class TaskComments(db.Model):
     def save(self):
         db.session.add(self)
         db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+
+# class TaskAssignedTo(db.Model):
+#     __tablename__ = 'task_assigned_to'
+#     task_id = db.Column(db.Integer, db.ForeignKey('project_task.taskID'), primary_key=True)
+#     user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), primary_key=True)
+
+
+# class TaskCC(db.Model):
+#     __tablename__ = 'task_cc'
+#     task_id = db.Column(db.Integer, db.ForeignKey('project_task.taskID'), primary_key=True)
+#     user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), primary_key=True)
         
 
 # Association tables for many-to-many relationships
@@ -361,6 +402,18 @@ task_cc = db.Table('task_cc',
                    db.Column('task_id', db.Integer, db.ForeignKey('project_task.taskID')),
                    db.Column('user_id', db.Integer, db.ForeignKey('users.userID'))
                    )
+
+def delete_task_assigned_to_by_task_id(task_id):
+    try:
+        db.session.execute(f"DELETE FROM task_assigned_to WHERE task_id = {task_id}")
+        db.session.commit()
+    except Exception as e:
+        print(f'error deleting assigned_to {str(e)}')
+
+# Example: Delete a record from task_cc using only taskId
+def delete_task_cc_by_task_id(task_id):
+    db.session.query(task_cc).filter_by(task_id=task_id).delete()
+    db.session.commit()
 
 class ProjectStatusData(db.Model):
     _tablename_ = 'project_status_data'
@@ -377,6 +430,10 @@ class ProjectStatusData(db.Model):
 
     def save(self):
         db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
         db.session.commit()
     
     @staticmethod
