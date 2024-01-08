@@ -1169,8 +1169,22 @@ class GetTasksForStageResource(Resource):
             tasks = ProjectTask.query.filter_by(projectID=project_id, stageID=stage_id).all()
 
             # Convert tasks to a list of dictionaries for response
-            tasks_list = [
-                {
+            tasks_list = []
+
+            for task in tasks:
+                # Fetch the first 5 comments for each task
+                comments = TaskComments.query.filter_by(taskID=task.taskID).limit(5).all()
+
+                comments_list = [
+                    {
+                        'user': Users.query.get(comment.userID).username if Users.query.get(comment.userID) else "Unknown User",
+                        'comment': comment.comment,
+                        'date': comment.date.strftime('%Y-%m-%d') if comment.date else None
+                    }
+                    for comment in comments
+                ]
+
+                tasks_list.append({
                     'taskID': task.taskID,
                     'title': task.title,
                     'deadline': str(task.deadline),
@@ -1180,10 +1194,11 @@ class GetTasksForStageResource(Resource):
                     'createdBy': task.createdBy,
                     'attachedFiles': task.attachedFiles,
                     'status': task.status.value,
-                    'completionDate': str(task.completionDate) if task.completionDate else None
-                }
-                for task in tasks
-            ]
+                    'completionDate': str(task.completionDate) if task.completionDate else None,
+                    'comments': comments_list
+                })
+
+            return {'tasks': tasks_list}, HTTPStatus.OK
 
             return {'tasks': tasks_list}, HTTPStatus.OK
 
