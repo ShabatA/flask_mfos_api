@@ -662,10 +662,14 @@ class ProjectChangeStatusResource(Resource):
                 if new_status == "APPROVED":
                     # Add three stages for the project
                     initiated_stage = Stage.query.filter_by(name='Project Initiated').first()
+                    progress_stage = Stage.query.filter_by(name='In Progress').first()
+                    closed_stage = Stage.query.filter_by(name='Closed').first()
 
                     # Add the stages to the project
                     project_stages = [
-                        ProjectStage(project=project, stage=initiated_stage, started=True)
+                        ProjectStage(project=project, stage=initiated_stage, started=True),
+                        ProjectStage(project=project, stage=progress_stage, started=True),
+                        ProjectStage(project=project, stage=closed_stage, started=True)
                     ]
 
                     # Commit the new stages to the database
