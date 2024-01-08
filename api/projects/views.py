@@ -8,6 +8,9 @@ from ..models.users import Users
 from flask import jsonify
 import json
 from datetime import datetime
+from collections import OrderedDict
+
+
 
 
 
@@ -74,9 +77,9 @@ project_status = project_namespace.model('ProjectStatus',{
 })
 
 edited_answers_model = project_namespace.model('EditedAnswers', {
-    'answer_id': fields.Integer(required=True, description='ID of the answer'),
-    'new_answer_text': fields.String(description='Text-based answer for a text question'),
-    'new_choice_id': fields.Integer(description='ID of the selected choice for a single-choice question')
+    'questionID': fields.Integer(required=True, description='ID of the question'),
+    'answerText': fields.String(description='Text-based answer for a text question'),
+    'choiceID': fields.List(fields.Integer, description='List of choices')
 })
 
 edit_choice = project_namespace.model(
@@ -361,23 +364,66 @@ class ProjectAnswersResource(Resource):
         if not project:
             return jsonify({'message': 'Project not found'}), HTTPStatus.NOT_FOUND
 
-        # Fetch both text-based and choice-based answers associated with the project
-        text_answers = Answers.query.filter_by(projectID=project_id, choiceID=None).all()
-        choice_answers = Answers.query.filter(Answers.projectID == project_id, Answers.choiceID.isnot(None)).all()
+        # Fetch all answers associated with the project
+        all_answers = Answers.query.filter_by(projectID=project_id).all()
 
-        # Convert the list of text answers to a JSON response
-        text_answers_data = [{'answerID': answer.answerID, 'questionID': answer.questionID, 'answerText': answer.answerText} for answer in text_answers]
+        # Prepare an ordered dictionary to store answers by question ID
+        answers_by_question = OrderedDict()
+        for answer in all_answers:
+            if answer.questionID not in answers_by_question:
+                answers_by_question[answer.questionID] = {'questionID': answer.questionID, 'answers': []}
+            answers_by_question[answer.questionID]['answers'].append(answer)
 
-        # Convert the list of choice answers to a JSON response, including choice details
-        choice_answers_data = [{
-            'answerID': answer.answerID,
-            'questionID': answer.questionID,
-            'choiceID': answer.choiceID,
-            'choiceText': answer.choice.choiceText,  # Include choice details in the response
-            'points': answer.choice.points
-        } for answer in choice_answers]
+        # Convert the list of answers to a JSON response
+        response_data = []
 
-        return jsonify({'text_answers': text_answers_data, 'choice_answers': choice_answers_data})
+        # Process each question and its associated answers
+        for question_id, question_data in answers_by_question.items():
+            question = Questions.get_by_id(question_id)
+
+            if question.questionType == 'single choice':
+                # For single-choice questions, include the selected choice details in the response
+                response_data.append(OrderedDict([
+                    ('questionID', question_id),
+                    ('questionText', question.questionText),
+                    ('questionType', 'single choice'),
+                    ('answers', [{
+                        'answerID': answer.answerID,
+                        'choiceID': answer.choiceID,
+                        'choiceText': QuestionChoices.get_by_id(answer.choiceID).choiceText,
+                        'points': QuestionChoices.get_by_id(answer.choiceID).points
+                    } for answer in question_data['answers']])
+                ]))
+            elif question.questionType == 'multi choice':
+                # For multi-choice questions, include all selected choices in the response
+                response_data.append(OrderedDict([
+                    ('questionID', question_id),
+                    ('questionText', question.questionText),
+                    ('questionType', 'multi choice'),
+                    ('answers', [{
+                        'answerID': answer.answerID,
+                        'choiceID': choice_id,
+                        'choiceText': QuestionChoices.get_by_id(choice_id).choiceText,
+                        'points': QuestionChoices.get_by_id(choice_id).points
+                    } for answer in question_data['answers'] for choice_id in (
+                        [answer.choiceID] if isinstance(answer.choiceID, int) else answer.choiceID)
+                    ])
+                ]))
+            else:
+                # For text-based questions, include the answer text in the response
+                response_data.append(OrderedDict([
+                    ('questionID', question_id),
+                    ('questionText', question.questionText),
+                    ('questionType', 'text'),
+                    ('answers', [{
+                        'answerID': answer.answerID,
+                        'answerText': answer.answerText
+                    } for answer in question_data['answers']])
+                ]))
+
+        return jsonify(OrderedDict([('answers', response_data)]))
+
+
 
 @project_namespace.route('/edit_answers/<int:project_id>', methods=['PUT'])
 class ProjectEditAnswersResource(Resource):
@@ -398,23 +444,13 @@ class ProjectEditAnswersResource(Resource):
         project_data = request.json
         edited_answers_data = project_data.pop('edited_answers', [])  # Extract edited answers from project_data
 
-        # Update the project details
-        # project.projectName = project_data.get('projectName', project.projectName)
-        # project.regionID = project_data.get('regionID', project.regionID)
-        # project.budgetRequired = project_data.get('budgetRequired', project.budgetRequired)
-        # project.budgetAvailable = project_data.get('budgetAvailable', project.budgetAvailable)
-        # project.projectStatus = project_data.get('projectStatus', project.projectStatus)
-        # project.projectScope = project_data.get('projectScope', project.projectScope)
-        # project.category = project_data.get('category', project.category)
-        # project.startDate = project_data.get('startDate', project.startDate)
-        # project.dueDate = project_data.get('dueDate', project.dueDate)
 
         # Save the updated project details to the database
         try:
             # 
 
             # Update the answers for the project
-            project.edit_answers(edited_answers_data)
+            project.edit_answers(project_id,edited_answers_data)
             db.session.commit()
 
             return {'message': 'Project details and answers updated successfully'}, HTTPStatus.OK

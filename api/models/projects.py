@@ -139,25 +139,42 @@ class Projects(db.Model):
     def get_by_id(cls, projectID):
         return cls.query.get_or_404(projectID)
     
-    def edit_answers(self, edited_answers):
+    def edit_answers(self, projectID,edited_answers):
         for edited_answer_data in edited_answers:
-            answer_id = edited_answer_data['answer_id']
-            new_answer_text = edited_answer_data.get('new_answer_text')
-            new_choice_id = edited_answer_data.get('new_choice_id')
+            questionID = edited_answer_data['questionID']
+            new_answer_text = edited_answer_data.get('answerText')
+            new_choice_id = edited_answer_data.get('choiceID')
 
-            # Get the existing answer by ID
-            existing_answer = Answers.query.get_or_404(answer_id)
-            if not existing_answer:
-                response = jsonify({'message': 'Answer not found'})
+            # Assuming you have a method to get a Question by ID
+            question = Questions.get_by_id(questionID)
+
+            if not question:
+                response = jsonify({'message': 'Question not found'})
                 response.status_code = HTTPStatus.NOT_FOUND
                 return response
 
-            if existing_answer.choice is not None:
-                # If the existing answer is for a single-choice question, update the choice
-                existing_answer.choiceID = new_choice_id
+            # Delete existing answers for the given question ID
+            Answers.query.filter_by(questionID=questionID,projectID=projectID).delete()
+
+            if question.questionType == 'multi choice' and isinstance(new_choice_id, list):
+                # For multiple-choice questions, add new rows for each choice
+                for choice_id in new_choice_id:
+                    new_answer = Answers(
+                        projectID=self.projectID,
+                        questionID=questionID,
+                        choiceID=choice_id,
+                        answerText=None
+                    )
+                    db.session.add(new_answer)
             else:
-                # If the existing answer is for a text-based question, update the answer text
-                existing_answer.answerText = new_answer_text
+                # For single-choice or text-based questions, update the existing row
+                new_answer = Answers(
+                    projectID=self.projectID,
+                    questionID=questionID,
+                    choiceID=new_choice_id if question.questionType == 'single choice' else None,
+                    answerText=new_answer_text if question.questionType == 'text' else None
+                )
+                db.session.add(new_answer)
 
         # Commit the changes to the database
         db.session.commit()
