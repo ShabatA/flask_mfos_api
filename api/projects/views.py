@@ -423,6 +423,55 @@ class ProjectAnswersResource(Resource):
 
         return jsonify(OrderedDict([('answers', response_data)]))
 
+@project_namespace.route('/<int:project_id>/answers/minified', methods=['GET'])
+class ProjectMinifiedAnswersResource(Resource):
+    def get(self, project_id):
+        # Get the project by ID
+        project = Projects.get_by_id(project_id)
+
+        if not project:
+            return jsonify({'message': 'Project not found'}), HTTPStatus.NOT_FOUND
+
+        # Fetch all answers associated with the project
+        all_answers = Answers.query.filter_by(projectID=project_id).all()
+
+        # Prepare an ordered dictionary to store answers by question ID
+        answers_by_question = OrderedDict()
+        for answer in all_answers:
+            if answer.questionID not in answers_by_question:
+                answers_by_question[answer.questionID] = {'questionID': answer.questionID, 'answers': []}
+            answers_by_question[answer.questionID]['answers'].append(answer)
+
+        # Convert the list of answers to a JSON response
+        response_data = []
+
+        # Process each question and its associated answers
+        for question_id, question_data in answers_by_question.items():
+            question = Questions.get_by_id(question_id)
+
+            if question.questionType == 'single choice':
+                # For single-choice questions, include the selected choice details in the response
+                response_data.append(OrderedDict([
+                    ('questionID', question_id),
+                    ('answer', {'choiceID': question_data['answers'][0].choiceID})
+                ]))
+            elif question.questionType == 'multi choice':
+                # For multi-choice questions, include all selected choices in the response
+                response_data.append(OrderedDict([
+                    ('questionID', question_id),
+                    ('answer', {'choiceID': [choice_id for choice_id in (
+                        [answer.choiceID] if isinstance(answer.choiceID, int) else answer.choiceID)
+                    ]})
+                ]))
+            else:
+                # For text-based questions, include the answer text in the response
+                response_data.append(OrderedDict([
+                    ('questionID', question_id),
+                    ('answer', {'answerText': question_data['answers'][0].answerText})
+                ]))
+
+        return jsonify(OrderedDict([('answers', response_data)]))
+
 
 
 @project_namespace.route('/edit_answers/<int:project_id>', methods=['PUT'])
