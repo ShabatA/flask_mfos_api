@@ -14,8 +14,8 @@ from collections import OrderedDict
 
 
 
-project_namespace = Namespace('project', description="A namespace for projects")
-stage_namespace = Namespace('project stages', description="A namespace for project stage")
+project_namespace = Namespace('Projects', description="A namespace for projects")
+stage_namespace = Namespace('Project Stages', description="A namespace for project stage")
 task_namespace = Namespace('Project Tasks', description="A namespace for project Tasks")
 
 stage_model = stage_namespace.model(
@@ -53,7 +53,7 @@ project_input_model = project_namespace.model('ProjectInput', {
     'regionID': fields.Integer(required=True, description='ID of the region'),
     'budgetRequired': fields.Float(required=True, description='Required budget for the project'),
     'budgetAvailable': fields.Float(required=True, description='Available budget for the project'),
-    'projectStatus': fields.String(required=True, enum=['approved', 'pending','rejected'], description='Status of the project'),
+    'projectStatus': fields.String(required=True, enum=['assessment','approved', 'pending','rejected'], description='Status of the project'),
     'projectScope': fields.String(description='Scope of the project'),
     'category': fields.String(enum=['A', 'B', 'C', 'D'], description='Category of the project'),
     'userID': fields.Integer(description='ID of the user associated with the project'),
@@ -182,32 +182,24 @@ class ProjectAddRequirementsResource(Resource):
     @project_namespace.expect(project_input_model2)
     def post(self, project_id):
         try:
-            # Get the current user ID from the JWT token
-            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            
             project = Projects.get_by_id(project_id)
             # Parse the input data
             project_data = request.json
             status_data = project_data.pop('status_data', {})  # Assuming status_data is part of the input
 
-            
-           
-
             # Assign status data to the project
             project.assign_status_data(status_data)
 
-            # Add the current user to the ProjectUsers table for the new project
-            project_user = ProjectUser(projectID=project.projectID, userID=current_user.userID)
-            project_user.save()
-
-            return {'message': 'Project added successfully'}, HTTPStatus.CREATED
+            return {'message': 'Project requirements added successfully'}, HTTPStatus.CREATED
         except Exception as e:
             # Handle exceptions (e.g., database errors) appropriately
-            return {'message': f'Error adding project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            return {'message': f'Error adding project requirements: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @project_namespace.route('/get/requirements/<int:project_id>')
 class ProjectRequirementResource(Resource):
    
-    
+    @jwt_required()
     def get(self, project_id):
         try:
             # Retrieve JSONB data based on project ID

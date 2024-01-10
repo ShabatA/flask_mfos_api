@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 
 class ProjectStatus(Enum):
+    ASSESSMENT = 'pending assessment'
     PENDING = 'pending'
     APPROVED = 'approved'
     REJECTED = 'rejected'
