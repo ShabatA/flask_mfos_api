@@ -188,7 +188,7 @@ class Questions(db.Model):
     _tablename_ = 'questions'
 
     questionID = db.Column(db.Integer, primary_key=True)
-    # projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
+    order = db.Column(db.Integer)  # New "order" column
     questionText = db.Column(db.String, nullable=False)
     questionType = db.Column(db.String, nullable=False)  # Text input, multiple choice, etc.
     points = db.Column(db.Integer, nullable=False)
@@ -200,6 +200,9 @@ class Questions(db.Model):
         return f"<Question {self.questionID} {self.questionText}>"
     
     def save(self):
+        # Set the order when saving a new question
+        if not self.order:
+            self.order = Questions.query.count() + 1
         db.session.add(self)
         db.session.commit()
     
@@ -432,6 +435,55 @@ def delete_task_assigned_to_by_task_id(task_id):
 def delete_task_cc_by_task_id(task_id):
     db.session.query(task_cc).filter_by(task_id=task_id).delete()
     db.session.commit()
+
+class AssessmentQuestions(db.Model):
+    __tablename__ = 'assessment_questions'
+    questionID = db.Column(db.Integer, primary_key=True)
+    questionText = db.Column(db.String, nullable=True)
+    
+    def _repr_(self):
+        return f"<AssessmentQuestions {self.questionID} {self.questionText}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        AssessmentAnswers.query.filter_by(questionID=self.questionID).delete()
+        db.session.delete(self)
+        db.session.commit()
+    
+    @classmethod
+    def get_by_id(cls, questionID):
+        return cls.query.get_or_404(questionID)
+
+class AssessmentAnswers(db.Model):
+    __tablename__ = 'assessment_answers'
+
+    answerID = db.Column(db.Integer, primary_key=True)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
+    questionID = db.Column(db.Integer, db.ForeignKey('assessment_questions.questionID'), nullable=False)
+    answerText = db.Column(db.String, nullable=True)  # Adjust based on the answer format
+
+     # Add a foreign key reference to the choices table
+    question = db.relationship('AssessmentQuestions', backref='assessment_answers', lazy=True)
+   
+
+    def _repr_(self):
+        return f"<AssessmentAnswer {self.answerID} {self.answerText}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+    
+    @classmethod
+    def get_by_id(cls, answerID):
+        return cls.query.get_or_404(answerID)
+    
 
 class ProjectStatusData(db.Model):
     _tablename_ = 'project_status_data'

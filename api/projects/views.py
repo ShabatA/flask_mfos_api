@@ -2,7 +2,7 @@ from flask import request, current_app
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
-from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData, TaskComments, TaskStatus, task_assigned_to, task_cc
+from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData, TaskComments, TaskStatus, task_assigned_to, task_cc, AssessmentAnswers, AssessmentQuestions
 from ..utils.db import db
 from ..models.users import Users
 from flask import jsonify
@@ -14,9 +14,10 @@ from collections import OrderedDict
 
 
 
-project_namespace = Namespace('Projects', description="A namespace for projects")
-stage_namespace = Namespace('Project Stages', description="A namespace for project stage")
-task_namespace = Namespace('Project Tasks', description="A namespace for project Tasks")
+project_namespace = Namespace('Projects', description="A namespace for Projects")
+stage_namespace = Namespace('Project Stages', description="A namespace for Project Stages")
+task_namespace = Namespace('Project Tasks', description="A namespace for Project Tasks")
+assessment_namespace = Namespace('Project Assessment', description="A namespace for Project Assessment")
 
 stage_model = stage_namespace.model(
     'Stage', {
@@ -33,6 +34,20 @@ comments_model = task_namespace.model('TaskComments',{
     'taskID': fields.Integer(required=True, description='Id of the task the comment belongs to'),
     'comment': fields.String(required=True, description= 'The comment written by the user'),
     'date': fields.Date(required=True, description='Date on which the comment was made')
+})
+
+assessment_question_model = assessment_namespace.model('AssessmentQuestion', {
+    'questionText': fields.String(required=True, description='The actual question to be asked.')
+})
+
+assessment_answer_model = assessment_namespace.model('AssessmentAnswer', {
+    'questionID': fields.Integer(required=True, description='The ID of the question'),
+    'answerText': fields.String(required=True, description='The answer provided')
+})
+
+assessment_model = assessment_namespace.model('ProjectAssessment', {
+    'projectID': fields.Integer(required=True, description='The ID of the project this assessment is for'),
+    'answers': fields.List(fields.Nested(assessment_answer_model), description='List of answers for the assessment')
 })
 
 # Define a model for the input data (assuming JSON format)
@@ -53,7 +68,6 @@ project_input_model = project_namespace.model('ProjectInput', {
     'regionID': fields.Integer(required=True, description='ID of the region'),
     'budgetRequired': fields.Float(required=True, description='Required budget for the project'),
     'budgetAvailable': fields.Float(required=True, description='Available budget for the project'),
-    'projectStatus': fields.String(required=True, enum=['assessment','approved', 'pending','rejected'], description='Status of the project'),
     'projectScope': fields.String(description='Scope of the project'),
     'category': fields.String(enum=['A', 'B', 'C', 'D'], description='Category of the project'),
     'userID': fields.Integer(description='ID of the user associated with the project'),
@@ -152,7 +166,7 @@ class ProjectAddResource(Resource):
             regionID=project_data['regionID'],
             budgetRequired=project_data['budgetRequired'],
             budgetAvailable=project_data['budgetAvailable'],
-            projectStatus=project_data['projectStatus'],
+            projectStatus=ProjectStatus.ASSESSMENT,
             projectScope=project_data.get('projectScope'),
             category=project_data.get('category'),
             userID=current_user.userID,
@@ -344,6 +358,35 @@ class AllProjectsResource(Resource):
 
         # Convert the list of projects to a JSON response
         projects_data = [{'projectID': project.projectID, 'projectName': project.projectName, 'projectStatus': project.projectStatus.value} for project in projects]
+
+        return jsonify({'projects': projects_data})
+
+@project_namespace.route('/user-projects/<int:user_id>', methods=['GET'])
+class UserProjectsResource(Resource):
+    def get(self, user_id):
+        # Replace 'user_id' with the actual way you get the user ID
+        user = Users.query.get(user_id)
+
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+
+        # Fetch projects associated with the user using the ProjectUser model
+        projects = (
+            Projects.query.join(ProjectUser)
+            .filter(ProjectUser.userID == user_id)
+            .distinct(Projects.projectID)
+            .all()
+        )
+
+        # Convert the list of projects to a JSON response
+        projects_data = [
+            {
+                'projectID': project.projectID,
+                'projectName': project.projectName,
+                'projectStatus': project.projectStatus.value,
+            }
+            for project in projects
+        ]
 
         return jsonify({'projects': projects_data})
 
@@ -568,6 +611,7 @@ class ProjectDeleteResource(Resource):
     def delete_associated_data(self, project):
         # Delete associated data (use this method to handle relationships)
         Answers.query.filter_by(projectID=project.projectID).delete()
+        AssessmentAnswers.query.filter_by(questionID=self.questionID).delete()
 
         # Delete linked projects
         ProjectUser.query.filter_by(projectID=project.projectID).delete()
@@ -820,7 +864,7 @@ class AllQuestionsResource(Resource):
     def get(self):
         try:
             # Get all questions
-            questions = Questions.query.all()
+            questions = Questions.query.order_by(Questions.order).all()
 
             # Initialize a list to store question data
             questions_data = []
@@ -1272,6 +1316,152 @@ class GetTaskCommentsResource(Resource):
             
         except Exception as e:
             current_app.logger.error(f"Error task comments: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            
+@assessment_namespace.route('/assessment/questions/add')
+class AddAssessmentQuestionResource(Resource):
+    @jwt_required()
+    @assessment_namespace.expect([assessment_question_model])
+    def post(self):
+        # Get the current user from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Check if the current user is an admin
+        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+            return {'message': 'Unauthorized. Only admin users can add questions.'}, HTTPStatus.FORBIDDEN
+
+        # Parse the input data for questions
+        questions_data = request.json
+        
+        try:
+            for question in questions_data:
+                new_question = AssessmentQuestions(
+                    questionText= question['questionText']
+                )
+                
+                new_question.save()
+            return {'message': 'All Assessment Questions were saved.'}, HTTPStatus.Ok      
+        except Exception as e:
+            current_app.logger.error(f"Error In adding AssessmentQuestion: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@assessment_namespace.route('/assessment/answers/add')
+class AddAssessmentAnswerResource(Resource):
+    @jwt_required()
+    @assessment_namespace.expect([assessment_model])
+    def post(self):
+        # Get the current user from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Check if the current user is an admin
+        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+            return {'message': 'Unauthorized. Only admin users can add answers.'}, HTTPStatus.FORBIDDEN
+
+        # Parse the input data for answers
+        assessment_data = request.json
+        answers_data = assessment_data.pop('answers', [])
+        try:
+            # get the project this assessment is for
+            project = Projects.get_by_id(assessment_data['projectID'])
+            if not project:
+                return {'message': 'Project not found'}, HTTPStatus.BAD_REQUEST
+            
+            
+            for answer in answers_data:
+                question = AssessmentQuestions.get_by_id(answer['questionID'])
+                if not question:
+                    pass
+                new_answer = AssessmentAnswers(
+                    questionID= answer['questionID'],
+                    prjectID= assessment_data['projectID'],
+                    answerText= answer['answerText']
+                )
+                
+                new_answer.save()
+            #now update project status to PENDING
+            project.projectStatus = ProjectStatus.PENDING
+            return {'message': 'All Assessment Answers were saved.'}, HTTPStatus.Ok
+                
+        except Exception as e:
+            current_app.logger.error(f"Error In adding AssessmentQuestion: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@assessment_namespace.route('/assessment/answers/get/<int:project_id>', methods=['GET'])
+class GetAssessmentResource(Resource):
+    @jwt_required()
+    def get(self, project_id):
+        try:
+            # Fetch all assessment answers for the given project_id
+            assessment_answers = (
+                AssessmentAnswers.query
+                .join(AssessmentQuestions)
+                .filter(AssessmentAnswers.projectID == project_id)
+                .add_columns(AssessmentQuestions.questionText, AssessmentAnswers.answerText)
+                .all()
+            )
+
+            # Convert the list of answers to a JSON response
+            answers_data = [
+                {
+                    'questionText': question_text,
+                    'answerText': answer_text,
+                }
+                for _, question_text, answer_text in assessment_answers
+            ]
+
+            return {'assessment_answers': answers_data}, HTTPStatus.OK
+            
+        except Exception as e:
+            current_app.logger.error(f"Error In fetching Assessment: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@assessment_namespace.route('/assessment/delete/<int:project_id>', methods=['DELETE'])
+class DeleteAssessmentResource(Resource):
+    @jwt_required()
+    def delete(self, project_id):
+        # Get the current user from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Check if the current user is an admin
+        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+            return {'message': 'Unauthorized. Only admin users can delete answers.'}, HTTPStatus.FORBIDDEN
+
+        try:
+            # Delete all AssessmentAnswers for the specified project_id
+            AssessmentAnswers.query.filter_by(projectID=project_id).delete()
+            db.session.commit()
+
+            return {'message': 'Assessment answers deleted successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error in deleting assessment answers: {str(e)}")
+            db.session.rollback()
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@assessment_namespace.route('/question/delete/<int:question_id>', methods=['DELETE'])
+class DeleteAssessmentQuestionResource(Resource):
+    @jwt_required()
+    def delete(self, question_id):
+        # Get the current user from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Check if the current user is an admin
+        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+            return {'message': 'Unauthorized. Only admin users can delete questions.'}, HTTPStatus.FORBIDDEN
+
+        try:
+            # Delete the AssessmentQuestion with the specified question_id
+            question = AssessmentQuestions.get_by_id(question_id)
+            if question:
+                question.delete()
+                return {'message': 'Assessment question deleted successfully'}, HTTPStatus.OK
+            else:
+                return {'message': 'Assessment question not found'}, HTTPStatus.NOT_FOUND
+
+        except Exception as e:
+            current_app.logger.error(f"Error in deleting assessment question: {str(e)}")
+            db.session.rollback()
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
             
         

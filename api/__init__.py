@@ -4,7 +4,7 @@ from .cases.views import case_namespace
 from .auth.views import auth_namespace, user_management_namespace
 from .regions.views import region_namespace
 from .accountfield.views import field_namespace
-from .projects.views import project_namespace, stage_namespace, task_namespace
+from .projects.views import project_namespace, stage_namespace, task_namespace, assessment_namespace
 # from .questions.views import questions_namespace
 from flask_cors import CORS
 
@@ -59,6 +59,7 @@ def create_app(config=config_dict['development']):
     # api.add_namespace(questions_namespace)
     api.add_namespace(auth_namespace, path="/auth")
     api.add_namespace(user_management_namespace)
+    api.add_namespace(assessment_namespace)
     
     @app.shell_context_processor
     def make_shell_context():

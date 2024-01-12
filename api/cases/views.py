@@ -292,7 +292,7 @@ class AllQuestionsResource(Resource):
     def get(self):
         try:
             # Get all questions
-            questions = CQuestions.query.all()
+            questions = CQuestions.query.order_by(CQuestions.order).all()
 
             # Initialize a list to store question data
             questions_data = []

@@ -541,24 +541,7 @@ class AllUsers(Resource):
 
             # Iterate through each user and extract relevant information
             for user in all_users:
-                user_data = {
-                    'userID': user.userID,
-                    'username': user.username,
-                    'email': user.email,
-                    'firstName': user.firstName,
-                    'lastName': user.lastName,
-                    'jobDescription': user.jobDescription,
-                    'mobile': user.mobile,
-                    'active': user.active,
-                    'userStatus': user.UserStatus.value,
-                    'date_created': user.date_created.isoformat(),
-                    'regionID': user.regionID,
-                    'role': {
-                        'roleID': user.role.RoleID,
-                        'roleName': user.role.RoleName
-                    },
-                    'permissions': [permission.permission_level.value for permission in user.permissions]
-                }
+                user_data = self.get_user_data(user)
                 users_data.append(user_data)
 
             # Return the user data as JSON
@@ -566,6 +549,53 @@ class AllUsers(Resource):
 
         except Exception as e:
             current_app.logger.error(f"Error getting all users: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+    @staticmethod
+    def get_user_data(user):
+        return {
+            'userID': user.userID,
+            'username': user.username,
+            'email': user.email,
+            'firstName': user.firstName,
+            'lastName': user.lastName,
+            'jobDescription': user.jobDescription,
+            'mobile': user.mobile,
+            'active': user.active,
+            'userStatus': user.UserStatus.value,
+            'date_created': user.date_created.isoformat(),
+            'regionID': user.regionID,
+            'role': {
+                'roleID': user.role.RoleID,
+                'roleName': user.role.RoleName
+            },
+            'permissions': [permission.permission_level.value for permission in user.permissions]
+        }
+
+@auth_namespace.route('/user/<int:user_id>')
+class SingleUser(Resource):
+    @jwt_required()
+    @auth_namespace.doc(
+        params={'user_id': 'The ID of the user'},
+        description='Returns information for a single user.',
+    )
+    def get(self, user_id):
+        try:
+            # Get user by ID
+            user = Users.get_by_id(user_id)
+
+            # Check if the user exists
+            if not user:
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+
+            # Get user data
+            user_data = AllUsers.get_user_data(user)
+
+            # Return the user data as JSON
+            return {'user': user_data}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting user by ID: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @auth_namespace.route('/get-user-id/<string:username>')

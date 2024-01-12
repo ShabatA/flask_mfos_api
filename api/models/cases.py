@@ -268,6 +268,7 @@ class CQuestions(db.Model):
     __tablename__ = 'cquestions'
 
     questionID = db.Column(db.Integer, primary_key=True)
+    order = db.Column(db.Integer)  # New "order" column
     questionText = db.Column(db.String, nullable=False)
     questionType = db.Column(db.String, nullable=False)  # Text input, multiple choice, etc.
     points = db.Column(db.Integer, nullable=False)
@@ -279,6 +280,9 @@ class CQuestions(db.Model):
         return f"<Question {self.questionID} {self.questionText}>"
     
     def save(self):
+        # Set the order when saving a new question
+        if not self.order:
+            self.order = CQuestions.query.count() + 1
         db.session.add(self)
         db.session.commit()
     
