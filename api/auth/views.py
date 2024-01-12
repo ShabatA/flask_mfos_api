@@ -598,6 +598,31 @@ class SingleUser(Resource):
             current_app.logger.error(f"Error getting user by ID: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@auth_namespace.route('/current-user/details')
+class CurrentUser(Resource):
+    @jwt_required()
+    @auth_namespace.doc(
+        description='Returns information for a single user.',
+    )
+    def get(self):
+        try:
+            # Get user by ID
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            # Check if the user exists
+            if not current_user:
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+
+            # Get user data
+            user_data = AllUsers.get_user_data(current_user)
+
+            # Return the user data as JSON
+            return {'user': user_data}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting user by ID: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
 @auth_namespace.route('/get-user-id/<string:username>')
 class GetUserId(Resource):
     @jwt_required()
