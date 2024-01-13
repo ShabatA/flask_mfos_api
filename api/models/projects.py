@@ -10,10 +10,10 @@ from sqlalchemy import text
 
 
 class ProjectStatus(Enum):
-    ASSESSMENT = 'pending assessment'
     PENDING = 'pending'
     APPROVED = 'approved'
     REJECTED = 'rejected'
+    ASSESSMENT = 'pending assessment'
 
     def to_dict(self):
         return {'status': self.value}

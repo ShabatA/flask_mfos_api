@@ -361,11 +361,11 @@ class AllProjectsResource(Resource):
 
         return jsonify({'projects': projects_data})
 
-@project_namespace.route('/user-projects/<int:user_id>', methods=['GET'])
+@project_namespace.route('/user-projects/<string:username>', methods=['GET'])
 class UserProjectsResource(Resource):
-    def get(self, user_id):
+    def get(self, username):
         # Replace 'user_id' with the actual way you get the user ID
-        user = Users.query.get(user_id)
+        user = Users.query.filter_by(username=username).first()
 
         if not user:
             return jsonify({'message': 'User not found'}), 404
@@ -373,7 +373,7 @@ class UserProjectsResource(Resource):
         # Fetch projects associated with the user using the ProjectUser model
         projects = (
             Projects.query.join(ProjectUser)
-            .filter(ProjectUser.userID == user_id)
+            .filter(ProjectUser.userID == user.userID)
             .distinct(Projects.projectID)
             .all()
         )
