@@ -2,11 +2,11 @@ from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.exceptions import NotFound
 from http import HTTPStatus
-from ..models.cases import Cases, CaseStatus, CaseUser, CQuestions, CQuestionChoices, CAnswers, CaseTaskAssignedTo, CaseStage, CaseToStage, CaseTaskComments, CaseStatusData, CaseTask, CaseTaskCC
+from ..models.cases import Cases, CaseStatus, CaseUser, CQuestions, CQuestionChoices, CAnswers, CaseTaskAssignedTo, CaseStage, CaseToStage, CaseTaskComments, CaseStatusData, CaseTask, CaseTaskCC, CaseTaskStatus
 from ..models.users import Users
 from ..models.regions import Regions
 from ..utils.db import db
-from datetime import datetime
+from datetime import datetime, date
 from flask import jsonify, current_app
 from flask import request
 import json
@@ -22,10 +22,10 @@ def get_region_id_by_name(region_name):
         return None  # Or any other value to indicate that the regionName was not found
 
 case_namespace = Namespace("Cases", description="Namespace for cases")
-stage_namespace = Namespace('Case Stages', description="A namespace for case Stages")
-task_namespace = Namespace('Case Tasks', description="A namespace for case Tasks")
+case_stage_namespace = Namespace('Case Stages', description="A namespace for case Stages")
+case_task_namespace = Namespace('Case Tasks', description="A namespace for case Tasks")
 
-stage_model = stage_namespace.model(
+stage_model = case_stage_namespace.model(
     'Stage', {
         'name': fields.String(required=True, description='Name of the stage'),
     }
@@ -47,7 +47,7 @@ answers_model = case_namespace.model('CAnswers', {
     'choiceID': fields.List(fields.Integer, description='List of choices')
 })
 
-comments_model = task_namespace.model('CaseTaskComments',{
+comments_model = case_task_namespace.model('CaseTaskComments',{
     'taskID': fields.Integer(required=True, description='Id of the task the comment belongs to'),
     'comment': fields.String(required=True, description= 'The comment written by the user'),
     'date': fields.Date(required=True, description='Date on which the comment was made')
@@ -61,7 +61,7 @@ question_input_model = case_namespace.model('QuestionInput', {
 })
 
 # Define a model for the input data (assuming JSON format)
-new_task_model = task_namespace.model('NewTaskModel', {
+new_task_model = case_task_namespace.model('NewTaskModel', {
     'title': fields.String(required=True, description='Title of the task'),
     'deadline': fields.Date(required=True, description='Deadline of the task (YYYY-MM-DD)'),
     'description': fields.String(description='Description of the task'),
@@ -70,6 +70,15 @@ new_task_model = task_namespace.model('NewTaskModel', {
     # 'created_by': fields.Integer(required=True, description='User ID of the task creator'),
     'attached_files': fields.String(description='File attachments for the task'),
     # 'stage_id': fields.Integer(required=True, description='ID of the linked stage'),
+})
+
+edit_task_model = case_task_namespace.model('EditTaskModel', {
+    'title': fields.String(required=True, description='Title of the task'),
+    'deadline': fields.Date(required=True, description='Deadline of the task (YYYY-MM-DD)'),
+    'description': fields.String(description='Description of the task'),
+    'assigned_to': fields.List(fields.Integer, description='List of user IDs assigned to the task'),
+    'cc': fields.List(fields.Integer, description='List of user IDs to be CCed on the task'),
+    'attached_files': fields.String(description='File attachments for the task')
 })
 
 case_model = case_namespace.model(
@@ -129,7 +138,7 @@ case_edit_model = case_namespace.model('CaseEdit', {
 })
 
 # Define a model for the input data (assuming JSON format)
-link_case_to_stage_model = stage_namespace.model('LinkCaseToStageModel', {
+link_case_to_stage_model = case_stage_namespace.model('LinkCaseToStageModel', {
     'case_id': fields.Integer(required=True, description='ID of the case'),
     'stage_id': fields.Integer(required=True, description='ID of the stage'),
     'started': fields.Boolean(required=True, description="If the stage has been started"),
@@ -841,6 +850,444 @@ class GiveAccessResource(Resource):
         case_user.save()
 
         return {'message': 'User granted access to the case successfully'}, HTTPStatus.OK
+
+#####################################################
+# STAGE ENDPOINTS
+#####################################################
+@case_stage_namespace.route('/add', methods=['POST'])
+class AddStageResource(Resource):
+    @jwt_required()
+    @case_namespace.expect(stage_model)
+    def post(self):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Check if the current user has permission to add a stage
+        if not current_user.is_admin:  # Adjust the condition based on your specific requirements
+            return {'message': 'Unauthorized. Only admin users can add stages.'}, HTTPStatus.FORBIDDEN
+
+        # Parse input data
+        stage_data = request.json
+
+        # Create a new stage instance
+        new_stage = CaseStage(
+            name=stage_data['name']
+            # status=stage_data['status']
+        )
+
+        # Save the stage to the database
+        try:
+            # db.session.add(new_stage)
+            # db.session.commit()
+            new_stage.save()
+
+            return {'message': 'Stage added successfully'}, HTTPStatus.CREATED
+        except Exception as e:
+            db.session.rollback()
+            return {'message': f'Error adding stage: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+    
+@case_stage_namespace.route('/delete_stage/<int:stage_id>', methods=['DELETE'])
+class DeleteStageResource(Resource):
+    @jwt_required()
+    def delete(self, stage_id):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Check if the current user has permission to delete a stage
+        if not current_user.is_admin:  # Adjust the condition based on your specific requirements
+            return {'message': 'Unauthorized. Only admin users can delete stages.'}, HTTPStatus.FORBIDDEN
+
+        # Get the stage by ID
+        stage_to_delete = CaseStage.query.get(stage_id)
+
+        # Check if the stage exists
+        if not stage_to_delete:
+            return {'message': 'Stage not found'}, HTTPStatus.NOT_FOUND
+
+        # Delete the stage from the database
+        try:
+            stage_to_delete.delete()
+
+            return {'message': 'Stage deleted successfully'}, HTTPStatus.OK
+        except Exception as e:
+            db.session.rollback()
+            return {'message': f'Error deleting stage: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
+@case_stage_namespace.route('/all_stages', methods=['GET'])
+class AllStagesResource(Resource):
+    def get(self):
+        try:
+            # Get all stages
+            stages = CaseStage.query.all()
+
+            # Convert the list of stages to a JSON response
+            stages_data = [{'stageID': stage.stageID, 'name': stage.name} for stage in stages]
+
+            return jsonify({'stages': stages_data})
+
+        except Exception as e:
+            current_app.logger.error(f"Error retrieving stages: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+  
+@case_stage_namespace.route('/stages_for_case/<int:case_id>', methods=['GET'])
+class StagesForCaseResource(Resource):
+    def get(self, case_id):
+        try:
+            # Check if the case exists in the database
+            case = Cases.query.get(case_id)
+
+            if case is None:
+                return {'message': 'Case not found'}, HTTPStatus.NOT_FOUND
+
+            # Get all stages linked to the case
+            linked_stages = CaseToStage.query.filter_by(caseID=case_id).all()
+
+            # Convert the list of linked stages to a JSON response
+            linked_stages_data = [{'stageID': stage.stage.stageID, 'name': stage.stage.name,
+                                   'started': stage.started, 'completed': stage.completed,
+                                   'completionDate': stage.completionDate} for stage in linked_stages]
+
+            return jsonify({'linked_stages': linked_stages_data})
+
+        except Exception as e:
+            current_app.logger.error(f"Error retrieving linked stages for case: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
+@case_stage_namespace.route('/complete_stage_for_case/<int:case_id>/<int:stage_id>', methods=['PUT'])
+@case_stage_namespace.doc(
+    params={
+        'case_id': 'Specify the ID of the case',
+        'stage_id': 'Specify the ID of the stage'
+    },
+    description = "Change the stage to complete"
+)
+class CompleteStageForCaseResource(Resource):
+    def put(self, case_id, stage_id):
+        try:
+            # Check if the case exists in the database
+            case = Cases.query.get(case_id)
+
+            if case is None:
+                return {'message': 'Case not found'}, HTTPStatus.NOT_FOUND
+
+            # Check if the linked stage exists for the case
+            linked_stage = CaseToStage.query.filter_by(caseID=case_id, stageID=stage_id).first()
+
+            if linked_stage is None:
+                return {'message': 'Stage not linked to the specified case'}, HTTPStatus.NOT_FOUND
+
+            # Update the linked stage as completed
+            linked_stage.completed = True
+            linked_stage.completionDate = datetime.today().date()
+
+            # Commit the changes to the database
+            db.session.commit()
+
+            return {'message': 'Linked stage marked as completed successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error marking linked stage as completed: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_stage_namespace.route('/remove_stage/<int:case_id>/<int:stage_id>', methods=['DELETE'])
+class RemoveStageResource(Resource):
+    @jwt_required()
+    def delete(self, case_id, stage_id):
+        try:
+            # Check if the linked stage exists for the case
+            linked_stage = CaseStage.query.filter_by(caseID=case_id, stageID=stage_id).first()
+
+            if linked_stage is None:
+                return {'message': 'Stage not linked to the specified case'}, HTTPStatus.NOT_FOUND
+
+            # Remove the linked stage
+            db.session.delete(linked_stage)
+            db.session.commit()
+
+            return {'message': 'Stage removed successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error removing stage: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+#####################################################
+# STAGE Tasks ENDPOINTS
+#####################################################
+@case_task_namespace.route('/add_task_for_stage/<int:case_id>/<int:stage_id>', methods=['POST'])
+class AddTaskForStageResource(Resource):
+    @case_task_namespace.expect(new_task_model, validate=True)
+    @jwt_required()
+    def post(self, case_id, stage_id):
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+        try:
+            # Check if the linked stage exists for the case
+            linked_stage = CaseToStage.query.filter_by(caseID=case_id, stageID=stage_id).first()
+
+            if linked_stage is None:
+                return {'message': 'Stage not linked to the specified case'}, HTTPStatus.NOT_FOUND
+
+            # Extract task data from the request payload
+            data = case_task_namespace.payload
+            title = data.get('title')
+            deadline = data.get('deadline')
+            description = data.get('description')
+            assigned_to_ids = data.get('assigned_to', [])
+            cc_ids = data.get('cc', [])
+            created_by = current_user.userID
+            attached_files = data.get('attached_files')
+
+            # Fetch user instances based on IDs
+            assigned_to_users = Users.query.filter(Users.userID.in_(assigned_to_ids)).all()
+            cc_users = Users.query.filter(Users.userID.in_(cc_ids)).all()
+
+            # Create a new task for the linked stage
+            new_task = CaseTask(
+                caseID=case_id,
+                title=title,
+                deadline=deadline,
+                description=description,
+                assignedTo=assigned_to_users,
+                cc=cc_users,
+                createdBy=created_by,
+                attachedFiles=attached_files,
+                stageID=stage_id,
+                status = CaseTaskStatus.TODO
+            )
+
+            # Save the new task to the database
+            db.session.add(new_task)
+            db.session.commit()
+
+            return {'message': 'Task added for the linked stage successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error adding task for linked stage: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_task_namespace.route('/mark_as_started/<int:task_id>',methods=['PUT'])
+class MarkTaskAsStartedResource(Resource):
+    @jwt_required()
+    @case_task_namespace.doc(
+        description = "Assign the In Progress status to the provided task"
+    )
+    def put(self, task_id):
+        try:
+            task = CaseTask.get_by_id(task_id)
+            if(task.status == CaseTaskStatus.TODO):
+                task.status = CaseTaskStatus.INPROGRESS
+                task.save()
+                return {'message': 'Task has been marked as In Progress successfully'}, HTTPStatus.OK
+            else:
+                return {'message': 'Not allowed. A task must be in a TODO state to mark at as In Progress'}, HTTPStatus.BAD_REQUEST
+        except Exception as e:
+            current_app.logger.error(f"Error marking task: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR  
+        
+
+@case_task_namespace.route('/mark_as_done/<int:task_id>',methods=['PUT'])
+class MarkTaskAsDoneResource(Resource):
+    @jwt_required()
+    @case_task_namespace.doc(
+        description = "Assign the DONE status to the provided task."
+    )
+    def put(self, task_id):
+        try:
+            task = CaseTask.get_by_id(task_id)
+            #
+            if(task.status == CaseTaskStatus.INPROGRESS or task.status == CaseTaskStatus.OVERDUE):
+                task.status = CaseTaskStatus.DONE
+                # Set completionDate to the current date
+                task.completionDate = date.today()
+                task.save()
+                return {'message': 'Task marked as done successfully.'}, HTTPStatus.OK
+            else:
+                return {'message': 'Cannot mark a Task as done if it was not IN PROGRESS.'}, HTTPStatus.BAD_REQUEST
+        except Exception as e:
+            current_app.logger.error(f"Error marking task: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_task_namespace.route('/mark_as_overdue/<int:task_id>',methods=['PUT'])
+class MarkTaskAsOverdueResource(Resource):
+    @jwt_required()
+    @case_task_namespace.doc(
+        description = "Assign the OVERDUE status to the provided task"
+    )
+    def put(self, task_id):
+        try:
+            task = CaseTask.get_by_id(task_id)
+            #only mark the task as overdue if it neither DONE nor already OVERDUE
+            if(task.status != CaseTaskStatus.DONE or task.status != CaseTaskStatus.OVERDUE):
+                if task.is_overdue:
+                    task.status = CaseTaskStatus.OVERDUE
+                    task.save()
+                    return {'message': 'Task has been marked as overdue'}, HTTPStatus.OK
+                else:
+                    return {'message': 'Ingored, Task is not yet overdue'}, HTTPStatus.OK
+            else:
+                return {'message': 'Cannot mark Task as OVERDUE, it is either DONE or already OVERDUE'}, HTTPStatus.BAD_REQUEST
+                
+        except Exception as e:
+            current_app.logger.error(f"Error marking task: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_task_namespace.route('/add_comment_for_task', methods=['POST'])
+class AddTaskComments(Resource):
+    @jwt_required()
+    @case_task_namespace.expect(comments_model, validate=True)
+    @case_task_namespace.doc(
+        description = "Post comments to a Task"
+    )
+    def post(self):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Parse the input data
+        comment_data = request.json
+        
+        #get data from json
+        taskID = comment_data['taskID']
+        comment = comment_data['comment']
+        date = comment_data['date']
+        
+        new_comment = CaseTaskComments(
+            taskID = taskID,
+            userID = current_user.userID,
+            comment = comment,
+            date = date
+        )
+        
+        try:
+            # db.session.add(new_stage)
+            # db.session.commit()
+            new_comment.save()
+
+            return {'message': 'Comment added successfully'}, HTTPStatus.CREATED
+        except Exception as e:
+            db.session.rollback()
+            return {'message': f'Error adding comment: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
+@case_task_namespace.route('/get/task_comments/<int:task_id>',methods=['GET'])
+class GetTaskCommentsResource(Resource):
+    @jwt_required()
+    def get(self, task_id):
+        try:
+            comments = CaseTaskComments.query.filter_by(taskID=task_id).all()
+            
+            comments_list = []
+            
+            for comment in comments:
+                # Fetch user's name based on userID
+                user = Users.query.get(comment.userID)
+                user_name = user.username if user else "Unknown User"
+                
+                # Convert TaskComments instance to dictionary
+                comment_dict = {
+                    'taskID': comment.taskID,
+                    'user': user_name,
+                    'comment': comment.comment,
+                    'date': comment.date.strftime('%Y-%m-%d') if comment.date else None,
+                }
+                
+                # Append the dictionary to comments_list
+                comments_list.append(comment_dict)
+
+            return {'comments': comments_list}, HTTPStatus.OK
+            
+        except Exception as e:
+            current_app.logger.error(f"Error task comments: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_task_namespace.route('/get_tasks_for_stage/<int:case_id>/<int:stage_id>', methods=['GET'])
+class GetTasksForStageResource(Resource):
+    @jwt_required()
+    def get(self, case_id, stage_id):
+        try:
+            # Check if the linked stage exists for the case
+            linked_stage = CaseToStage.query.filter_by(caseID=case_id, stageID=stage_id).first()
+
+            if linked_stage is None:
+                return {'message': 'Stage not linked to the specified case'}, HTTPStatus.NOT_FOUND
+
+            # Fetch all tasks for the linked stage
+            tasks = CaseTask.query.filter_by(caseID=case_id, stageID=stage_id).all()
+
+            # Convert tasks to a list of dictionaries for response
+            tasks_list = []
+
+            for task in tasks:
+                # Fetch the first 5 comments for each task
+                comments = CaseTaskComments.query.filter_by(taskID=task.taskID).limit(5).all()
+
+                comments_list = [
+                    {
+                        'user': Users.query.get(comment.userID).username if Users.query.get(comment.userID) else "Unknown User",
+                        'comment': comment.comment,
+                        'date': comment.date.strftime('%Y-%m-%d') if comment.date else None
+                    }
+                    for comment in comments
+                ]
+
+                tasks_list.append({
+                    'taskID': task.taskID,
+                    'title': task.title,
+                    'deadline': str(task.deadline),
+                    'description': task.description,
+                    'assignedTo': [user.username for user in task.assignedTo],
+                    'cc': [user.username for user in task.cc],
+                    'createdBy': task.createdBy,
+                    'attachedFiles': task.attachedFiles,
+                    'status': task.status.value,
+                    'completionDate': str(task.completionDate) if task.completionDate else None,
+                    'comments': comments_list
+                })
+
+            return {'tasks': tasks_list}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting tasks for linked stage: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_task_namespace.route('/edit_task/<int:task_id>', methods=['PUT'])
+class EditTaskForStageResource(Resource):
+    @case_task_namespace.expect(edit_task_model, validate=True)
+    @jwt_required()
+    def put(self, task_id):
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+        # Check if the current user has permission to delete a stage
+        if not current_user.is_admin:  # Adjust the condition based on your specific requirements
+            return {'message': 'Unauthorized. Only admin users can edit Task details.'}, HTTPStatus.FORBIDDEN
+
+        try:
+            # Get the task
+            task = CaseTask.get_by_id(task_id)
+
+            if task is None:
+                return {'message': 'Task not found'}, HTTPStatus.NOT_FOUND
+
+            # Extract task data from the request payload
+            data = case_task_namespace.payload
+            
+            task.title = data.get('title', task.title)
+            task.deadline = data.get('deadline', task.deadline)
+            task.description = data.get('description', task.description)
+            assigned_to_ids = data.get('assigned_to', [])
+            cc_ids = data.get('cc', [])
+            task.attachedFiles = data.get('attached_files', task.attachedFiles)
+
+            # Fetch user instances based on IDs
+            assigned_to_users = Users.query.filter(Users.userID.in_(assigned_to_ids)).all()
+            cc_users = Users.query.filter(Users.userID.in_(cc_ids)).all()
+            
+            task.assignedTo = assigned_to_users
+            task.cc = cc_users
+
+            db.session.commit()
+
+            return {'message': 'Task updated successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error updating task: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 

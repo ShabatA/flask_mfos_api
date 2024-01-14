@@ -280,6 +280,46 @@ class UpdateUserByAdmin(Resource):
         except Exception as e:
             return {'message': f'Error updating user: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@auth_namespace.route('/user/update-details/<int:user_id>')
+class UpdateUserByUser(Resource):
+    @auth_namespace.expect(user_model)
+    @auth_namespace.doc(
+        description="Update a user's details",
+        params={'user_id': 'Specify the user ID'}
+    )
+
+    @jwt_required()
+    def put(self, user_id):
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+        # current_user = Users.query.filter_by(username=get_jwt_identity(), is_admin=True).first()
+
+
+        user_to_update = Users.get_by_id(user_id)
+        if not user_to_update:
+            return {'message': 'User not found.'}, HTTPStatus.NOT_FOUND
+
+        try:
+            data = request.get_json(force=True, silent=True)
+
+            if not data:
+                return {'message': 'Invalid JSON data.'}, HTTPStatus.BAD_REQUEST
+            
+            # Exclude 'permission_level' from the data dictionary if it's present
+            if 'permission_level' in data:
+                del data['permission_level']
+
+            # Update user fields using the update method
+            user_to_update.update(data)
+            
+            # Save the updated user
+            user_to_update.save()
+
+            # Return the updated user without using marshal_with
+            return auth_namespace.marshal(user_to_update, user_model), HTTPStatus.OK
+
+        except Exception as e:
+            return {'message': f'Error updating user: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 @auth_namespace.route('/admin/deactivate/<int:user_id>')
 class DeactivateUserByAdmin(Resource):

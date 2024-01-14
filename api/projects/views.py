@@ -7,7 +7,7 @@ from ..utils.db import db
 from ..models.users import Users
 from flask import jsonify
 import json
-from datetime import datetime
+from datetime import datetime, date
 from collections import OrderedDict
 
 
@@ -60,6 +60,15 @@ new_task_model = task_namespace.model('NewTaskModel', {
     # 'created_by': fields.Integer(required=True, description='User ID of the task creator'),
     'attached_files': fields.String(description='File attachments for the task'),
     # 'stage_id': fields.Integer(required=True, description='ID of the linked stage'),
+})
+
+edit_task_model = task_namespace.model('EditTaskModel', {
+    'title': fields.String(required=True, description='Title of the task'),
+    'deadline': fields.Date(required=True, description='Deadline of the task (YYYY-MM-DD)'),
+    'description': fields.String(description='Description of the task'),
+    'assigned_to': fields.List(fields.Integer, description='List of user IDs assigned to the task'),
+    'cc': fields.List(fields.Integer, description='List of user IDs to be CCed on the task'),
+    'attached_files': fields.String(description='File attachments for the task')
 })
 
 # Define the expected input model using Flask-RESTx fields
@@ -230,38 +239,38 @@ class ProjectRequirementResource(Resource):
 
 
 
-@project_namespace.route('/update_status/<int:project_id>')
-class ProjectUpdateStatusResource(Resource):
-    @jwt_required()
-    @project_namespace.expect(project_update_status_model)
-    def post(self, project_id):
-        try:
-            # Get the current user ID from the JWT token
-            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+# @project_namespace.route('/update_status/<int:project_id>')
+# class ProjectUpdateStatusResource(Resource):
+#     @jwt_required()
+#     @project_namespace.expect(project_update_status_model)
+#     def post(self, project_id):
+#         try:
+#             # Get the current user ID from the JWT token
+#             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
-            # Retrieve the project by ID
-            project = Projects.query.get_or_404(project_id)
+#             # Retrieve the project by ID
+#             project = Projects.query.get_or_404(project_id)
 
-            # Check if the current user has the necessary permissions to update the project status
-            # Add your own logic for permission checks
-            if not current_user.is_admin:
-                return {'message': 'Unauthorized. You do not have permission to update the project status.'}, HTTPStatus.FORBIDDEN
+#             # Check if the current user has the necessary permissions to update the project status
+#             # Add your own logic for permission checks
+#             if not current_user.is_admin:
+#                 return {'message': 'Unauthorized. You do not have permission to update the project status.'}, HTTPStatus.FORBIDDEN
 
-            # Parse the input data
-            status_data = request.json.get('status_data', {})
-            project_status = request.json.get('projectStatus')
+#             # Parse the input data
+#             status_data = request.json.get('status_data', {})
+#             project_status = request.json.get('projectStatus')
 
-            # Update the project status if provided
-            if project_status:
-                project.projectStatus = project_status
+#             # Update the project status if provided
+#             if project_status:
+#                 project.projectStatus = project_status
 
-            # Update the project status data
-            project.assign_status_data(status_data)
+#             # Update the project status data
+#             project.assign_status_data(status_data)
 
-            return {'message': 'Project status updated successfully'}, HTTPStatus.OK
-        except Exception as e:
-            # Handle exceptions (e.g., database errors) appropriately
-            return {'message': f'Error updating project status: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+#             return {'message': 'Project status updated successfully'}, HTTPStatus.OK
+#         except Exception as e:
+#             # Handle exceptions (e.g., database errors) appropriately
+#             return {'message': f'Error updating project status: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 @project_namespace.route('/add_questions')
@@ -777,6 +786,7 @@ class ProjectChangeStatusResource(Resource):
 
 @project_namespace.route('/all_with_answers', methods=['GET'])
 class AllProjectsWithAnswersResource(Resource):
+    @jwt_required()
     def get(self):
         try:
             # Get all projects
@@ -1055,6 +1065,7 @@ class LinkProjectToStageResource(Resource):
     
 @stage_namespace.route('/stages_for_project/<int:project_id>', methods=['GET'])
 class StagesForProjectResource(Resource):
+    @jwt_required()
     def get(self, project_id):
         try:
             # Check if the project exists in the database
@@ -1086,6 +1097,7 @@ class StagesForProjectResource(Resource):
     description = "Change the stage to complete"
 )
 class CompleteStageForProjectResource(Resource):
+    @jwt_required()
     def put(self, project_id, stage_id):
         try:
             # Check if the project exists in the database
@@ -1187,6 +1199,48 @@ class AddTaskForStageResource(Resource):
             current_app.logger.error(f"Error adding task for linked stage: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@task_namespace.route('/edit_task/<int:task_id>', methods=['PUT'])
+class EditTaskForStageResource(Resource):
+    @task_namespace.expect(edit_task_model, validate=True)
+    @jwt_required()
+    def put(self, task_id):
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+        # Check if the current user has permission to delete a stage
+        if not current_user.is_admin:  # Adjust the condition based on your specific requirements
+            return {'message': 'Unauthorized. Only admin users can edit Task details.'}, HTTPStatus.FORBIDDEN
+
+        try:
+            # Get the task
+            task = ProjectTask.get_by_id(task_id)
+
+            if task is None:
+                return {'message': 'Task not found'}, HTTPStatus.NOT_FOUND
+
+            # Extract task data from the request payload
+            data = task_namespace.payload
+            
+            task.title = data.get('title', task.title)
+            task.deadline = data.get('deadline', task.deadline)
+            task.description = data.get('description', task.description)
+            assigned_to_ids = data.get('assigned_to', [])
+            cc_ids = data.get('cc', [])
+            task.attachedFiles = data.get('attached_files', task.attachedFiles)
+
+            # Fetch user instances based on IDs
+            assigned_to_users = Users.query.filter(Users.userID.in_(assigned_to_ids)).all()
+            cc_users = Users.query.filter(Users.userID.in_(cc_ids)).all()
+            
+            task.assignedTo = assigned_to_users
+            task.cc = cc_users
+
+            db.session.commit()
+
+            return {'message': 'Task updated successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error updating task: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
 @task_namespace.route('/mark_as_started/<int:task_id>',methods=['PUT'])
 class MarkTaskAsStartedResource(Resource):
     @jwt_required()
@@ -1219,6 +1273,8 @@ class MarkTaskAsDoneResource(Resource):
             #
             if(task.status == TaskStatus.INPROGRESS or task.status == TaskStatus.OVERDUE):
                 task.status = TaskStatus.DONE
+                # Set completionDate to the current date
+                task.completionDate = date.today()
                 task.save()
                 return {'message': 'Task marked as done successfully.'}, HTTPStatus.OK
             else:
@@ -1380,6 +1436,7 @@ class AddAssessmentAnswerResource(Resource):
                 new_answer.save()
             #now update project status to PENDING
             project.projectStatus = ProjectStatus.PENDING
+            db.session.commit()
             return {'message': 'All Assessment Answers were saved.'}, HTTPStatus.Ok
                 
         except Exception as e:
@@ -1509,8 +1566,6 @@ class GetTasksForStageResource(Resource):
                     'completionDate': str(task.completionDate) if task.completionDate else None,
                     'comments': comments_list
                 })
-
-            return {'tasks': tasks_list}, HTTPStatus.OK
 
             return {'tasks': tasks_list}, HTTPStatus.OK
 

@@ -1,6 +1,6 @@
 from flask import Flask
 from flask_restx import Api
-from .cases.views import case_namespace
+from .cases.views import case_namespace, case_stage_namespace, case_task_namespace
 from .auth.views import auth_namespace, user_management_namespace
 from .regions.views import region_namespace
 from .accountfield.views import field_namespace
@@ -60,6 +60,8 @@ def create_app(config=config_dict['development']):
     api.add_namespace(auth_namespace, path="/auth")
     api.add_namespace(user_management_namespace)
     api.add_namespace(assessment_namespace)
+    api.add_namespace(case_stage_namespace)
+    api.add_namespace(case_task_namespace)
     
     @app.shell_context_processor
     def make_shell_context():
