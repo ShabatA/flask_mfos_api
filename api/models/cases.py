@@ -113,7 +113,7 @@ class Cases(db.Model):
     def assign_status_data(self, status_data):
         new_status_data = CaseStatusData(caseID=self.caseID, status=self.caseStatus.value, data=status_data)
         self.startDate = status_data.get('startDate', self.startDate)
-        self.dueDate = status_data.get('startDate', self.dueDate)
+        self.dueDate = status_data.get('dueDate', self.dueDate)
         db.sesion.commit()
         new_status_data.save()
 

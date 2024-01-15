@@ -88,7 +88,13 @@ class Projects(db.Model):
         return total_points
     
     def assign_status_data(self, status_data):
+        
+        requirementsList = status_data.pop('predefined_req')
+         
         new_status_data = ProjectStatusData(projectID=self.projectID, status=self.projectStatus.value, data=status_data)
+        self.startDate = status_data.get('startDate', self.startDate)
+        self.dueDate = status_data.get('dueDate', self.dueDate)
+        db.sesion.commit()
         new_status_data.save()
 
 
@@ -441,7 +447,7 @@ class AssessmentQuestions(db.Model):
     questionID = db.Column(db.Integer, primary_key=True)
     questionText = db.Column(db.String, nullable=True)
     
-    def _repr_(self):
+    def __repr__(self):
         return f"<AssessmentQuestions {self.questionID} {self.questionText}>"
     
     def save(self):
@@ -483,6 +489,34 @@ class AssessmentAnswers(db.Model):
     @classmethod
     def get_by_id(cls, answerID):
         return cls.query.get_or_404(answerID)
+    
+class RequirementSection(Enum):
+    FINANCIAL = 'Financial'
+    IMPLEMENTATION = 'Implementation'
+    MEDIA = 'Media'
+
+class Requirements(db.Model):
+    __tablename__ = 'requirements'
+    
+    requirementID = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, nullable=False)
+    description = db.Column(db.String, nullable=False)
+    section = db.Column(db.Enum(RequirementSection), nullable=False)
+    
+    def __repr__(self):
+        return f"<Requirement {self.projectID} {self.name} {self.description} {self.section.value}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+    
+    @classmethod
+    def get_by_id(cls, projectID):
+        return cls.query.get_or_404(projectID)
     
 
 class ProjectStatusData(db.Model):

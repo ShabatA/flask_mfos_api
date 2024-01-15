@@ -2,7 +2,7 @@ from flask import request, current_app
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
-from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData, TaskComments, TaskStatus, task_assigned_to, task_cc, AssessmentAnswers, AssessmentQuestions
+from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData, TaskComments, TaskStatus, task_assigned_to, task_cc, AssessmentAnswers, AssessmentQuestions, Requirements, RequirementSection
 from ..utils.db import db
 from ..models.users import Users
 from flask import jsonify
@@ -19,11 +19,20 @@ stage_namespace = Namespace('Project Stages', description="A namespace for Proje
 task_namespace = Namespace('Project Tasks', description="A namespace for Project Tasks")
 assessment_namespace = Namespace('Project Assessment', description="A namespace for Project Assessment")
 
+requirements_namespace = Namespace('Requirements', description="A namespace for requirements. These will be universal for both Case and Project Approval")
+
 stage_model = stage_namespace.model(
     'Stage', {
         'name': fields.String(required=True, description='Name of the stage'),
     }
 )
+
+requirements_model = requirements_namespace.model('Requirement', {
+    'name': fields.String(required=True, description= 'The name of the requirement.'),
+    'description': fields.String(required=True, description='Short details to give an idea of what the underlying task will be.'),
+    'section': fields.String(enum=['FINANCIAL', 'IMPLEMENTATION', 'MEDIA'], description='The section these requirements belong to.')
+})
+
 answers_model = project_namespace.model('Answers', {
     'questionID': fields.Integer(required=True, description='ID of the answer'),
     'answerText': fields.String(description='Text-based answer for a text question'),
@@ -237,40 +246,127 @@ class ProjectRequirementResource(Resource):
             # Handle exceptions (e.g., database errors) appropriately
             return {'message': f'Error retrieving status data: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@requirements_namespace.route('/add', methods=['POST'])
+class AddRequirementsResource(Resource):
+    @jwt_required()
+    @requirements_namespace.expect([requirements_model])
+    def post(self):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+         # Check if the current user is an admin
+        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+            return {'message': 'Unauthorized. Only admin users can add requirements.'}, HTTPStatus.FORBIDDEN
+        # Parse the input data
+        requirements_data = request.json
+        try:
+            for requirement in requirements_data:
+                new_requirement = Requirements(
+                    name=requirement['name'],
+                    description=requirement['description'],
+                    section=requirement['section']
+                )
+                new_requirement.save()
+            return {'message': 'All requirements added successfully.'}, HTTPStatus.OK
+                
+        except Exception as e:
+            current_app.logger.error(f"Error adding requirements: {str(e)}")
+            db.session.rollback()
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@requirements_namespace.route('/get/all', methods=['GET'])
+class GetRequirementsResource(Resource):
+    @jwt_required()
+    def get(self):
+         # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
-# @project_namespace.route('/update_status/<int:project_id>')
-# class ProjectUpdateStatusResource(Resource):
-#     @jwt_required()
-#     @project_namespace.expect(project_update_status_model)
-#     def post(self, project_id):
-#         try:
-#             # Get the current user ID from the JWT token
-#             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+        # Check if the current user is authorized to access requirements
+        if not current_user:
+            return {'message': 'Unauthorized'}, HTTPStatus.UNAUTHORIZED
 
-#             # Retrieve the project by ID
-#             project = Projects.query.get_or_404(project_id)
+        # Check if the current user is an admin
+        # if not current_user.is_admin:
+        #     return {'message': 'Unauthorized. Only admin users can retrieve all requirements.'}, HTTPStatus.FORBIDDEN
 
-#             # Check if the current user has the necessary permissions to update the project status
-#             # Add your own logic for permission checks
-#             if not current_user.is_admin:
-#                 return {'message': 'Unauthorized. You do not have permission to update the project status.'}, HTTPStatus.FORBIDDEN
+        try:
+            # Fetch all requirements from the database
+            all_requirements = Requirements.query.all()
 
-#             # Parse the input data
-#             status_data = request.json.get('status_data', {})
-#             project_status = request.json.get('projectStatus')
+            # Serialize the requirements data
+            requirements_list = []
+            for requirement in all_requirements:
+                requirement_data = {
+                    'requirementID': requirement.requirementID,
+                    'name': requirement.name,
+                    'description': requirement.description,
+                    'section': requirement.section.value  # Convert Enum to its value
+                }
+                requirements_list.append(requirement_data)
 
-#             # Update the project status if provided
-#             if project_status:
-#                 project.projectStatus = project_status
+            return {'requirements': requirements_list}, HTTPStatus.OK
 
-#             # Update the project status data
-#             project.assign_status_data(status_data)
+        except Exception as e:
+            current_app.logger.error(f"Error retrieving requirements: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
 
-#             return {'message': 'Project status updated successfully'}, HTTPStatus.OK
-#         except Exception as e:
-#             # Handle exceptions (e.g., database errors) appropriately
-#             return {'message': f'Error updating project status: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+@project_namespace.route('/change_status/<int:project_id>', methods=['PUT'])
+class ProjectChangeStatusResource(Resource):
+    @jwt_required()
+    @project_namespace.expect(project_namespace.model('ProjectStatus', {
+        'projectStatus': fields.String(required=True, description='New project status')
+    }))
+    def put(self, project_id):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Get the project by ID
+        project = Projects.query.get(project_id)
+        if not project:
+            return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
+
+        # Check if the current user has permission to change the status
+        if current_user.is_admin or current_user.userID == project.userID:
+            # Parse the new status from the request
+            new_status = request.json.get('projectStatus')
+            # valid_statuses = [status for status in ProjectStatus]
+
+            # Check if the new status is valid
+            # if new_status not in valid_statuses:
+            #     return {'message': 'Invalid project status'}, HTTPStatus.BAD_REQUEST
+
+            # Update the project status
+            project.projectStatus = new_status
+
+            # Save the updated project status to the database
+            try:
+                db.session.commit()
+                # Check if the new status is 'Approved' and add stages if true
+                if new_status == "APPROVED":
+                    # Add three stages for the project
+                    initiated_stage = Stage.query.filter_by(name='Project Initiated').first()
+                    progress_stage = Stage.query.filter_by(name='In Progress').first()
+                    closed_stage = Stage.query.filter_by(name='Closed').first()
+
+                    # Add the stages to the project
+                    project_stages = [
+                        ProjectStage(project=project, stage=initiated_stage, started=True),
+                        ProjectStage(project=project, stage=progress_stage, started=True),
+                        ProjectStage(project=project, stage=closed_stage, started=True)
+                    ]
+
+                    # Commit the new stages to the database
+                    db.session.add_all(project_stages)
+                    db.session.commit()
+
+                return {'message': 'Project status changed successfully', 'new_status': new_status}, HTTPStatus.OK
+
+            except Exception as e:
+                db.session.rollback()
+                return {'message': f'Error changing project status: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        else:
+            return {'message': 'Unauthorized. You do not have permission to change the status of this project.'}, HTTPStatus.FORBIDDEN
+
 
 
 @project_namespace.route('/add_questions')
@@ -725,62 +821,7 @@ class ProjectUsersResource(Resource):
         else:
             return {'message': 'Unauthorized. You do not have permission to view users for this project.'}, HTTPStatus.FORBIDDEN
 
-@project_namespace.route('/change_status/<int:project_id>', methods=['PUT'])
-class ProjectChangeStatusResource(Resource):
-    @jwt_required()
-    @project_namespace.expect(project_namespace.model('ProjectStatus', {
-        'projectStatus': fields.String(required=True, description='New project status')
-    }))
-    def put(self, project_id):
-        # Get the current user ID from the JWT token
-        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
-        # Get the project by ID
-        project = Projects.query.get(project_id)
-        if not project:
-            return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
-
-        # Check if the current user has permission to change the status
-        if current_user.is_admin or current_user.userID == project.userID:
-            # Parse the new status from the request
-            new_status = request.json.get('projectStatus')
-            # valid_statuses = [status for status in ProjectStatus]
-
-            # Check if the new status is valid
-            # if new_status not in valid_statuses:
-            #     return {'message': 'Invalid project status'}, HTTPStatus.BAD_REQUEST
-
-            # Update the project status
-            project.projectStatus = new_status
-
-            # Save the updated project status to the database
-            try:
-                db.session.commit()
-                # Check if the new status is 'Approved' and add stages if true
-                if new_status == "APPROVED":
-                    # Add three stages for the project
-                    initiated_stage = Stage.query.filter_by(name='Project Initiated').first()
-                    progress_stage = Stage.query.filter_by(name='In Progress').first()
-                    closed_stage = Stage.query.filter_by(name='Closed').first()
-
-                    # Add the stages to the project
-                    project_stages = [
-                        ProjectStage(project=project, stage=initiated_stage, started=True),
-                        ProjectStage(project=project, stage=progress_stage, started=True),
-                        ProjectStage(project=project, stage=closed_stage, started=True)
-                    ]
-
-                    # Commit the new stages to the database
-                    db.session.add_all(project_stages)
-                    db.session.commit()
-
-                return {'message': 'Project status changed successfully', 'new_status': new_status}, HTTPStatus.OK
-
-            except Exception as e:
-                db.session.rollback()
-                return {'message': f'Error changing project status: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
-        else:
-            return {'message': 'Unauthorized. You do not have permission to change the status of this project.'}, HTTPStatus.FORBIDDEN
 
 
 
@@ -1396,9 +1437,31 @@ class AddAssessmentQuestionResource(Resource):
                 )
                 
                 new_question.save()
-            return {'message': 'All Assessment Questions were saved.'}, HTTPStatus.Ok      
+            return {'message': 'All Assessment Questions were saved.'}, HTTPStatus.OK      
         except Exception as e:
             current_app.logger.error(f"Error In adding AssessmentQuestion: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@assessment_namespace.route('/assessment/questions/all')
+class GetAllAssessmentQuestionsResource(Resource):
+    @jwt_required()
+    def get(self):
+        # Get all assessment questions
+        try:
+            questions = AssessmentQuestions.query.all()
+            
+            # Serialize the questions data
+            questions_data = []
+            for question in questions:
+                question_data = {
+                    'questionID': question.questionID,
+                    'questionText': question.questionText
+                }
+                questions_data.append(question_data)
+            
+            return {'questions': questions_data}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error in retrieving Assessment Questions: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @assessment_namespace.route('/assessment/answers/add')
