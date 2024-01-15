@@ -2,6 +2,8 @@ from flask import request, current_app
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
+
+from api.utils.project_requirement_processor import ProjectRequirementProcessor
 from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData, TaskComments, TaskStatus, task_assigned_to, task_cc, AssessmentAnswers, AssessmentQuestions, Requirements, RequirementSection
 from ..utils.db import db
 from ..models.users import Users
@@ -215,6 +217,12 @@ class ProjectAddRequirementsResource(Resource):
     def post(self, project_id):
         try:
             
+            # Get the current user ID from the JWT token
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            
+            if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+                return {'message': 'Unauthorized. Only admin users can add requirements.'}, HTTPStatus.FORBIDDEN
+            
             project = Projects.get_by_id(project_id)
             # Parse the input data
             project_data = request.json
@@ -222,6 +230,15 @@ class ProjectAddRequirementsResource(Resource):
 
             # Assign status data to the project
             project.assign_status_data(status_data)
+            
+            #process adding tasks from the requirements
+            requirementsList = status_data.pop('predefined_req')
+            processor = ProjectRequirementProcessor(project.projectID, current_user.userID)
+            #call the corresponding function to handle making a Task for that requirement
+            for value in requirementsList:
+                function_name = f"requirement_{value}"
+                case_function = getattr(processor, function_name, processor.default_case)
+                case_function()
 
             return {'message': 'Project requirements added successfully'}, HTTPStatus.CREATED
         except Exception as e:
@@ -1467,7 +1484,7 @@ class GetAllAssessmentQuestionsResource(Resource):
 @assessment_namespace.route('/assessment/answers/add')
 class AddAssessmentAnswerResource(Resource):
     @jwt_required()
-    @assessment_namespace.expect([assessment_model])
+    @assessment_namespace.expect(assessment_model)
     def post(self):
         # Get the current user from the JWT token
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
@@ -1487,20 +1504,32 @@ class AddAssessmentAnswerResource(Resource):
             
             
             for answer in answers_data:
-                question = AssessmentQuestions.get_by_id(answer['questionID'])
+                question_id = answer['questionID']
+                question = AssessmentQuestions.get_by_id(question_id)
                 if not question:
                     pass
-                new_answer = AssessmentAnswers(
-                    questionID= answer['questionID'],
-                    prjectID= assessment_data['projectID'],
-                    answerText= answer['answerText']
-                )
+                existing_answer = AssessmentAnswers.query.filter_by(
+                    questionID=question_id,
+                    projectID=assessment_data['projectID']
+                ).first()
+
+                if existing_answer:
+                    # If an answer already exists for the question, update it
+                    existing_answer.answerText = answer['answerText']
+                    db.session.commit()
+                else:
+                    # If no answer exists, create a new one
+                    new_answer = AssessmentAnswers(
+                        questionID=question_id,
+                        projectID=assessment_data['projectID'],
+                        answerText=answer['answerText']
+                    )
                 
-                new_answer.save()
+                    new_answer.save()
             #now update project status to PENDING
             project.projectStatus = ProjectStatus.PENDING
             db.session.commit()
-            return {'message': 'All Assessment Answers were saved.'}, HTTPStatus.Ok
+            return {'message': 'All Assessment Answers were saved.'}, HTTPStatus.OK
                 
         except Exception as e:
             current_app.logger.error(f"Error In adding AssessmentQuestion: {str(e)}")

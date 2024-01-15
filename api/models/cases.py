@@ -1,7 +1,6 @@
 
 from ..utils.db import db
 from enum import Enum
-from werkzeug.exceptions import NotFound
 from datetime import datetime
 from flask import jsonify
 from http import HTTPStatus
@@ -111,6 +110,7 @@ class Cases(db.Model):
         return total_points
     
     def assign_status_data(self, status_data):
+            
         new_status_data = CaseStatusData(caseID=self.caseID, status=self.caseStatus.value, data=status_data)
         self.startDate = status_data.get('startDate', self.startDate)
         self.dueDate = status_data.get('dueDate', self.dueDate)

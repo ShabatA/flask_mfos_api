@@ -2,6 +2,8 @@ from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.exceptions import NotFound
 from http import HTTPStatus
+
+from api.utils.case_requirement_processor import CaseRequirementProcessor
 from ..models.cases import Cases, CaseStatus, CaseUser, CQuestions, CQuestionChoices, CAnswers, CaseTaskAssignedTo, CaseStage, CaseToStage, CaseTaskComments, CaseStatusData, CaseTask, CaseTaskCC, CaseTaskStatus
 from ..models.users import Users
 from ..models.regions import Regions
@@ -677,6 +679,12 @@ class CaseAddRequirementsResource(Resource):
     @case_namespace.expect(case_status_data)
     def post(self, case_id):
         try:
+            
+             # Get the current user ID from the JWT token
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            
+            if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+                return {'message': 'Unauthorized. Only admin users can add requirements.'}, HTTPStatus.FORBIDDEN
         
             case = Cases.get_by_id(case_id)
             # Parse the input data
@@ -685,6 +693,15 @@ class CaseAddRequirementsResource(Resource):
 
             # Assign status data to the case
             case.assign_status_data(status_data)
+            
+            #handle making tasks from the requirements
+            requirementsList = status_data.pop('predefined_req')
+            processor = CaseRequirementProcessor(case.caseID, current_user.userID)
+            #call the corresponding function to handle making a Task for that requirement
+            for value in requirementsList:
+                function_name = f"requirement_{value}"
+                case_function = getattr(processor, function_name, processor.default_case)
+                case_function()
 
             return {'message': 'Case requirements added successfully'}, HTTPStatus.CREATED
         except Exception as e:

@@ -1,12 +1,9 @@
 from ..utils.db import db
-from .regions import Regions
-from .users import Users
 from enum import Enum
 from flask import jsonify
 from http import HTTPStatus
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy import text
 
 
 class ProjectStatus(Enum):
@@ -89,8 +86,6 @@ class Projects(db.Model):
     
     def assign_status_data(self, status_data):
         
-        requirementsList = status_data.pop('predefined_req')
-         
         new_status_data = ProjectStatusData(projectID=self.projectID, status=self.projectStatus.value, data=status_data)
         self.startDate = status_data.get('startDate', self.startDate)
         self.dueDate = status_data.get('dueDate', self.dueDate)
