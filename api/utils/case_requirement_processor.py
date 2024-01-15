@@ -25,7 +25,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -40,7 +40,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -55,7 +55,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -70,7 +70,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -85,7 +85,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -100,7 +100,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -115,7 +115,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -130,7 +130,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -145,7 +145,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -160,7 +160,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -175,7 +175,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -190,7 +190,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -205,7 +205,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -220,7 +220,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -235,7 +235,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=1   
+           stageID=2   
        )
        task.save()
     
@@ -250,7 +250,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=1   
+           stageID=2   
        )
        task.save()
     
@@ -265,7 +265,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=3   
+           stageID=6   
        )
        task.save()
     
@@ -280,7 +280,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=1   
+           stageID=6   
        )
        task.save()
     
@@ -295,7 +295,7 @@ class CaseRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= CaseTaskStatus.TODO,
-           stageID=1   
+           stageID=6   
        )
        task.save()
     

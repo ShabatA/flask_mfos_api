@@ -278,7 +278,7 @@ class ProjectRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= TaskStatus.TODO,
-           stageID=1   
+           stageID=3  
        )
        task.save()
     
@@ -293,7 +293,7 @@ class ProjectRequirementProcessor:
            attachedFiles= 'N/A',
            deadline= self.date_30_days_from_now,
            status= TaskStatus.TODO,
-           stageID=1   
+           stageID=3  
        )
        task.save()
     
