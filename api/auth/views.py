@@ -1,6 +1,8 @@
 from api.config.config import Config
 from flask_restx import Resource, Namespace, fields
 from flask import request, current_app
+
+from api.models.cases import Cases, CaseUser
 from ..models.users import Users, Role, UserPermissions, PermissionLevel
 from ..models.projects import Projects, ProjectUser, ProjectTask
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -838,10 +840,126 @@ class TakeoverResource(Resource):
                 for project_user in project_users:
                     project_user.userID = touser.userID
                     project_user.save()
+            
+            cases = Cases.query.filter_by(userID=fromuser.userID).all()
+            if cases:
+                for case in cases:
+                    case.userID = touser.userID
+                    case.save()
+
+            
+            #find all the case the deactivated user is responsible for,
+            #and reassign them to the new user
+            case_users = CaseUser.query.filter_by( userID=fromuser.userID).all()
+            if case_users:
+                for case_user in case_users:
+                    case_user.userID = touser.userID
+                    case_user.save()
 
             return {'message': 'Takeover successfull.'}, HTTPStatus.OK
 
         except Exception as e:
             current_app.logger.error(f"Error in performing takeover: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@user_management_namespace.route('/case-assign-user/<int:case_id>/<string:username>')
+class AssignUserToCaseResource(Resource):
+    @jwt_required()
+    @user_management_namespace.doc(
+        description= 'When a user is given access/responsibility to an existing case.',
+        params={
+            'case_id': 'The case to re-assign',
+            'username': 'The Username of the User to give the case to.'
+            }
+    )
+    def post(self, case_id, username):
+        try:
+            # Get the current user from the JWT token
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            # Check if the current user has the necessary permissions (e.g., case owner or admin)
+            # Adjust the condition based on your specific requirements
+            if not current_user.is_admin():
+                return {'message': 'Unauthorized. You do not have permission to link users to cases.'}, HTTPStatus.FORBIDDEN
+
+            # Get the case by ID
+            case = Cases.query.get(case_id)
+            if not case:
+                return {'message': 'Case not found'}, HTTPStatus.NOT_FOUND
+
+            
+
+            # Get the user by username
+            user = Users.query.filter_by(username=username).first()
+            print(f'user.is_active: {user.is_active()}')
+            print(f'Type of user.is_active: {type(user.is_active())}')
+
+            if not user: 
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+            elif  not user.is_active():
+                return {'message': 'User is deactivated'}, HTTPStatus.BAD_REQUEST
+            
+
+            # Check if the user is already linked to the case
+            if CaseUser.query.filter_by(caseID=case_id, userID=user.userID).first():
+                return {'message': 'User is already linked to the case'}, HTTPStatus.BAD_REQUEST
+
+            # Link the user to the case
+            case_user = CaseUser(caseID=case_id, userID=user.userID)
+            case_user.save()
+
+            return {'message': 'User linked to the case successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error linking user to case: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@user_management_namespace.route('/case-reassign-user/<int:case_id>/from/<string:fromusername>/to/<string:tousername>')
+class ReassignUserToCaseResource(Resource):
+    @jwt_required()
+    @user_management_namespace.doc(
+        description= 'If necessary a case needs to be given to another user.',
+        params={
+            'case_id': 'The case to re-assign',
+            'fromusername': 'The Username of the User to take the case from.',
+            'tousername': 'The Username of the User to give the case to.'
+            }
+    )
+
+    def put(self, case_id, fromusername, tousername):
+        try:
+            # Get the current user from the JWT token
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            # Check if the current user has the necessary permissions (e.g., project owner or admin)
+            # Adjust the condition based on your specific requirements
+            if not current_user.is_admin():
+                return {'message': 'Unauthorized. You do not have permission to link users to cases.'}, HTTPStatus.FORBIDDEN
+
+            # Get the case by ID
+            case = Cases.query.get(case_id)
+            if not case:
+                return {'message': 'Case not found'}, HTTPStatus.NOT_FOUND
+
+            # Get the user by username
+            fromuser = Users.query.filter_by(username=fromusername).first()
+            touser = Users.query.filter_by(username=tousername).first()
+            if not fromuser or not touser:
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+            
+            if  not touser.is_active():
+                return {'message': 'The user you are trying to assign to has been deactivated'}, HTTPStatus.BAD_REQUEST
+
+            
+            # Link the user to the case
+            case_user = CaseUser.query.filter_by(caseID=case_id, userID=fromuser.userID).first()
+            case_user.userID = touser.userID
+            case_user.save()
+
+            return {'message': 'case has been reassigned successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error linking user to case: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
         

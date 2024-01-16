@@ -773,42 +773,7 @@ class QuestionDeleteResource(Resource):
             # Handle exceptions (e.g., database errors) appropriately
             return {'message': f'Error deleting question: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
     
-
-@project_namespace.route('/give_access/<int:project_id>/<int:user_id>')
-class GiveAccessResource(Resource):
-    @jwt_required()
-    def post(self, project_id, user_id):
-        # Get the current user ID from the JWT token
-        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-
-        project_to_access = Projects.query.get(project_id)
-
-        # Check if the current user has the necessary permissions (e.g., project owner or admin)
-        # Adjust the condition based on your specific requirements
-        if not current_user.is_admin and current_user.userID != project_to_access.userID:
-            return {'message': 'Unauthorized. You do not have permission to give access to this project.'}, HTTPStatus.FORBIDDEN
-
-        # Get the project by ID
-        
-        if not project_to_access:
-            return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
-
-        # Get the user by ID
-        user_to_give_access = Users.query.get(user_id)
-        if not user_to_give_access:
-            return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
-
-        # Check if the user already has access to the project
-        if ProjectUser.query.filter_by(projectID=project_id, userID=user_id).first():
-            return {'message': 'User already has access to the project'}, HTTPStatus.BAD_REQUEST
-
-        # Add the user to the project's list of users
-        project_user = ProjectUser(projectID=project_id, userID=user_id)
-        project_user.save()
-
-        return {'message': 'User granted access to the project successfully'}, HTTPStatus.OK
-    
-    
+   
 @project_namespace.route('/project_users/<int:project_id>')
 class ProjectUsersResource(Resource):
     @jwt_required()

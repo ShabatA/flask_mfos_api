@@ -12,6 +12,7 @@ class CaseStatus(Enum):
     INPROGRESS = "in progress"
     REJECTED = "rejected"
     COMPLETED = "completed"
+    ASSESSMENT = "pending assessment"
 
 class CaseCategory(Enum):
     A = 'A'
@@ -122,7 +123,7 @@ class Cases(db.Model):
         for answer_data in answers:
             questionID = answer_data['questionID']
             answerText = answer_data.get('answerText')
-            
+            extras = answer_data.get('extras')  # Retrieve the 'extras' key if it exists
 
             # Assuming you have a method to get a Question by ID
             question = CQuestions.get_by_id(questionID)
@@ -134,7 +135,8 @@ class Cases(db.Model):
                     caseID=self.caseID,
                     questionID=questionID,
                     choiceID=choiceID,
-                    answerText=None  # Set answerText to None for multiple-choice questions
+                    answerText=None, # Set answerText to None for multiple-choice questions
+                    extras=extras
                 )
                 new_answer.save()
             elif question.questionType == 'multi choice':
@@ -146,7 +148,8 @@ class Cases(db.Model):
                         caseID=self.caseID,
                         questionID=questionID,
                         choiceID=choiceID,
-                        answerText=None  # Set answerText to None for multiple-choice questions
+                        answerText=None, # Set answerText to None for multiple-choice questions
+                        extras=extras
                     )
                     new_answer.save()
             else:
@@ -155,7 +158,8 @@ class Cases(db.Model):
                     caseID=self.caseID,
                     questionID=questionID,
                     answerText=answerText,
-                    choiceID=None  # Set choiceID to None for text-based questions
+                    choiceID=None,  # Set choiceID to None for text-based questions
+                    extras=extras
                 )
                 new_answer.save()
 
@@ -312,6 +316,7 @@ class CAnswers(db.Model):
     caseID = db.Column(db.Integer, db.ForeignKey('cases.caseID'), nullable=False)
     questionID = db.Column(db.Integer, db.ForeignKey('cquestions.questionID'), nullable=False)
     answerText = db.Column(db.String, nullable=True)  # Adjust based on the answer format
+    extras = db.Column(JSONB, nullable=True)
 
      # Add a foreign key reference to the choices table
     question = db.relationship('CQuestions', backref='canswers', lazy=True)
@@ -467,6 +472,55 @@ class CaseStatusData(db.Model):
 
         except Exception as e:
             # Handle exceptions (e.g., database errors) appropriately
-            print(f'Error retrieving project status data: {str(e)}')
+            print(f'Error retrieving case status data: {str(e)}')
             return None  # or raise an exception, depending on your error handling strategy
+
+class CaseAssessmentQuestions(db.Model):
+    __tablename__ = 'case_assessment_questions'
+    questionID = db.Column(db.Integer, primary_key=True)
+    questionText = db.Column(db.String, nullable=True)
+    
+    def __repr__(self):
+        return f"<CaseAssessmentQuestions {self.questionID} {self.questionText}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        CaseAssessmentAnswers.query.filter_by(questionID=self.questionID).delete()
+        db.session.delete(self)
+        db.session.commit()
+    
+    @classmethod
+    def get_by_id(cls, questionID):
+        return cls.query.get_or_404(questionID)
+
+class CaseAssessmentAnswers(db.Model):
+    __tablename__ = 'case_assessment_answers'
+
+    answerID = db.Column(db.Integer, primary_key=True)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases.caseID'), nullable=False)
+    questionID = db.Column(db.Integer, db.ForeignKey('case_assessment_questions.questionID'), nullable=False)
+    answerText = db.Column(db.String, nullable=True)
+    extras = db.Column(JSONB, nullable=True)
+    
+    # Add a foreign key reference to the choices table
+    question = db.relationship('CaseAssessmentQuestions', backref='case_assessment_answers', lazy=True)
+   
+
+    def _repr_(self):
+        return f"<CaseAssessmentAnswer {self.answerID} {self.answerText}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+    
+    @classmethod
+    def get_by_id(cls, answerID):
+        return cls.query.get_or_404(answerID)
 

@@ -4,7 +4,7 @@ from werkzeug.exceptions import NotFound
 from http import HTTPStatus
 
 from api.utils.case_requirement_processor import CaseRequirementProcessor
-from ..models.cases import Cases, CaseStatus, CaseUser, CQuestions, CQuestionChoices, CAnswers, CaseTaskAssignedTo, CaseStage, CaseToStage, CaseTaskComments, CaseStatusData, CaseTask, CaseTaskCC, CaseTaskStatus
+from ..models.cases import Cases, CaseStatus, CaseUser, CQuestions, CQuestionChoices, CAnswers, CaseTaskAssignedTo, CaseStage, CaseToStage, CaseTaskComments, CaseStatusData, CaseTask, CaseTaskCC, CaseTaskStatus, CaseAssessmentAnswers, CaseAssessmentQuestions
 from ..models.users import Users
 from ..models.regions import Regions
 from ..utils.db import db
@@ -26,6 +26,22 @@ def get_region_id_by_name(region_name):
 case_namespace = Namespace("Cases", description="Namespace for cases")
 case_stage_namespace = Namespace('Case Stages', description="A namespace for case Stages")
 case_task_namespace = Namespace('Case Tasks', description="A namespace for case Tasks")
+case_assessment_namespace = Namespace('Case Assessment', description="A namespace for Case Assessment")
+
+assessment_question_model = case_assessment_namespace.model('AssessmentQuestion', {
+    'questionText': fields.String(required=True, description='The actual question to be asked.')
+})
+
+assessment_answer_model = case_assessment_namespace.model('AssessmentAnswer', {
+    'questionID': fields.Integer(required=True, description='The ID of the question'),
+    'answerText': fields.String(required=True, description='The answer provided'),
+    'extras': fields.Raw(description='Answers for the subquestion as key-value pair')
+})
+
+assessment_model = case_assessment_namespace.model('ProjectAssessment', {
+    'projectID': fields.Integer(required=True, description='The ID of the project this assessment is for'),
+    'answers': fields.List(fields.Nested(assessment_answer_model), description='List of answers for the assessment')
+})
 
 stage_model = case_stage_namespace.model(
     'Stage', {
@@ -38,7 +54,7 @@ case_update_status_model = case_namespace.model('CaseUpdateStatus', {
     'status_data': fields.Raw(description='Status data associated with the case'),
 })
 
-case_status_data = case_namespace.model('CaseStatus', {
+case_status_data = case_namespace.model('CaseStatusData', {
     
     'status_data': fields.Raw(description='Status data associated with the case'),
 })
@@ -46,7 +62,8 @@ case_status_data = case_namespace.model('CaseStatus', {
 answers_model = case_namespace.model('CAnswers', {
     'questionID': fields.Integer(required=True, description='ID of the answer'),
     'answerText': fields.String(description='Text-based answer for a text question'),
-    'choiceID': fields.List(fields.Integer, description='List of choices')
+    'choiceID': fields.List(fields.Integer, description='List of choices'),
+    'extras': fields.Raw(description='Answers for the subquestion as key-value pair')
 })
 
 comments_model = case_task_namespace.model('CaseTaskComments',{
@@ -89,7 +106,6 @@ case_model = case_namespace.model(
         'budgetRequired': fields.Float(required=True, description="Budget required"),
         'budgetAvailable': fields.Float(required=True, description="Budget available"),
         'caseCategory': fields.String(description="Case category"),
-        'caseStatus': fields.String(enum=[status.value for status in CaseStatus], description="Case status"),
         'serviceRequired': fields.String(description="Service Required"),
         'regionName': fields.String(required=True, description="Region Name"),
         'answers': fields.List(fields.Nested(answers_model), description='List of answers for the case')
@@ -102,7 +118,6 @@ case_input_model = case_namespace.model('CaseInput', {
     'regionID': fields.Integer(required=True, description='ID of the region'),
     'budgetRequired': fields.Float(required=True, description='Required budget for the case'),
     'budgetAvailable': fields.Float(required=True, description='Available budget for the case'),
-    'caseStatus': fields.String(required=True, enum=['approved', 'pending','inprogress','rejected', 'completed'], description='Status of the case'),
     'serviceRequired': fields.String(required=True, description='The service that is needed'),
     'category': fields.String(enum=['A', 'B', 'C', 'D'], description='Category of the case'),
     'userID': fields.Integer(description='ID of the user associated with the case'),
@@ -132,7 +147,6 @@ case_edit_model = case_namespace.model('CaseEdit', {
     'regionID': fields.Integer(required=True, description='ID of the region'),
     'budgetRequired': fields.Float(required=True, description='Required budget for the case'),
     'budgetAvailable': fields.Float(required=True, description='Available budget for the case'),
-    'caseStatus': fields.String(required=True, enum=['approved', 'pending','inprogress','rejected', 'completed'], description='Status of the case'),
     'serviceRequired': fields.String(required=True, description='The service that is needed'),
     'category': fields.String(enum=['A', 'B', 'C', 'D'], description='Category of the case'),
     'userID': fields.Integer(description='ID of the user associated with the case'),
@@ -199,7 +213,7 @@ class CaseAddResource(Resource):
             regionID = case_data['regionID'],
             budgetRequired = case_data['budgetRequired'],
             budgetAvailable = case_data['budgetAvailable'],
-            caseStatus = case_data['caseStatus'],
+            caseStatus = CaseStatus.ASSESSMENT,
             caseCategory = case_data['category'],
             serviceRequired = case_data['serviceRequired'],
             userID=current_user.userID,
@@ -374,31 +388,29 @@ class AllCasesWithAnswersResource(Resource):
                 for question_id, question_data in answers_by_question.items():
                     question = CQuestions.get_by_id(question_id)
 
+                    # Include 'extras' in the 'answer' dictionary
+                    answer_dict = {'extras': question_data['answers'][0].extras} if 'extras' in question_data['answers'][0] else {}
+
                     if question.questionType == 'single choice':
                         # For single-choice questions, include the selected choice details in the response
-                        response_data.append(OrderedDict([
-                            ('questionID', question_id),
-                            ('answer', {
-                                'choiceID': question_data['answers'][0].choiceID,
-                                'choiceText': CQuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText
-                            })
-                        ]))
+                        answer_dict.update({
+                            'choiceID': question_data['answers'][0].choiceID,
+                            'choiceText': CQuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText
+                        })
                     elif question.questionType == 'multi choice':
                         # For multi-choice questions, include all selected choices in the response
-                        response_data.append(OrderedDict([
-                            ('questionID', question_id),
-                            ('answer', {
-                                'choices': [choice.choiceID for choice in question_data['answers']],
-                                'choiceText': [CQuestionChoices.get_by_id(choice.choiceID).choiceText for choice in
-                                            question_data['answers']]
-                            })
-                        ]))
+                        answer_dict.update({
+                            'choices': [choice.choiceID for choice in question_data['answers']],
+                            'choiceText': [CQuestionChoices.get_by_id(choice.choiceID).choiceText for choice in question_data['answers']]
+                        })
                     else:
                         # For text-based questions, include the answer text in the response
-                        response_data.append(OrderedDict([
-                            ('questionID', question_id),
-                            ('answer', {'answerText': question_data['answers'][0].answerText})
-                        ]))
+                        answer_dict.update({'answerText': question_data['answers'][0].answerText})
+
+                    response_data.append(OrderedDict([
+                        ('questionID', question_id),
+                        ('answer', answer_dict)
+                    ]))
 
                 order_answers = response_data
                 
@@ -458,31 +470,29 @@ class UserCasesWithAnswersResource(Resource):
                 for question_id, question_data in answers_by_question.items():
                     question = CQuestions.get_by_id(question_id)
 
+                    # Include 'extras' in the 'answer' dictionary
+                    answer_dict = {'extras': question_data['answers'][0].extras} if 'extras' in question_data['answers'][0] else {}
+
                     if question.questionType == 'single choice':
                         # For single-choice questions, include the selected choice details in the response
-                        response_data.append(OrderedDict([
-                            ('questionID', question_id),
-                            ('answer', {
-                                'choiceID': question_data['answers'][0].choiceID,
-                                'choiceText': CQuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText
-                            })
-                        ]))
+                        answer_dict.update({
+                            'choiceID': question_data['answers'][0].choiceID,
+                            'choiceText': CQuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText
+                        })
                     elif question.questionType == 'multi choice':
                         # For multi-choice questions, include all selected choices in the response
-                        response_data.append(OrderedDict([
-                            ('questionID', question_id),
-                            ('answer', {
-                                'choices': [choice.choiceID for choice in question_data['answers']],
-                                'choiceText': [CQuestionChoices.get_by_id(choice.choiceID).choiceText for choice in
-                                               question_data['answers']]
-                            })
-                        ]))
+                        answer_dict.update({
+                            'choices': [choice.choiceID for choice in question_data['answers']],
+                            'choiceText': [CQuestionChoices.get_by_id(choice.choiceID).choiceText for choice in question_data['answers']]
+                        })
                     else:
                         # For text-based questions, include the answer text in the response
-                        response_data.append(OrderedDict([
-                            ('questionID', question_id),
-                            ('answer', {'answerText': question_data['answers'][0].answerText})
-                        ]))
+                        answer_dict.update({'answerText': question_data['answers'][0].answerText})
+
+                    response_data.append(OrderedDict([
+                        ('questionID', question_id),
+                        ('answer', answer_dict)
+                    ]))
 
                 order_answers = response_data
 
@@ -533,45 +543,50 @@ class CaseAnswersOnlyResource(Resource):
         for question_id, question_data in answers_by_question.items():
             question = CQuestions.get_by_id(question_id)
 
+            # Include 'extras' in the 'answer' dictionary
+            answer_dict = {'extras': question_data['answers'][0].extras} if 'extras' in question_data['answers'][0] else {}
+
             if question.questionType == 'single choice':
                 # For single-choice questions, include the selected choice details in the response
-                response_data.append(OrderedDict([
-                    ('questionID', question_id),
-                    ('questionText', question.questionText),
-                    ('questionType', 'single choice'),
-                    ('answers', [{
+                answer_dict.update({
+                    'questionID': question_id,
+                    'questionText': question.questionText,
+                    'questionType': 'single choice',
+                    'answers': [{
                         'answerID': answer.answerID,
                         'choiceID': answer.choiceID,
                         'choiceText': CQuestionChoices.get_by_id(answer.choiceID).choiceText,
                         'points': CQuestionChoices.get_by_id(answer.choiceID).points
-                    } for answer in question_data['answers']])
-                ]))
+                    } for answer in question_data['answers']]
+                })
             elif question.questionType == 'multi choice':
                 # For multi-choice questions, include all selected choices in the response
-                response_data.append(OrderedDict([
-                    ('questionID', question_id),
-                    ('questionText', question.questionText),
-                    ('questionType', 'multi choice'),
-                    ('answers', [{
+                answer_dict.update({
+                    'questionID': question_id,
+                    'questionText': question.questionText,
+                    'questionType': 'multi choice',
+                    'answers': [{
                         'answerID': answer.answerID,
                         'choiceID': choice_id,
                         'choiceText': CQuestionChoices.get_by_id(choice_id).choiceText,
                         'points': CQuestionChoices.get_by_id(choice_id).points
                     } for answer in question_data['answers'] for choice_id in (
                         [answer.choiceID] if isinstance(answer.choiceID, int) else answer.choiceID)
-                    ])
-                ]))
+                    ]
+                })
             else:
                 # For text-based questions, include the answer text in the response
-                response_data.append(OrderedDict([
-                    ('questionID', question_id),
-                    ('questionText', question.questionText),
-                    ('questionType', 'text'),
-                    ('answers', [{
+                answer_dict.update({
+                    'questionID': question_id,
+                    'questionText': question.questionText,
+                    'questionType': 'text',
+                    'answers': [{
                         'answerID': answer.answerID,
                         'answerText': answer.answerText
-                    } for answer in question_data['answers']])
-                ]))
+                    } for answer in question_data['answers']]
+                })
+
+            response_data.append(OrderedDict(answer_dict))
 
         return jsonify(OrderedDict([('answers', response_data)]))
 
@@ -598,35 +613,33 @@ class CaseMinifiedAnswersOnlyResource(Resource):
         # Convert the list of answers to a JSON response
         response_data = []
 
-        # Process each question and its associated answers
+       # Process each question and its associated answers
         for question_id, question_data in answers_by_question.items():
             question = CQuestions.get_by_id(question_id)
 
+            # Include 'extras' in the 'answer' dictionary
+            answer_dict = {'extras': question_data['answers'][0].extras} if 'extras' in question_data['answers'][0] else {}
+
             if question.questionType == 'single choice':
                 # For single-choice questions, include the selected choice details in the response
-                response_data.append(OrderedDict([
-                    ('questionID', question_id),
-                    ('answer', {
-                        'choiceID': question_data['answers'][0].choiceID,
-                        'choiceText': CQuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText
-                    })
-                ]))
+                answer_dict.update({
+                    'choiceID': question_data['answers'][0].choiceID,
+                    'choiceText': CQuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText
+                })
             elif question.questionType == 'multi choice':
                 # For multi-choice questions, include all selected choices in the response
-                response_data.append(OrderedDict([
-                    ('questionID', question_id),
-                    ('answer', {
-                        'choiceID': [choice.choiceID for choice in question_data['answers']],
-                        'choiceText': [CQuestionChoices.get_by_id(choice.choiceID).choiceText for choice in
-                                       question_data['answers']]
-                    })
-                ]))
+                answer_dict.update({
+                    'choices': [choice.choiceID for choice in question_data['answers']],
+                    'choiceText': [CQuestionChoices.get_by_id(choice.choiceID).choiceText for choice in question_data['answers']]
+                })
             else:
                 # For text-based questions, include the answer text in the response
-                response_data.append(OrderedDict([
-                    ('questionID', question_id),
-                    ('answer', {'answerText': question_data['answers'][0].answerText})
-                ]))
+                answer_dict.update({'answerText': question_data['answers'][0].answerText})
+
+            response_data.append(OrderedDict([
+                ('questionID', question_id),
+                ('answer', answer_dict)
+            ]))
 
         return jsonify(OrderedDict([('answers', response_data)]))
     
@@ -836,37 +849,6 @@ class QuestionDeleteResource(Resource):
             # Handle exceptions (e.g., database errors) appropriately
             return {'message': f'Error deleting question: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@case_namespace.route('/give_access/<int:case_id>/<int:user_id>')
-class GiveAccessResource(Resource):
-    @jwt_required()
-    def post(self, case_id, user_id):
-        # Get the current user ID from the JWT token
-        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-        # Get the case by ID
-        case_to_access = Cases.query.get(case_id)
-        # Check if the current user has the necessary permissions (e.g., case owner or admin)
-        # Adjust the condition based on your specific requirements
-        if not current_user.is_admin and current_user.userID != case_to_access.userID:
-            return {'message': 'Unauthorized. You do not have permission to give access to this case.'}, HTTPStatus.FORBIDDEN
-
-        
-        if not case_to_access:
-            return {'message': 'case not found'}, HTTPStatus.NOT_FOUND
-
-        # Get the user by ID
-        user_to_give_access = Users.query.get(user_id)
-        if not user_to_give_access:
-            return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
-
-        # Check if the user already has access to the case
-        if CaseUser.query.filter_by(caseID=case_id, userID=user_id).first():
-            return {'message': 'User already has access to the case'}, HTTPStatus.BAD_REQUEST
-
-        # Add the user to the case's list of users
-        case_user = CaseUser(caseID=case_id, userID=user_id)
-        case_user.save()
-
-        return {'message': 'User granted access to the case successfully'}, HTTPStatus.OK
 
 #####################################################
 # STAGE ENDPOINTS
@@ -1305,6 +1287,220 @@ class EditTaskForStageResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error updating task: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@case_assessment_namespace.route('/assessment/questions/add')
+class AddAssessmentQuestionResource(Resource):
+    @jwt_required()
+    @case_assessment_namespace.expect([assessment_question_model])
+    def post(self):
+        # Get the current user from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Check if the current user is an admin
+        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+            return {'message': 'Unauthorized. Only admin users can add questions.'}, HTTPStatus.FORBIDDEN
+
+        # Parse the input data for questions
+        questions_data = request.json
+        
+        try:
+            for question in questions_data:
+                new_question = CaseAssessmentQuestions(
+                    questionText= question['questionText']
+                )
+                
+                new_question.save()
+            return {'message': 'All Assessment Questions were saved.'}, HTTPStatus.OK      
+        except Exception as e:
+            current_app.logger.error(f"Error In adding AssessmentQuestion: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_assessment_namespace.route('/assessment/questions/all')
+class GetAllAssessmentQuestionsResource(Resource):
+    @jwt_required()
+    def get(self):
+        # Get all assessment questions
+        try:
+            questions = CaseAssessmentQuestions.query.all()
+            
+            # Serialize the questions data
+            questions_data = []
+            for question in questions:
+                question_data = {
+                    'questionID': question.questionID,
+                    'questionText': question.questionText
+                }
+                questions_data.append(question_data)
+            
+            return {'questions': questions_data}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error in retrieving Assessment Questions: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_assessment_namespace.route('/assessment/answers/add')
+class AddAssessmentAnswerResource(Resource):
+    @jwt_required()
+    @case_assessment_namespace.expect(assessment_model)
+    def post(self):
+        # Get the current user from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Check if the current user is an admin
+        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+            return {'message': 'Unauthorized. Only admin users can add answers.'}, HTTPStatus.FORBIDDEN
+
+        # Parse the input data for answers
+        assessment_data = request.json
+        answers_data = assessment_data.pop('answers', [])
+        try:
+            # get the case this assessment is for
+            case = Cases.get_by_id(assessment_data['caseID'])
+            if not case:
+                return {'message': 'Case not found'}, HTTPStatus.BAD_REQUEST
+            
+            
+            for answer in answers_data:
+                question_id = answer['questionID']
+                question = CaseAssessmentQuestions.get_by_id(question_id)
+                if not question:
+                    pass
+                existing_answer = CaseAssessmentAnswers.query.filter_by(
+                    questionID=question_id,
+                    caseID=assessment_data['caseID']
+                ).first()
+
+                if existing_answer:
+                    # If an answer already exists for the question, update it
+                    existing_answer.answerText = answer['answerText']
+                    existing_answer.extras = answer['extras']
+                    db.session.commit()
+                else:
+                    # If no answer exists, create a new one
+                    new_answer = CaseAssessmentAnswers(
+                        questionID=question_id,
+                        projectID=assessment_data['caseID'],
+                        answerText=answer['answerText'],
+                        extras=assessment_data['extras']
+                    )
+                
+                    new_answer.save()
+            #now update case status to PENDING
+            case.caseStatus = CaseStatus.PENDING
+            db.session.commit()
+            return {'message': 'All Assessment Answers were saved.'}, HTTPStatus.OK
+                
+        except Exception as e:
+            current_app.logger.error(f"Error In adding AssessmentQuestion: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_assessment_namespace.route('/assessment/answers/get/<int:case_id>', methods=['GET'])
+class GetAssessmentResource(Resource):
+    @jwt_required()
+    def get(self, case_id):
+        try:
+            # Fetch all assessment answers for the given case_id
+            assessment_answers = (
+                CaseAssessmentAnswers.query
+                .join(CaseAssessmentQuestions)
+                .filter(CaseAssessmentAnswers.caseID == case_id)
+                .add_columns(CaseAssessmentQuestions.questionText, CaseAssessmentAnswers.answerText, CaseAssessmentAnswers.extras)
+                .all()
+            )
+
+            # Convert the list of answers to a JSON response
+            answers_data = [
+                {
+                    'questionText': question_text,
+                    'answerText': answer_text,
+                    'extras': extras  # Include extras in the response
+                }
+                for _, question_text, answer_text, extras in assessment_answers
+            ]
+
+            return {'assessment_answers': answers_data}, HTTPStatus.OK
+            
+        except Exception as e:
+            current_app.logger.error(f"Error In fetching Assessment: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_assessment_namespace.route('/assessment/delete/<int:case_id>', methods=['DELETE'])
+class DeleteAssessmentResource(Resource):
+    @jwt_required()
+    def delete(self, case_id):
+        # Get the current user from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Check if the current user is an admin
+        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+            return {'message': 'Unauthorized. Only admin users can delete answers.'}, HTTPStatus.FORBIDDEN
+
+        try:
+            # Delete all AssessmentAnswers for the specified case_id
+            CaseAssessmentAnswers.query.filter_by(caseID=case_id).delete()
+            db.session.commit()
+
+            return {'message': 'Assessment answers deleted successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error in deleting assessment answers: {str(e)}")
+            db.session.rollback()
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@case_assessment_namespace.route('/question/delete/<int:question_id>', methods=['DELETE'])
+class DeleteAssessmentQuestionResource(Resource):
+    @jwt_required()
+    def delete(self, question_id):
+        # Get the current user from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Check if the current user is an admin
+        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+            return {'message': 'Unauthorized. Only admin users can delete questions.'}, HTTPStatus.FORBIDDEN
+
+        try:
+            # Delete the AssessmentQuestion with the specified question_id
+            question = CaseAssessmentQuestions.get_by_id(question_id)
+            if question:
+                question.delete()
+                return {'message': 'Assessment question deleted successfully'}, HTTPStatus.OK
+            else:
+                return {'message': 'Assessment question not found'}, HTTPStatus.NOT_FOUND
+
+        except Exception as e:
+            current_app.logger.error(f"Error in deleting assessment question: {str(e)}")
+            db.session.rollback()
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_namespace.route('/user-cases/<string:username>', methods=['GET'])
+class UserCasesResource(Resource):
+    def get(self, username):
+        # Replace 'user_id' with the actual way you get the user ID
+        user = Users.query.filter_by(username=username).first()
+
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+
+        # Fetch cases associated with the user using the CaseUser model
+        cases = (
+            Cases.query.join(CaseUser)
+            .filter(CaseUser.userID == user.userID)
+            .distinct(Cases.caseID)
+            .all()
+        )
+
+        # Convert the list of cases to a JSON response
+        cases_data = [
+            {
+                'caseID': case.caseID,
+                'caseName': case.caseName,
+                'caseStatus': case.caseStatus.value,
+            }
+            for case in cases
+        ]
+
+        return jsonify({'cases': cases_data})
 
 
 
