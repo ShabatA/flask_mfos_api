@@ -707,8 +707,8 @@ class CaseAddRequirementsResource(Resource):
             # Assign status data to the case
             case.assign_status_data(status_data)
             
-            #handle making tasks from the requirements
-            requirementsList = status_data.pop('predefined_req')
+            # Instead of popping the 'predefined_req', just access it directly
+            requirementsList = status_data.get('predefined_req', [])
             processor = CaseRequirementProcessor(case.caseID, current_user.userID)
             #call the corresponding function to handle making a Task for that requirement
             for value in requirementsList:

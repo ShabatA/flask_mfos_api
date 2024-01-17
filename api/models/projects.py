@@ -89,7 +89,7 @@ class Projects(db.Model):
         new_status_data = ProjectStatusData(projectID=self.projectID, status=self.projectStatus.value, data=status_data)
         self.startDate = status_data.get('startDate', self.startDate)
         self.dueDate = status_data.get('dueDate', self.dueDate)
-        db.sesion.commit()
+        db.session.commit()
         new_status_data.save()
 
 

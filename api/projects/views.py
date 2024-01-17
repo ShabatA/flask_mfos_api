@@ -227,12 +227,13 @@ class ProjectAddRequirementsResource(Resource):
             # Parse the input data
             project_data = request.json
             status_data = project_data.pop('status_data', {})  # Assuming status_data is part of the input
-
+            
             # Assign status data to the project
             project.assign_status_data(status_data)
             
-            #process adding tasks from the requirements
-            requirementsList = status_data.pop('predefined_req')
+            # Instead of popping the 'predefined_req', just access it directly
+            requirementsList = status_data.get('predefined_req', [])
+    
             processor = ProjectRequirementProcessor(project.projectID, current_user.userID)
             #call the corresponding function to handle making a Task for that requirement
             for value in requirementsList:
