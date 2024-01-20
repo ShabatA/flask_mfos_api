@@ -426,13 +426,13 @@ class ProjectAddQuestionsResource(Resource):
                     questionType=question_data['questionType'],
                     points=0,
                 )
-
+                new_question.save()
                 # If the question is multiple choice, add choices
                 if question_data['questionType'] == 'single choice':
                     choices_data = question_data.get('choices',[])
                     for choice_data in choices_data:
                         new_choice = QuestionChoices(
-                            question=new_question,
+                            questionID=new_question.questionID,
                             choiceText=choice_data['choiceText'],
                             points=choice_data['points']
                         )
@@ -441,16 +441,14 @@ class ProjectAddQuestionsResource(Resource):
                     choices_data = question_data.get('choices', [])
                     for choice_data in choices_data:
                         new_choice = QuestionChoices(
-                            question=new_question,
+                            questionID=new_question.questionID,
                             choiceText=choice_data['choiceText'],
                             points=choice_data['points']
                         )
                         db.session.add(new_choice)
                 else:
                     new_question.points = question_data['points']
-
-                new_question.save()
-
+                    
             db.session.commit()
 
             return {'message': 'Questions added successfully'}, HTTPStatus.CREATED
@@ -734,7 +732,7 @@ class ProjectDeleteResource(Resource):
     def delete_associated_data(self, project):
         # Delete associated data (use this method to handle relationships)
         Answers.query.filter_by(projectID=project.projectID).delete()
-        AssessmentAnswers.query.filter_by(projectID=self.projectID).delete()
+        AssessmentAnswers.query.filter_by(projectID=project.projectID).delete()
 
         # Delete linked projects
         ProjectUser.query.filter_by(projectID=project.projectID).delete()

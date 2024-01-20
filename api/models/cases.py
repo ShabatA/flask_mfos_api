@@ -27,23 +27,7 @@ class CaseTaskStatus(Enum):
     OVERDUE = 'Overdue'
 
 class Cases(db.Model):
-    """
-    Represents a case in the application.
-
-    Attributes:
-        caseID (int): The unique identifier for the case.
-        caseName (str): The name of the case.
-        budgetRequired (Decimal): The budget required for the case.
-        budgetAvailable (Decimal): The budget available for the case.
-        caseStatus (CaseStatus): The status of the case.
-        caseCategory (str): The category of the case.
-        userID (int): The user ID associated with the case.
-        regionID (int): The region ID associated with the case.
-        user (Users): The user associated with the case.
-        region (Regions): The region associated with the case.
-        createdAt (datetime): The date and time when the case was created.
-    """
-
+    
     __tablename__ = 'cases'
 
     caseID = db.Column(db.Integer, primary_key=True)

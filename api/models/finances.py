@@ -13,7 +13,9 @@ class RegionAccount(db.Model):
     totalFund = db.Column(db.Float, nullable=False)
     availableFund = db.Column(db.Float, nullable=False)
     
-    answers = db.relationship('ProjectFunds', backref='projects', lazy=True)
+    projectsFunds = db.relationship('ProjectFunds', backref='projects', lazy=True)
+    casesFunds = db.relationship('CaseFunds', backref='cases', lazy=True)
+
 
 
 class ProjectFunds(db.Model):
@@ -21,6 +23,13 @@ class ProjectFunds(db.Model):
     
     fundID = db.Column(db.Integer, primary_key=True)
     projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
+    fundsAllocated = db.Column(db.Float, nullable=True)
+
+class CaseFunds(db.Model):
+    __tablename__ = 'case_funds'
+    
+    fundID = db.Column(db.Integer, primary_key=True)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases.caseID'), nullable=False)
     fundsAllocated = db.Column(db.Float, nullable=True)
     
     

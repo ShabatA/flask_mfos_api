@@ -427,15 +427,18 @@ task_cc = db.Table('task_cc',
 
 def delete_task_assigned_to_by_task_id(task_id):
     try:
-        db.session.execute(f"DELETE FROM task_assigned_to WHERE task_id = {task_id}")
+        task_assigned_to.delete().where(task_assigned_to.c.task_id == task_id).execute()
         db.session.commit()
     except Exception as e:
         print(f'error deleting assigned_to {str(e)}')
 
 # Example: Delete a record from task_cc using only taskId
 def delete_task_cc_by_task_id(task_id):
-    db.session.query(task_cc).filter_by(task_id=task_id).delete()
-    db.session.commit()
+    try:
+        task_cc.delete().where(task_cc.c.task_id == task_id).execute()
+        db.session.commit()
+    except Exception as e:
+        print(f'Error deleting task_cc: {str(e)}')
 
 class AssessmentQuestions(db.Model):
     __tablename__ = 'assessment_questions'

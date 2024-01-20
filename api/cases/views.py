@@ -4,7 +4,7 @@ from werkzeug.exceptions import NotFound
 from http import HTTPStatus
 
 from api.utils.case_requirement_processor import CaseRequirementProcessor
-from ..models.cases import Cases, CaseStatus, CaseUser, CQuestions, CQuestionChoices, CAnswers, CaseTaskAssignedTo, CaseStage, CaseToStage, CaseTaskComments, CaseStatusData, CaseTask, CaseTaskCC, CaseTaskStatus, CaseAssessmentAnswers, CaseAssessmentQuestions
+from ..models.cases import CaseCategory, Cases, CaseStatus, CaseUser, CQuestions, CQuestionChoices, CAnswers, CaseTaskAssignedTo, CaseStage, CaseToStage, CaseTaskComments, CaseStatusData, CaseTask, CaseTaskCC, CaseTaskStatus, CaseAssessmentAnswers, CaseAssessmentQuestions
 from ..models.users import Users
 from ..models.regions import Regions
 from ..utils.db import db
@@ -119,7 +119,6 @@ case_input_model = case_namespace.model('CaseInput', {
     'budgetRequired': fields.Float(required=True, description='Required budget for the case'),
     'budgetAvailable': fields.Float(required=True, description='Available budget for the case'),
     'serviceRequired': fields.String(required=True, description='The service that is needed'),
-    'category': fields.String(enum=['A', 'B', 'C', 'D'], description='Category of the case'),
     'userID': fields.Integer(description='ID of the user associated with the case'),
     'dueDate': fields.Date(description='Due date of the case'),
     'answers': fields.List(fields.Nested(answers_model), description='List of answers for the case')
@@ -214,7 +213,7 @@ class CaseAddResource(Resource):
             budgetRequired = case_data['budgetRequired'],
             budgetAvailable = case_data['budgetAvailable'],
             caseStatus = CaseStatus.ASSESSMENT,
-            caseCategory = case_data['category'],
+            category = CaseCategory.A,
             serviceRequired = case_data['serviceRequired'],
             userID=current_user.userID,
             createdAt = datetime.utcnow().date(),
@@ -348,7 +347,7 @@ class AllQuestionsResource(Resource):
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@case_namespace.route('/admin/all_cases_with_answers', methods=['GET'])
+@case_namespace.route('/all_cases_with_answers', methods=['GET'])
 class AllCasesWithAnswersResource(Resource):
     @jwt_required()
     def get(self):
@@ -356,21 +355,30 @@ class AllCasesWithAnswersResource(Resource):
             # Get the current user ID from the JWT token
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
-            # Ensure the current user is authorized to edit the case
-            if current_user.userID != case.userID and not current_user.is_admin:
-                return {'message': 'Viewing all cases is reserved only for admins'}, HTTPStatus.FORBIDDEN
-            # Get all cases
-            cases = Cases.query.all()
-            
+            if not current_user:
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+
+            # Check if the user is an admin
+            if current_user.is_admin:
+                # If admin, fetch all cases
+                cases = Cases.query.all()
+            else:
+                # If not admin, fetch cases linked to the user through CaseUser model
+                user_cases = CaseUser.query.filter_by(userID=current_user.userID).all()
+                cases = [user_case.case for user_case in user_cases]
+
             if not cases:
-                return {'message': 'no cases found'}, HTTPStatus.NOT_FOUND
+                return {'message': 'No cases found'}, HTTPStatus.NOT_FOUND
 
             # Initialize a list to store case data
             cases_data = []
 
             # Iterate through each case
             for case in cases:
-                
+                # Ensure the current user is authorized to view the case
+                if current_user.userID != case.userID and not current_user.is_admin:
+                    continue  # Skip this case if not authorized
+
                 # Fetch all answers associated with the case
                 all_answers = CAnswers.query.filter_by(caseID=case.caseID).all()
 
@@ -388,133 +396,64 @@ class AllCasesWithAnswersResource(Resource):
                 for question_id, question_data in answers_by_question.items():
                     question = CQuestions.get_by_id(question_id)
 
-                    # Include 'extras' in the 'answer' dictionary
-                    answer_dict = {'extras': question_data['answers'][0].extras} if 'extras' in question_data['answers'][0] else {}
+                    # Filter answers for the current case and question
+                    current_question_answers = [answer for answer in question_data['answers'] if answer.caseID == case.caseID]
 
                     if question.questionType == 'single choice':
                         # For single-choice questions, include the selected choice details in the response
-                        answer_dict.update({
-                            'choiceID': question_data['answers'][0].choiceID,
-                            'choiceText': CQuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText
-                        })
+                        response_data.append(OrderedDict([
+                            ('questionID', question_id),
+                            ('answer', {
+                                'choiceID': current_question_answers[0].choiceID,
+                                'choiceText': CQuestionChoices.get_by_id(current_question_answers[0].choiceID).choiceText
+                            })
+                        ]))
                     elif question.questionType == 'multi choice':
                         # For multi-choice questions, include all selected choices in the response
-                        answer_dict.update({
-                            'choices': [choice.choiceID for choice in question_data['answers']],
-                            'choiceText': [CQuestionChoices.get_by_id(choice.choiceID).choiceText for choice in question_data['answers']]
-                        })
+                        choices_data = []
+                        for choice in current_question_answers:
+                            choices_data.append({
+                                'choiceID': choice.choiceID,
+                                'choiceText': CQuestionChoices.get_by_id(choice.choiceID).choiceText
+                            })
+                        response_data.append(OrderedDict([
+                            ('questionID', question_id),
+                            ('answer', {
+                                'choices': choices_data
+                            })
+                        ]))
                     else:
                         # For text-based questions, include the answer text in the response
-                        answer_dict.update({'answerText': question_data['answers'][0].answerText})
-
-                    response_data.append(OrderedDict([
-                        ('questionID', question_id),
-                        ('answer', answer_dict)
-                    ]))
+                        response_data.append(OrderedDict([
+                            ('questionID', question_id),
+                            ('answer', {'answerText': current_question_answers[0].answerText})
+                        ]))
 
                 order_answers = response_data
-                
+
                 # Get cases details
                 case_details = {
                     'caseID': case.caseID,
                     'caseName': case.caseName,
                     'caseStatus': case.caseStatus.value,
-                    'category': case.caseCategory.value,
+                    'category': case.category.value,
                     'serviceRequired': case.serviceRequired,
                     'startDate': case.startDate,
                     'dueDate': case.dueDate,
-                    'startDate': case.startDate,
                     'answers': order_answers
                 }
                 cases_data.append(case_details)
-                
 
             return jsonify({'cases_with_answers': cases_data})
 
         except Exception as e:
-            current_app.logger.error(f"Error retrieving cases with answers: {str(e)}")
-            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            return {'message': f'Error retrieving cases with answers: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@case_namespace.route('/user/all_cases_with_answers', methods=['GET'])
-class UserCasesWithAnswersResource(Resource):
-    @jwt_required()
-    def get(self):
-        try:
-            # Get the current user ID from the JWT token
-            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
-            # Fetch all CaseUser records for the current user
-            user_cases = CaseUser.query.filter_by(userID=current_user.userID).all()
 
-            # Initialize a list to store case data
-            cases_data = []
 
-            # Iterate through each user's case
-            for user_case in user_cases:
-                case = Cases.query.get(user_case.caseID)
 
-                # Get all answers associated with the case
-                all_answers = CAnswers.query.filter_by(caseID=case.caseID).all()
 
-                # Prepare an ordered dictionary to store answers by question ID
-                answers_by_question = OrderedDict()
-                for answer in all_answers:
-                    if answer.questionID not in answers_by_question:
-                        answers_by_question[answer.questionID] = {'questionID': answer.questionID, 'answers': []}
-                    answers_by_question[answer.questionID]['answers'].append(answer)
-
-                # Convert the list of answers to a JSON response
-                response_data = []
-
-                # Process each question and its associated answers
-                for question_id, question_data in answers_by_question.items():
-                    question = CQuestions.get_by_id(question_id)
-
-                    # Include 'extras' in the 'answer' dictionary
-                    answer_dict = {'extras': question_data['answers'][0].extras} if 'extras' in question_data['answers'][0] else {}
-
-                    if question.questionType == 'single choice':
-                        # For single-choice questions, include the selected choice details in the response
-                        answer_dict.update({
-                            'choiceID': question_data['answers'][0].choiceID,
-                            'choiceText': CQuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText
-                        })
-                    elif question.questionType == 'multi choice':
-                        # For multi-choice questions, include all selected choices in the response
-                        answer_dict.update({
-                            'choices': [choice.choiceID for choice in question_data['answers']],
-                            'choiceText': [CQuestionChoices.get_by_id(choice.choiceID).choiceText for choice in question_data['answers']]
-                        })
-                    else:
-                        # For text-based questions, include the answer text in the response
-                        answer_dict.update({'answerText': question_data['answers'][0].answerText})
-
-                    response_data.append(OrderedDict([
-                        ('questionID', question_id),
-                        ('answer', answer_dict)
-                    ]))
-
-                order_answers = response_data
-
-                # Get cases details
-                case_details = {
-                    'caseID': case.caseID,
-                    'caseName': case.caseName,
-                    'caseStatus': case.caseStatus.value,
-                    'category': case.caseCategory.value,
-                    'serviceRequired': case.serviceRequired,
-                    'startDate': case.startDate,
-                    'dueDate': case.dueDate,
-                    'startDate': case.startDate,
-                    'answers': order_answers
-                }
-                cases_data.append(case_details)
-
-            return jsonify({'user_cases_with_answers': cases_data})
-
-        except Exception as e:
-            # Handle exceptions appropriately
-            return {'message': str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @case_namespace.route('/answers_only/<int:case_id>', methods=['GET'])
 class CaseAnswersOnlyResource(Resource):
