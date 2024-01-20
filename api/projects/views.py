@@ -449,7 +449,7 @@ class ProjectAddQuestionsResource(Resource):
                 else:
                     new_question.points = question_data['points']
 
-                db.session.add(new_question)
+                new_question.save()
 
             db.session.commit()
 
@@ -734,7 +734,7 @@ class ProjectDeleteResource(Resource):
     def delete_associated_data(self, project):
         # Delete associated data (use this method to handle relationships)
         Answers.query.filter_by(projectID=project.projectID).delete()
-        AssessmentAnswers.query.filter_by(questionID=self.questionID).delete()
+        AssessmentAnswers.query.filter_by(projectID=self.projectID).delete()
 
         # Delete linked projects
         ProjectUser.query.filter_by(projectID=project.projectID).delete()
@@ -747,6 +747,8 @@ class ProjectDeleteResource(Resource):
 
         #Delete Project Status Data
         ProjectStatusData.filter_by(projectID=project.projectID).delete()
+        
+        
     
     
 
@@ -1629,4 +1631,58 @@ class GetTasksForStageResource(Resource):
 
         except Exception as e:
             current_app.logger.error(f"Error getting tasks for linked stage: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@task_namespace.route('/get_all_project_tasks/<int:project_id>', methods=['GET'])
+class GetTasksForProjectResource(Resource):
+    @jwt_required()
+    def get(self, project_id):
+        try:
+            # get the project 
+            project = Projects.get_by_id(project_id)
+            
+            if project is None:
+                return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
+
+            # Fetch all tasks for the linked stage
+            tasks = ProjectTask.query.filter_by(projectID=project_id).all()
+
+            # Convert tasks to a list of dictionaries for response
+            tasks_list = []
+            
+            # Guard clause to check if there are tasks available
+            if not tasks:
+                return {'tasks': tasks_list}, HTTPStatus.OK
+
+            for task in tasks:
+                # Fetch the first 5 comments for each task
+                comments = TaskComments.query.filter_by(taskID=task.taskID).limit(5).all()
+
+                comments_list = [
+                    {
+                        'user': Users.query.get(comment.userID).username if Users.query.get(comment.userID) else "Unknown User",
+                        'comment': comment.comment,
+                        'date': comment.date.strftime('%Y-%m-%d') if comment.date else None
+                    }
+                    for comment in comments
+                ]
+
+                tasks_list.append({
+                    'taskID': task.taskID,
+                    'title': task.title,
+                    'deadline': str(task.deadline),
+                    'description': task.description,
+                    'assignedTo': [user.username for user in task.assignedTo],
+                    'cc': [user.username for user in task.cc],
+                    'createdBy': task.createdBy,
+                    'attachedFiles': task.attachedFiles,
+                    'status': task.status.value,
+                    'completionDate': str(task.completionDate) if task.completionDate else None,
+                    'comments': comments_list
+                })
+
+            return {'tasks': tasks_list}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting tasks for project: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR

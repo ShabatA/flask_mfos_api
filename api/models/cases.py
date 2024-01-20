@@ -208,6 +208,28 @@ class Cases(db.Model):
         db.session.commit()
 
         return jsonify({'message': 'Answers updated successfully'})
+    
+    def delete_associated_data(self):
+        # Delete associated data (use this method to handle relationships)
+        CAnswers.query.filter_by(caseID=self.caseID).delete()
+        CaseAssessmentAnswers.query.filter_by(caseID=self.caseID).delete()
+
+        # Delete linked projects
+        CaseUser.query.filter_by(caseID=self.caseID).delete()
+        
+        #Delete linked stages
+        CaseToStage.query.filter_by(caseID=self.caseID).delete()
+        
+        CaseTaskAssignedTo.query.filter_by(caseID=self.caseID).delete()
+        CaseTaskCC.query.filter_by(caseID=self.caseID).delete()
+        
+        #Delete Tasks
+        CaseTask.query.filter_by(caseID=self.caseID).delete()
+
+        #Delete Project Status Data
+        CaseStatusData.filter_by(caseID=self.caseID).delete()
+        
+        
 
 class CaseStage(db.Model):
     _tablename_ = 'case_stages'

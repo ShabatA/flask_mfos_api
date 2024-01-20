@@ -416,13 +416,13 @@ class TaskComments(db.Model):
 
 # Association tables for many-to-many relationships
 task_assigned_to = db.Table('task_assigned_to',
-                           db.Column('task_id', db.Integer, db.ForeignKey('project_task.taskID')),
-                           db.Column('user_id', db.Integer, db.ForeignKey('users.userID'))
+                           db.Column('task_id', db.Integer, db.ForeignKey('project_task.taskID'), primary_key = True),
+                           db.Column('user_id', db.Integer, db.ForeignKey('users.userID'), primary_key = True)
                            )
 
 task_cc = db.Table('task_cc',
-                   db.Column('task_id', db.Integer, db.ForeignKey('project_task.taskID')),
-                   db.Column('user_id', db.Integer, db.ForeignKey('users.userID'))
+                   db.Column('task_id', db.Integer, db.ForeignKey('project_task.taskID'), primary_key=True),
+                   db.Column('user_id', db.Integer, db.ForeignKey('users.userID'), primary_key=True)
                    )
 
 def delete_task_assigned_to_by_task_id(task_id):
