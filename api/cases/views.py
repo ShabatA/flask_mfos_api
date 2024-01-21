@@ -437,6 +437,8 @@ class AllCasesWithAnswersResource(Resource):
                     'caseName': case.caseName,
                     'caseStatus': case.caseStatus.value,
                     'category': case.category.value,
+                    'budgetRequired': case.budgetRequired,
+                    'budgetAvailable': case.budgetAvailable,
                     'serviceRequired': case.serviceRequired,
                     'startDate': case.startDate,
                     'dueDate': case.dueDate,
