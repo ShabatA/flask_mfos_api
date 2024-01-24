@@ -40,6 +40,7 @@ class Projects(db.Model):
     category = db.Column(db.Enum(ProjectCategory), nullable=True)
     userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=True)
     startDate = db.Column(db.Date, nullable=True)
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     dueDate = db.Column(db.Date, nullable=True)
 
     # Relationship with Questions

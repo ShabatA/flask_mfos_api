@@ -100,8 +100,6 @@ project_input_model = project_namespace.model('ProjectInput', {
     'projectScope': fields.String(description='Scope of the project'),
     'category': fields.String(enum=['A', 'B', 'C', 'D'], description='Category of the project'),
     'userID': fields.Integer(description='ID of the user associated with the project'),
-    'startDate': fields.Date(description='Start date of the project'),
-    'dueDate': fields.Date(description='Due date of the project'),
     'answers': fields.List(fields.Nested(answers_model), description='List of answers for the project')
 })
 
@@ -197,9 +195,7 @@ class ProjectAddResource(Resource):
             projectStatus=ProjectStatus.ASSESSMENT,
             projectScope=project_data.get('projectScope'),
             category=project_data.get('category'),
-            userID=current_user.userID,
-            startDate=project_data.get('startDate'),
-            dueDate=project_data.get('dueDate')
+            userID=current_user.userID
         )
 
         # Save the project to the database
@@ -363,6 +359,7 @@ class ProjectChangeStatusResource(Resource):
 
             # Update the project status
             project.projectStatus = new_status
+            project.startDate = datetime.utcnow().date()
 
             # Save the updated project status to the database
             try:
@@ -899,9 +896,12 @@ class AllProjectsWithAnswersResource(Resource):
                     'projectID': project.projectID,
                     'projectName': project.projectName,
                     'projectStatus': project.projectStatus.value,
+                    'createdAt': project.createdAt,
                     'startDate': project.startDate,
                     'dueDate': project.dueDate,
                     'userID': project.userID,
+                    'userFullName': current_user.firstName + current_user.lastName,
+                    'username': current_user.username,
                     'regionID': project.regionID,
                     'budgetRequired': project.budgetRequired,
                     'budgetAvailable': project.budgetAvailable,
