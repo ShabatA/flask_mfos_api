@@ -156,7 +156,7 @@ class Cases(db.Model):
             questionID = edited_answer_data['questionID']
             new_answer_text = edited_answer_data.get('answerText')
             new_choice_id = edited_answer_data.get('choiceID')
-
+            extras = edited_answer_data.get('extras')
             # Assuming you have a method to get a Question by ID
             question = CQuestions.get_by_id(questionID)
 
@@ -184,7 +184,8 @@ class Cases(db.Model):
                     caseID=self.caseID,
                     questionID=questionID,
                     choiceID=new_choice_id if question.questionType == 'single choice' else None,
-                    answerText=new_answer_text if question.questionType == 'text' else None
+                    answerText=new_answer_text if question.questionType == 'text' else None,
+                    extras = extras
                 )
                 db.session.add(new_answer)
 
@@ -204,8 +205,11 @@ class Cases(db.Model):
         #Delete linked stages
         CaseToStage.query.filter_by(caseID=self.caseID).delete()
         
-        CaseTaskAssignedTo.query.filter_by(caseID=self.caseID).delete()
-        CaseTaskCC.query.filter_by(caseID=self.caseID).delete()
+        # Delete Tasks
+        task_ids = [task.taskID for task in CaseTask.query.filter_by(caseID=self.caseID).all()]
+
+        # Delete associated TaskComments rows
+        CaseTaskComments.query.filter(CaseTaskComments.taskID.in_(task_ids)).delete()
         
         #Delete Tasks
         CaseTask.query.filter_by(caseID=self.caseID).delete()
@@ -376,8 +380,8 @@ class CaseTask(db.Model):
     caseID = db.Column(db.Integer, db.ForeignKey('cases.caseID'), nullable=False)
     title = db.Column(db.String, nullable=False)
     deadline = db.Column(db.Date, nullable=False)
-    assignedTo = db.relationship('Users', secondary='c_task_assigned_to', backref='c_assigned_tasks', lazy='dynamic')
-    cc = db.relationship('Users', secondary='c_task_cc', backref='c_cc_tasks', lazy='dynamic')
+    assignedTo = db.relationship('Users', secondary='c_task_assigned_to', backref='c_assigned_tasks', lazy='dynamic', single_parent=True)
+    cc = db.relationship('Users', secondary='c_task_cc', backref='c_cc_tasks', lazy='dynamic', single_parent=True)
     description = db.Column(db.String, nullable=True)
     createdBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
     attachedFiles = db.Column(db.String, nullable=True)
@@ -388,7 +392,7 @@ class CaseTask(db.Model):
     stage = db.relationship('CaseStage', backref='tasks', lazy=True)
 
     def is_overdue(self):
-        return self.deadline < datetime.today().date() if not self.status.DONE else False
+        return self.deadline < datetime.today().date() if not self.status == CaseTaskStatus.DONE else False
 
     def _repr_(self):
         return f"<CaseTask {self.taskID} {self.title}>"
@@ -404,11 +408,14 @@ class CaseTask(db.Model):
         self.assignedTo = []
         self.cc = []
         
+        # Delete related entries in CaseTaskAssignedTo and CaseTaskCC
+        CaseTaskAssignedTo.query.filter_by(task_id=self.taskID).delete()
+        CaseTaskCC.query.filter_by(task_id=self.taskID).delete()
+        db.session.commit()
+        
         db.session.delete(self)
         db.session.commit()
         
-        
-    
     @classmethod
     def get_by_id(cls, taskID):
         return cls.query.get_or_404(taskID)
@@ -423,7 +430,28 @@ class CaseTaskComments(db.Model):
     date = db.Column(db.Date, nullable=False)
     
     def __repr__(self) -> str:
-        return f"<TaskComments {self.id} userID: {self.userID} taskID: {self.taskID} comment: {self.comment}>"
+        return f"<CaseTaskComments {self.id} userID: {self.userID} taskID: {self.taskID} comment: {self.comment}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+    
+    @classmethod
+    def get_by_id(cls, commentID):
+        return cls.query.get_or_404(commentID)
+
+class CaseTaskAssignedTo(db.Model):
+    __tablename__ = 'c_task_assigned_to'
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('case_task.taskID'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
+    
+    def __repr__(self):
+        return f"<CaseTaskAssignedTo {self.id} userID: {self.user_id} taskID: {self.task_id}>"
     
     def save(self):
         db.session.add(self)
@@ -433,16 +461,23 @@ class CaseTaskComments(db.Model):
         db.session.delete(self)
         db.session.commit()
 
-class CaseTaskAssignedTo(db.Model):
-    __tablename__ = 'c_task_assigned_to'
-    task_id = db.Column(db.Integer, db.ForeignKey('case_task.taskID'), primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), primary_key=True)
-
 
 class CaseTaskCC(db.Model):
     __tablename__ = 'c_task_cc'
-    task_id = db.Column(db.Integer, db.ForeignKey('case_task.taskID'), primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('case_task.taskID'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
+    
+    def __repr__(self):
+        return f"<CaseTaskCC {self.id} userID: {self.user_id} taskID: {self.task_id}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
 
 class CaseStatusData(db.Model):
     _tablename_ = 'case_status_data'

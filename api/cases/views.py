@@ -72,6 +72,11 @@ comments_model = case_task_namespace.model('CaseTaskComments',{
     'date': fields.Date(required=True, description='Date on which the comment was made')
 })
 
+edit_comments_model = case_task_namespace.model('EditTaskComments',{
+    'commentID': fields.Integer(required=True, description='Id of the comment'),
+    'newComment': fields.String(required=True, description= 'The comment written by the user')
+})
+
 question_input_model = case_namespace.model('QuestionInput', {
     'questionText': fields.String(required=True, description='Text of the question'),
     'questionType': fields.String(required=True, description='Type of the question'),
@@ -104,7 +109,6 @@ case_model = case_namespace.model(
     'Case', {
         'caseName': fields.String(required=True, description="A case name"),
         'budgetRequired': fields.Float(required=True, description="Budget required"),
-        'budgetAvailable': fields.Float(required=True, description="Budget available"),
         'caseCategory': fields.String(description="Case category"),
         'serviceRequired': fields.String(description="Service Required"),
         'regionName': fields.String(required=True, description="Region Name"),
@@ -117,7 +121,6 @@ case_input_model = case_namespace.model('CaseInput', {
     'caseName': fields.String(required=True, description='Name of the case'),
     'regionID': fields.Integer(required=True, description='ID of the region'),
     'budgetRequired': fields.Float(required=True, description='Required budget for the case'),
-    'budgetAvailable': fields.Float(required=True, description='Available budget for the case'),
     'serviceRequired': fields.String(required=True, description='The service that is needed'),
     'userID': fields.Integer(description='ID of the user associated with the case'),
     'dueDate': fields.Date(description='Due date of the case'),
@@ -130,7 +133,6 @@ case_model_2 = case_namespace.model(
     'Case2', {
         'caseName': fields.String(required=True, description="A case name"),
         'budgetRequired': fields.Float(required=True, description="Budget required"),
-        'budgetAvailable': fields.Float(required=True, description="Budget available"),
         'caseCategory': fields.String(description="Case category"),
         'caseStatus': fields.String(enum=[status.value for status in CaseStatus], description="Case status"),
     })
@@ -145,7 +147,6 @@ case_edit_model = case_namespace.model('CaseEdit', {
     'caseName': fields.String(required=True, description='Name of the case'),
     'regionID': fields.Integer(required=True, description='ID of the region'),
     'budgetRequired': fields.Float(required=True, description='Required budget for the case'),
-    'budgetAvailable': fields.Float(required=True, description='Available budget for the case'),
     'serviceRequired': fields.String(required=True, description='The service that is needed'),
     'category': fields.String(enum=['A', 'B', 'C', 'D'], description='Category of the case'),
     'userID': fields.Integer(description='ID of the user associated with the case'),
@@ -211,7 +212,7 @@ class CaseAddResource(Resource):
             caseName = case_data['caseName'],
             regionID = case_data['regionID'],
             budgetRequired = case_data['budgetRequired'],
-            budgetAvailable = case_data['budgetAvailable'],
+            budgetAvailable = 0,
             caseStatus = CaseStatus.ASSESSMENT,
             category = CaseCategory.A,
             serviceRequired = case_data['serviceRequired'],
@@ -608,7 +609,6 @@ class CaseEditAnswersResource(Resource):
         case.caseName = case_data.get('caseName', case.caseName)
         case.regionID = case_data.get('regionID', case.regionID)
         case.budgetRequired = case_data.get('budgetRequired', case.budgetRequired)
-        case.budgetAvailable = case_data.get('budgetAvailable', case.budgetAvailable)
         case.caseStatus = case_data.get('caseStatus', case.caseStatus)
         case.caseCategory = case_data.get('caseCategory', case.caseCategory)
         case.startDate = case_data.get('startDate', case.startDate)
@@ -765,6 +765,27 @@ class CaseDeleteResource(Resource):
         except Exception as e:
             # Handle exceptions (e.g., database errors) appropriately
             return {'message': f'Error deleting case: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+    
+    def delete_associated_data(self, case):
+        # Delete associated data (use this method to handle relationships)
+        CAnswers.query.filter_by(projectID=project.projectID).delete()
+        CAssessmentAnswers.query.filter_by(projectID=project.projectID).delete()
+
+        # Delete linked projects
+        ProjectUser.query.filter_by(projectID=project.projectID).delete()
+        
+        #Delete linked stages
+        ProjectStage.query.filter_by(projectID=project.projectID).delete()
+        # Delete Tasks
+        task_ids = [task.taskID for task in ProjectTask.query.filter_by(projectID=project.projectID).all()]
+
+        # Delete associated TaskComments rows
+        TaskComments.query.filter(TaskComments.taskID.in_(task_ids)).delete()
+        #Delete Tasks
+        ProjectTask.query.filter_by(projectID=project.projectID).delete()
+
+        #Delete Project Status Data
+        ProjectStatusData.query.filter_by(projectID=project.projectID).delete()
     
 @case_namespace.route('/delete_question/<int:question_id>')
 class QuestionDeleteResource(Resource):
@@ -1070,6 +1091,25 @@ class MarkTaskAsOverdueResource(Resource):
             current_app.logger.error(f"Error marking task: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@case_task_namespace.route('/delete/<int:task_id>',methods=['DELETE'])
+class DeleteTaskResource(Resource):
+    @jwt_required()
+    @case_task_namespace.doc(
+        description = "Delete the task."
+    )
+    def delete(self, task_id):
+        try:
+            task = CaseTask.get_by_id(task_id)
+            #
+            if task:
+                task.delete()
+                return {'message': 'Task deleted successfully.'}, HTTPStatus.OK
+            else:
+                return {'message': 'Task not found.'}, HTTPStatus.NOT_FOUND
+        except Exception as e:
+            current_app.logger.error(f"Error deleting task: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
 @case_task_namespace.route('/add_comment_for_task', methods=['POST'])
 class AddTaskComments(Resource):
     @jwt_required()
@@ -1105,6 +1145,57 @@ class AddTaskComments(Resource):
         except Exception as e:
             db.session.rollback()
             return {'message': f'Error adding comment: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_task_namespace.route('/edit_comment_for_task', methods=['PUT'])
+class EditTaskComments(Resource):
+    @jwt_required()
+    @case_task_namespace.expect(edit_comments_model, validate=True)
+    @case_task_namespace.doc(
+        description="Edit a comment for a Task"
+    )
+    def put(self):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Parse the input data
+        edit_comment_data = request.json
+
+        # Get data from JSON
+        comment_id = edit_comment_data['commentID']
+        new_comment_text = edit_comment_data['newComment']
+
+        try:
+            # Fetch the comment to be edited
+            comment_to_edit = CaseTaskComments.query.get_or_404(comment_id)
+
+            # Check if the current user is the owner of the comment
+            if comment_to_edit.userID == current_user.userID:
+                # Update the comment text
+                comment_to_edit.comment = new_comment_text
+                db.session.commit()
+                return {'message': 'Comment edited successfully'}, HTTPStatus.OK
+            else:
+                return {'message': 'Unauthorized to edit this comment'}, HTTPStatus.UNAUTHORIZED
+
+        except Exception as e:
+            db.session.rollback()
+            return {'message': f'Error editing comment: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_task_namespace.route('/delete/task_comment/<int:comment_id>',methods=['DELETE'])
+class DeleteComment(Resource):
+    @jwt_required()
+    def delete(self, comment_id):
+        try:
+            comment = CaseTaskComments.get_by_id(comment_id)
+            
+            if comment:
+                comment.delete()
+                return {'message': 'Comment deleted successfully'}, HTTPStatus.OK
+            else:
+                return {'message': 'Comment not found'}, HTTPStatus.NOT_FOUND
+        except Exception as e:
+            current_app.logger.error(f"Error deleting comment: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
         
 @case_task_namespace.route('/get/task_comments/<int:task_id>',methods=['GET'])
 class GetTaskCommentsResource(Resource):

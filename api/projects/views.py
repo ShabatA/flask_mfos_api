@@ -4,7 +4,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
 
 from api.utils.project_requirement_processor import ProjectRequirementProcessor
-from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData, TaskComments, TaskStatus, task_assigned_to, task_cc, AssessmentAnswers, AssessmentQuestions, Requirements, RequirementSection
+from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData, TaskComments, TaskStatus, ProjectTaskAssignedTo, ProjectTaskCC, AssessmentAnswers, AssessmentQuestions, Requirements, RequirementSection
 from ..utils.db import db
 from ..models.users import Users
 from flask import jsonify
@@ -47,6 +47,11 @@ comments_model = task_namespace.model('TaskComments',{
     'date': fields.Date(required=True, description='Date on which the comment was made')
 })
 
+edit_comments_model = task_namespace.model('EditTaskComments',{
+    'commentID': fields.Integer(required=True, description='Id of the comment'),
+    'newComment': fields.String(required=True, description= 'The comment written by the user')
+})
+
 assessment_question_model = assessment_namespace.model('AssessmentQuestion', {
     'questionText': fields.String(required=True, description='The actual question to be asked.')
 })
@@ -73,6 +78,11 @@ new_task_model = task_namespace.model('NewTaskModel', {
     # 'stage_id': fields.Integer(required=True, description='ID of the linked stage'),
 })
 
+assign_task = task_namespace.model('AssignTask', {
+    'assigned_to': fields.List(fields.Integer, description='List of user IDs assigned to the task'),
+    'cc': fields.List(fields.Integer, description='List of user IDs to be CCed on the task') 
+})
+
 edit_task_model = task_namespace.model('EditTaskModel', {
     'title': fields.String(required=True, description='Title of the task'),
     'deadline': fields.Date(required=True, description='Deadline of the task (YYYY-MM-DD)'),
@@ -87,7 +97,6 @@ project_input_model = project_namespace.model('ProjectInput', {
     'projectName': fields.String(required=True, description='Name of the project'),
     'regionID': fields.Integer(required=True, description='ID of the region'),
     'budgetRequired': fields.Float(required=True, description='Required budget for the project'),
-    'budgetAvailable': fields.Float(required=True, description='Available budget for the project'),
     'projectScope': fields.String(description='Scope of the project'),
     'category': fields.String(enum=['A', 'B', 'C', 'D'], description='Category of the project'),
     'userID': fields.Integer(description='ID of the user associated with the project'),
@@ -135,7 +144,6 @@ project_edit_details_model = project_namespace.model('ProjectEditDetails', {
     'projectName': fields.String(required=True, description='Name of the project'),
     'regionID': fields.Integer(required=True, description='ID of the region'),
     'budgetRequired': fields.Float(required=True, description='Required budget for the project'),
-    'budgetAvailable': fields.Float(required=True, description='Available budget for the project'),
     'projectStatus': fields.String(required=True, enum=['approved', 'pending','rejected'], description='Status of the project'),
     'projectScope': fields.String(description='Scope of the project'),
     'category': fields.String(enum=['A', 'B', 'C', 'D'], description='Category of the project'),
@@ -185,7 +193,7 @@ class ProjectAddResource(Resource):
             projectName=project_data['projectName'],
             regionID=project_data['regionID'],
             budgetRequired=project_data['budgetRequired'],
-            budgetAvailable=project_data['budgetAvailable'],
+            budgetAvailable=0,
             projectStatus=ProjectStatus.ASSESSMENT,
             projectScope=project_data.get('projectScope'),
             category=project_data.get('category'),
@@ -687,7 +695,7 @@ class ProjectEditDetailsResource(Resource):
         project_data = request.json
 
         # Update the project details conditionally
-        for field in ['projectName', 'regionID', 'budgetRequired', 'budgetAvailable', 'projectStatus',
+        for field in ['projectName', 'regionID', 'budgetRequired', 'projectStatus',
                       'projectScope', 'category', 'startDate', 'dueDate']:
             if field in project_data:
                 setattr(project, field, project_data[field])
@@ -724,7 +732,7 @@ class ProjectDeleteResource(Resource):
             # Delete the project
             project_to_delete.delete()
 
-            return {'message': 'Project and associated answers deleted successfully'}, HTTPStatus.OK
+            return {'message': 'Project and associated data deleted successfully'}, HTTPStatus.OK
         except Exception as e:
             # Handle exceptions (e.g., database errors) appropriately
             return {'message': f'Error deleting project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
@@ -739,17 +747,18 @@ class ProjectDeleteResource(Resource):
         
         #Delete linked stages
         ProjectStage.query.filter_by(projectID=project.projectID).delete()
-        
+        # Delete Tasks
+        task_ids = [task.taskID for task in ProjectTask.query.filter_by(projectID=project.projectID).all()]
+
+        # Delete associated TaskComments rows
+        TaskComments.query.filter(TaskComments.taskID.in_(task_ids)).delete()
         #Delete Tasks
         ProjectTask.query.filter_by(projectID=project.projectID).delete()
 
         #Delete Project Status Data
-        ProjectStatusData.filter_by(projectID=project.projectID).delete()
+        ProjectStatusData.query.filter_by(projectID=project.projectID).delete()
         
         
-    
-    
-
 @project_namespace.route('/delete_question/<int:question_id>')
 class QuestionDeleteResource(Resource):
     @jwt_required()  
@@ -813,8 +822,24 @@ class AllProjectsWithAnswersResource(Resource):
     @jwt_required()
     def get(self):
         try:
-            # Get all projects
-            projects = Projects.query.all()
+            # Get the current user ID from the JWT token
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            if not current_user:
+                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+
+            # Check if the user is an admin
+            if current_user.is_admin:
+                # If admin, fetch all projects
+                projects = Projects.query.all()
+            else:
+                # If not admin, fetch projects linked to the user through ProjectUser model
+                user_projects = ProjectUser.query.filter_by(userID=current_user.userID).all()
+                projects = [project_user.project for project_user in user_projects]
+                
+
+            if not projects:
+                return {'message': 'No projects found'}, HTTPStatus.NOT_FOUND
 
             # Initialize a list to store project data
             projects_data = []
@@ -839,13 +864,15 @@ class AllProjectsWithAnswersResource(Resource):
                 for question_id, question_data in answers_by_question.items():
                     question = Questions.get_by_id(question_id)
 
+                    extras = question_data['answers'][0].extras if hasattr(question_data['answers'][0], 'extras') else None
                     if question.questionType == 'single choice':
                         # For single-choice questions, include the selected choice details in the response
                         response_data.append(OrderedDict([
                             ('questionID', question_id),
                             ('answer', {
                                 'choiceID': question_data['answers'][0].choiceID,
-                                'choiceText': QuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText
+                                'choiceText': QuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText,
+                                'extras': extras
                             })
                         ]))
                     elif question.questionType == 'multi choice':
@@ -1265,6 +1292,44 @@ class EditTaskForStageResource(Resource):
             current_app.logger.error(f"Error updating task: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@task_namespace.route('/assign_task/<int:task_id>', methods=['PUT'])
+class AssignTaskResource(Resource):
+    @task_namespace.expect(assign_task, validate=True)
+    @jwt_required()
+    def put(self, task_id):
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+        # Check if the current user has permission to delete a stage
+        if not current_user.is_admin:  # Adjust the condition based on your specific requirements
+            return {'message': 'Unauthorized. Only admin users can edit Task details.'}, HTTPStatus.FORBIDDEN
+
+        try:
+            # Get the task
+            task = ProjectTask.get_by_id(task_id)
+
+            if task is None:
+                return {'message': 'Task not found'}, HTTPStatus.NOT_FOUND
+
+            # Extract task data from the request payload
+            data = task_namespace.payload
+            
+            assigned_to_ids = data.get('assigned_to', [])
+            cc_ids = data.get('cc', [])
+            
+            # Fetch user instances based on IDs
+            assigned_to_users = Users.query.filter(Users.userID.in_(assigned_to_ids)).all()
+            cc_users = Users.query.filter(Users.userID.in_(cc_ids)).all()
+            
+            task.assignedTo = assigned_to_users
+            task.cc = cc_users
+
+            db.session.commit()
+
+            return {'message': 'Task updated successfully'}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error updating task: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
 @task_namespace.route('/mark_as_started/<int:task_id>',methods=['PUT'])
 class MarkTaskAsStartedResource(Resource):
     @jwt_required()
@@ -1305,6 +1370,25 @@ class MarkTaskAsDoneResource(Resource):
                 return {'message': 'Cannot mark a Task as done if it was not IN PROGRESS.'}, HTTPStatus.BAD_REQUEST
         except Exception as e:
             current_app.logger.error(f"Error marking task: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@task_namespace.route('/delete/<int:task_id>',methods=['DELETE'])
+class DeleteTaskResource(Resource):
+    @jwt_required()
+    @task_namespace.doc(
+        description = "Delete the task."
+    )
+    def delete(self, task_id):
+        try:
+            task = ProjectTask.get_by_id(task_id)
+            #
+            if task:
+                task.delete()
+                return {'message': 'Task deleted successfully.'}, HTTPStatus.OK
+            else:
+                return {'message': 'Task not found.'}, HTTPStatus.NOT_FOUND
+        except Exception as e:
+            current_app.logger.error(f"Error deleting task: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @task_namespace.route('/mark_as_overdue/<int:task_id>',methods=['PUT'])
@@ -1366,6 +1450,58 @@ class AddTaskComments(Resource):
         except Exception as e:
             db.session.rollback()
             return {'message': f'Error adding comment: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@task_namespace.route('/edit_comment_for_task', methods=['PUT'])
+class EditTaskComments(Resource):
+    @jwt_required()
+    @task_namespace.expect(edit_comments_model, validate=True)
+    @task_namespace.doc(
+        description="Edit a comment for a Task"
+    )
+    def put(self):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Parse the input data
+        edit_comment_data = request.json
+
+        # Get data from JSON
+        comment_id = edit_comment_data['commentID']
+        new_comment_text = edit_comment_data['newComment']
+
+        try:
+            # Fetch the comment to be edited
+            comment_to_edit = TaskComments.query.get_or_404(comment_id)
+
+            # Check if the current user is the owner of the comment
+            if comment_to_edit.userID == current_user.userID:
+                # Update the comment text
+                comment_to_edit.comment = new_comment_text
+                db.session.commit()
+                return {'message': 'Comment edited successfully'}, HTTPStatus.OK
+            else:
+                return {'message': 'Unauthorized to edit this comment'}, HTTPStatus.UNAUTHORIZED
+
+        except Exception as e:
+            db.session.rollback()
+            return {'message': f'Error editing comment: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@task_namespace.route('/delete/task_comment/<int:comment_id>',methods=['DELETE'])
+class DeleteComment(Resource):
+    @jwt_required()
+    def delete(self, comment_id):
+        try:
+            comment = TaskComments.get_by_id(comment_id)
+            
+            if comment:
+                comment.delete()
+                return {'message': 'Comment deleted successfully'}, HTTPStatus.OK
+            else:
+                return {'message': 'Comment not found'}, HTTPStatus.NOT_FOUND
+        except Exception as e:
+            current_app.logger.error(f"Error deleting comment: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+    
         
 @task_namespace.route('/get/task_comments/<int:task_id>',methods=['GET'])
 class GetTaskCommentsResource(Resource):

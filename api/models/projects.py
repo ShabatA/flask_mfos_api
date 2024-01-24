@@ -47,7 +47,7 @@ class Projects(db.Model):
     users = db.relationship('Users', secondary='project_user', backref='projects', lazy='dynamic')
     answers = db.relationship('Answers', backref='projects', lazy=True)
     tasks = db.relationship('ProjectTask', backref='projects', lazy=True)
-    status_data = db.relationship('ProjectStatusData', backref='projects', uselist=False, lazy=True)
+    status_data = db.relationship('ProjectStatusData', backref='projects', uselist=False, lazy=True, overlaps="projects,status_data")
 
     def _repr_(self):
         return f"<Project {self.projectID} {self.projectName}>"
@@ -97,7 +97,7 @@ class Projects(db.Model):
         for answer_data in answers:
             questionID = answer_data['questionID']
             answerText = answer_data.get('answerText')
-            
+            extras = answer_data.get('extras')  # Retrieve the 'extras' key if it exists
 
             # Assuming you have a method to get a Question by ID
             question = Questions.get_by_id(questionID)
@@ -109,7 +109,8 @@ class Projects(db.Model):
                     projectID=self.projectID,
                     questionID=questionID,
                     choiceID=choiceID,
-                    answerText=None  # Set answerText to None for multiple-choice questions
+                    answerText=None,  # Set answerText to None for multiple-choice questions
+                    extras=extras
                 )
                 new_answer.save()
             elif question.questionType == 'multi choice':
@@ -121,7 +122,8 @@ class Projects(db.Model):
                         projectID=self.projectID,
                         questionID=questionID,
                         choiceID=choiceID,
-                        answerText=None  # Set answerText to None for multiple-choice questions
+                        answerText=None,  # Set answerText to None for multiple-choice questions
+                        extras=extras
                     )
                     new_answer.save()
             else:
@@ -130,7 +132,8 @@ class Projects(db.Model):
                     projectID=self.projectID,
                     questionID=questionID,
                     answerText=answerText,
-                    choiceID=None  # Set choiceID to None for text-based questions
+                    choiceID=None,  # Set choiceID to None for text-based questions
+                    extras=extras
                 )
                 new_answer.save()
 
@@ -146,6 +149,7 @@ class Projects(db.Model):
             questionID = edited_answer_data['questionID']
             new_answer_text = edited_answer_data.get('answerText')
             new_choice_id = edited_answer_data.get('choiceID')
+            extras = edited_answer_data.get('extras')
 
             # Assuming you have a method to get a Question by ID
             question = Questions.get_by_id(questionID)
@@ -174,8 +178,10 @@ class Projects(db.Model):
                     projectID=self.projectID,
                     questionID=questionID,
                     choiceID=new_choice_id if question.questionType == 'single choice' else None,
-                    answerText=new_answer_text if question.questionType == 'text' else None
-                )
+                    answerText=new_answer_text if question.questionType == 'text' else None,
+                    extras = extras
+                ) 
+                
                 db.session.add(new_answer)
 
         # Commit the changes to the database
@@ -233,7 +239,7 @@ class Answers(db.Model):
     projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
     questionID = db.Column(db.Integer, db.ForeignKey('questions.questionID'), nullable=False)
     answerText = db.Column(db.String, nullable=True)  # Adjust based on the answer format
-
+    extras = db.Column(JSONB, nullable=True)
      # Add a foreign key reference to the choices table
     question = db.relationship('Questions', backref='answers', lazy=True)
     choiceID = db.Column(db.Integer, db.ForeignKey('question_choices.choiceID'), nullable=True)
@@ -338,14 +344,14 @@ class ProjectStage(db.Model):
 
 
 class ProjectTask(db.Model):
-    _tablename_ = 'project_tasks'
+    __tablename__ = 'project_task'
 
     taskID = db.Column(db.Integer, primary_key=True)
     projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
     title = db.Column(db.String, nullable=False)
     deadline = db.Column(db.Date, nullable=False)
-    assignedTo = db.relationship('Users', secondary='task_assigned_to', backref='assigned_tasks', lazy='dynamic')
-    cc = db.relationship('Users', secondary='task_cc', backref='cc_tasks', lazy='dynamic')
+    assignedTo = db.relationship('Users', secondary='project_task_assigned_to', backref='assigned_tasks', lazy='dynamic', single_parent=True)
+    cc = db.relationship('Users', secondary='project_task_cc', backref='cc_tasks', lazy='dynamic', single_parent=True)
     description = db.Column(db.String, nullable=True)
     createdBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
     attachedFiles = db.Column(db.String, nullable=True)
@@ -356,9 +362,9 @@ class ProjectTask(db.Model):
     stage = db.relationship('Stage', backref='tasks', lazy=True)
 
     def is_overdue(self):
-        return self.deadline < datetime.today().date() if not self.status.DONE else False
+        return self.deadline < datetime.today().date() if not self.status == TaskStatus.DONE else False
 
-    def _repr_(self):
+    def __repr__(self):
         return f"<ProjectTask {self.taskID} {self.title}>"
     
     def save(self):
@@ -371,19 +377,21 @@ class ProjectTask(db.Model):
 
         self.assignedTo = []
         self.cc = []
-        delete_task_assigned_to_by_task_id(self.taskID)
-        delete_task_cc_by_task_id(self.taskID)
-        db.session.delete(self)
+        
+        # Delete related entries in ProjectTaskAssignedTo and ProjectTaskCC
+        ProjectTaskAssignedTo.query.filter_by(task_id=self.taskID).delete()
+        ProjectTaskCC.query.filter_by(task_id=self.taskID).delete()
         db.session.commit()
         
-        
-    
+        db.session.delete(self)
+        db.session.commit()
+
     @classmethod
     def get_by_id(cls, taskID):
         return cls.query.get_or_404(taskID)
 
 class TaskComments(db.Model):
-    _tablename_ = 'task_comments'
+    __tablename__ = 'task_comments'
     
     id = db.Column(db.Integer, primary_key=True)
     userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
@@ -391,7 +399,7 @@ class TaskComments(db.Model):
     comment = db.Column(db.String, nullable=False)
     date = db.Column(db.Date, nullable=False)
     
-    def __repr__(self) -> str:
+    def __repr__(self):
         return f"<TaskComments {self.id} userID: {self.userID} taskID: {self.taskID} comment: {self.comment}>"
     
     def save(self):
@@ -401,44 +409,45 @@ class TaskComments(db.Model):
     def delete(self):
         db.session.delete(self)
         db.session.commit()
+    
+    @classmethod
+    def get_by_id(cls, commentID):
+        return cls.query.get_or_404(commentID)
 
-# class TaskAssignedTo(db.Model):
-#     __tablename__ = 'task_assigned_to'
-#     task_id = db.Column(db.Integer, db.ForeignKey('project_task.taskID'), primary_key=True)
-#     user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), primary_key=True)
+class ProjectTaskAssignedTo(db.Model):
+    __tablename__ = 'project_task_assigned_to'
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('project_task.taskID'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
+    
+    def __repr__(self):
+        return f"<ProjectAssignedTo {self.id} userID: {self.user_id} taskID: {self.task_id}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
 
-
-# class TaskCC(db.Model):
-#     __tablename__ = 'task_cc'
-#     task_id = db.Column(db.Integer, db.ForeignKey('project_task.taskID'), primary_key=True)
-#     user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), primary_key=True)
+class ProjectTaskCC(db.Model):
+    __tablename__ = 'project_task_cc'
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('project_task.taskID'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
+    
+    def __repr__(self):
+        return f"<ProjectTaskCC {self.id} userID: {self.user_id} taskID: {self.task_id}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
         
-
-# Association tables for many-to-many relationships
-task_assigned_to = db.Table('task_assigned_to',
-                           db.Column('task_id', db.Integer, db.ForeignKey('project_task.taskID'), primary_key = True),
-                           db.Column('user_id', db.Integer, db.ForeignKey('users.userID'), primary_key = True)
-                           )
-
-task_cc = db.Table('task_cc',
-                   db.Column('task_id', db.Integer, db.ForeignKey('project_task.taskID'), primary_key=True),
-                   db.Column('user_id', db.Integer, db.ForeignKey('users.userID'), primary_key=True)
-                   )
-
-def delete_task_assigned_to_by_task_id(task_id):
-    try:
-        task_assigned_to.delete().where(task_assigned_to.c.task_id == task_id).execute()
-        db.session.commit()
-    except Exception as e:
-        print(f'error deleting assigned_to {str(e)}')
-
-# Example: Delete a record from task_cc using only taskId
-def delete_task_cc_by_task_id(task_id):
-    try:
-        task_cc.delete().where(task_cc.c.task_id == task_id).execute()
-        db.session.commit()
-    except Exception as e:
-        print(f'Error deleting task_cc: {str(e)}')
 
 class AssessmentQuestions(db.Model):
     __tablename__ = 'assessment_questions'
@@ -525,7 +534,7 @@ class ProjectStatusData(db.Model):
     status = db.Column(db.String, nullable=False)
     data = db.Column(JSONB, nullable=True)  # You can adjust the type based on the data you want to store
 
-    project = db.relationship('Projects', backref='project_status_data', lazy=True)
+    project = db.relationship('Projects', backref='project_status_data', lazy=True, overlaps='projects')
 
     def _repr_(self):
         return f"<ProjectStatusData {self.id} ProjectID: {self.projectID}, Status: {self.status}>"
