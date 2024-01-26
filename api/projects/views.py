@@ -58,7 +58,8 @@ assessment_question_model = assessment_namespace.model('AssessmentQuestion', {
 
 assessment_answer_model = assessment_namespace.model('AssessmentAnswer', {
     'questionID': fields.Integer(required=True, description='The ID of the question'),
-    'answerText': fields.String(required=True, description='The answer provided')
+    'answerText': fields.String(required=True, description='The answer provided'),
+    'notes': fields.String( description='The extra notes if needed')
 })
 
 assessment_model = assessment_namespace.model('ProjectAssessment', {
@@ -1618,13 +1619,15 @@ class AddAssessmentAnswerResource(Resource):
                 if existing_answer:
                     # If an answer already exists for the question, update it
                     existing_answer.answerText = answer['answerText']
+                    existing_answer.notes = answer.get('notes', '')
                     db.session.commit()
                 else:
                     # If no answer exists, create a new one
                     new_answer = AssessmentAnswers(
                         questionID=question_id,
                         projectID=assessment_data['projectID'],
-                        answerText=answer['answerText']
+                        answerText=answer['answerText'],
+                        notes=answer.get('notes', '')
                     )
                 
                     new_answer.save()
@@ -1647,7 +1650,7 @@ class GetAssessmentResource(Resource):
                 AssessmentAnswers.query
                 .join(AssessmentQuestions)
                 .filter(AssessmentAnswers.projectID == project_id)
-                .add_columns(AssessmentQuestions.questionText, AssessmentAnswers.answerText)
+                .add_columns(AssessmentQuestions.questionText, AssessmentAnswers.answerText, AssessmentAnswers.notes)
                 .all()
             )
 
@@ -1656,8 +1659,9 @@ class GetAssessmentResource(Resource):
                 {
                     'questionText': question_text,
                     'answerText': answer_text,
+                    'notes': notes
                 }
-                for _, question_text, answer_text in assessment_answers
+                for _, question_text, answer_text, notes in assessment_answers
             ]
 
             return {'assessment_answers': answers_data}, HTTPStatus.OK

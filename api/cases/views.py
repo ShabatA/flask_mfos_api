@@ -32,13 +32,13 @@ assessment_question_model = case_assessment_namespace.model('AssessmentQuestion'
     'questionText': fields.String(required=True, description='The actual question to be asked.')
 })
 
-assessment_answer_model = case_assessment_namespace.model('AssessmentAnswer', {
+assessment_answer_model = case_assessment_namespace.model('CaseAssessmentAnswer', {
     'questionID': fields.Integer(required=True, description='The ID of the question'),
     'answerText': fields.String(required=True, description='The answer provided'),
     'extras': fields.Raw(description='Answers for the subquestion as key-value pair')
 })
 
-assessment_model = case_assessment_namespace.model('ProjectAssessment', {
+assessment_model = case_assessment_namespace.model('CaseAssessment', {
     'projectID': fields.Integer(required=True, description='The ID of the project this assessment is for'),
     'answers': fields.List(fields.Nested(assessment_answer_model), description='List of answers for the assessment')
 })
@@ -768,24 +768,24 @@ class CaseDeleteResource(Resource):
     
     def delete_associated_data(self, case):
         # Delete associated data (use this method to handle relationships)
-        CAnswers.query.filter_by(projectID=project.projectID).delete()
-        CAssessmentAnswers.query.filter_by(projectID=project.projectID).delete()
+        CAnswers.query.filter_by(caseID=case.caseID).delete()
+        CaseAssessmentAnswers.query.filter_by(caseID=case.caseID).delete()
 
-        # Delete linked projects
-        ProjectUser.query.filter_by(projectID=project.projectID).delete()
+        # Delete linked cases
+        CaseUser.query.filter_by(caseID=case.caseID).delete()
         
         #Delete linked stages
-        ProjectStage.query.filter_by(projectID=project.projectID).delete()
+        CaseToStage.query.filter_by(caseID=case.caseID).delete()
         # Delete Tasks
-        task_ids = [task.taskID for task in ProjectTask.query.filter_by(projectID=project.projectID).all()]
+        task_ids = [task.taskID for task in CaseTask.query.filter_by(caseID=case.caseID).all()]
 
         # Delete associated TaskComments rows
-        TaskComments.query.filter(TaskComments.taskID.in_(task_ids)).delete()
+        CaseTaskComments.query.filter(CaseTaskComments.taskID.in_(task_ids)).delete()
         #Delete Tasks
-        ProjectTask.query.filter_by(projectID=project.projectID).delete()
+        CaseTask.query.filter_by(caseID=case.caseID).delete()
 
-        #Delete Project Status Data
-        ProjectStatusData.query.filter_by(projectID=project.projectID).delete()
+        #Delete Case Status Data
+        CaseStatusData.query.filter_by(caseID=case.caseID).delete()
     
 @case_namespace.route('/delete_question/<int:question_id>')
 class QuestionDeleteResource(Resource):
@@ -1405,7 +1405,7 @@ class AddAssessmentAnswerResource(Resource):
                 if existing_answer:
                     # If an answer already exists for the question, update it
                     existing_answer.answerText = answer['answerText']
-                    existing_answer.extras = answer['extras']
+                    existing_answer.extras = answer.get('extras', {})
                     db.session.commit()
                 else:
                     # If no answer exists, create a new one
@@ -1413,7 +1413,7 @@ class AddAssessmentAnswerResource(Resource):
                         questionID=question_id,
                         projectID=assessment_data['caseID'],
                         answerText=answer['answerText'],
-                        extras=assessment_data['extras']
+                        extras=answer.get('extras', {})
                     )
                 
                     new_answer.save()

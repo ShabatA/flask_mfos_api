@@ -478,6 +478,7 @@ class AssessmentAnswers(db.Model):
     projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
     questionID = db.Column(db.Integer, db.ForeignKey('assessment_questions.questionID'), nullable=False)
     answerText = db.Column(db.String, nullable=True)  # Adjust based on the answer format
+    notes = db.Column(db.String, nullable=True)
 
      # Add a foreign key reference to the choices table
     question = db.relationship('AssessmentQuestions', backref='assessment_answers', lazy=True)
