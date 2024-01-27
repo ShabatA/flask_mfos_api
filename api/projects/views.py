@@ -1826,7 +1826,7 @@ class AddAssessmentAnswerResource(Resource):
                 
                     new_answer.save()
             #now update project status to PENDING
-            project.projectStatus = ProjectStatus.PENDING
+            project.projectStatus = Status.PENDING
             db.session.commit()
             return {'message': 'All Assessment Answers were saved.'}, HTTPStatus.OK
                 
