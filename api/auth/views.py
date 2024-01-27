@@ -162,12 +162,19 @@ class SignUp(Resource):
 
             new_user.save()
 
-            # Save all UserPermissions entries
-            # for user_permission in user_permissions:
-            #     user_permission.save()
-
-            # db.session.add(new_user)
-            # db.session.commit()
+            cases = data.get('cases', [])
+            projects = data.get('projects', [])
+            
+            if cases:
+                for case in cases:
+                    case_user = CaseUser(caseID=case, userID=new_user.userID)
+                    case_user.save()
+            
+            if projects:
+                for project in projects:
+                    project_user = ProjectUser(projectID=project, userID=new_user.userID)
+                    project_user.save()
+            
 
             return new_user, HTTPStatus.CREATED
 

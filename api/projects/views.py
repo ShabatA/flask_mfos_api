@@ -385,7 +385,7 @@ class ProjectGetAllResource(Resource):
                     'user': user_details,
                     'budgetRequired': project.budgetRequired,
                     'budgetApproved': project.budgetApproved,
-                    'projectStatus': project.projectStatus.value,
+                    'projectStatus': 'Assessment' if project.projectStatus == Status.ASSESSMENT else project.projectStatus.value,
                     'category': project.category.value if project.category else None,
                     'projectScope': project.projectScope,
                     'projectIdea': project.projectIdea,
