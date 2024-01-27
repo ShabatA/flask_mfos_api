@@ -2,9 +2,9 @@ from api.config.config import Config
 from flask_restx import Resource, Namespace, fields
 from flask import request, current_app
 
-from api.models.cases import Cases, CaseUser
+from api.models.cases import CaseTask, Cases, CaseUser
 from ..models.users import Users, Role, UserPermissions, PermissionLevel
-from ..models.projects import Projects, ProjectUser, ProjectTask
+from ..models.projects import ProjectUser, ProjectTask, ProjectsData
 from werkzeug.security import generate_password_hash, check_password_hash
 from http import HTTPStatus
 from flask_jwt_extended import (create_access_token,
@@ -595,7 +595,21 @@ class AllUsers(Resource):
 
     @staticmethod
     def get_user_data(user):
-        return {
+        
+        
+        # Fetch all projects the user has access to
+        projects = ProjectsData.query.join(Users, Users.userID == ProjectsData.createdBy).filter(Users.userID == user.userID).all()
+
+        # Fetch all cases the user has access to
+        cases = Cases.query.filter(Cases.userID == user.userID).all()
+
+        # Fetch all ProjectTasks the user is assigned to
+        project_tasks = ProjectTask.query.join(Users.assigned_tasks).filter(Users.userID == user.userID).all()
+
+        # Fetch all CaseTasks the user is assigned to
+        case_tasks = CaseTask.query.join(Users.c_assigned_tasks).filter(Users.userID == user.userID).all()
+        
+        user_data = {
             'userID': user.userID,
             'username': user.username,
             'email': user.email,
@@ -611,8 +625,27 @@ class AllUsers(Resource):
                 'roleID': user.role.RoleID,
                 'roleName': user.role.RoleName
             },
-            'permissions': [permission.permission_level.value for permission in user.permissions]
+            'permissions': [permission.permission_level.value for permission in user.permissions],
+            'projects': [{'projectID': project.projectID,
+                          'projectName': project.projectName,
+                          'status': project.projectStatus.value,
+                          'dueDate': project.dueDate.isoformat() if project.dueDate else None} for project in projects] if projects else [],
+            'cases': [{'caseID': case.caseID,
+                       'caseName': case.caseName,
+                       'status': case.caseStatus.value,
+                       'dueDate': case.dueDate.isoformat() if case.dueDate else None} for case in cases] if cases else [],
+            'project_tasks': [{'taskID': task.taskID,
+                               'description': task.description,
+                               'status': task.status.value,
+                               'stageName': task.stage.name,
+                               'completionDate': task.completionDate.isoformat() if task.completionDate else None} for task in project_tasks] if project_tasks else [],
+            'case_tasks': [{'taskID': task.taskID,
+                            'description': task.description,
+                            'status': task.status.value,
+                            'stageName': task.stage.name,
+                            'completionDate': task.completionDate.isoformat() if task.completionDate else None} for task in case_tasks] if case_tasks else [],
         }
+        return user_data
 
 @auth_namespace.route('/user/<int:user_id>')
 class SingleUser(Resource):
@@ -712,7 +745,7 @@ class AssignUserToProjectResource(Resource):
                 return {'message': 'Unauthorized. You do not have permission to link users to projects.'}, HTTPStatus.FORBIDDEN
 
             # Get the project by ID
-            project = Projects.query.get(project_id)
+            project = ProjectsData.query.get(project_id)
             if not project:
                 return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
 
@@ -766,7 +799,7 @@ class ReassignUserToProjectResource(Resource):
                 return {'message': 'Unauthorized. You do not have permission to link users to projects.'}, HTTPStatus.FORBIDDEN
 
             # Get the project by ID
-            project = Projects.query.get(project_id)
+            project = ProjectsData.query.get(project_id)
             if not project:
                 return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
 
@@ -826,7 +859,7 @@ class TakeoverResource(Resource):
 
             #find all the projects the deactivated user created,
             #and reassign them to the new user
-            projects = Projects.query.filter_by(userID=fromuser.userID).all()
+            projects = ProjectsData.query.filter_by(userID=fromuser.userID).all()
             if projects:
                 for project in projects:
                     project.userID = touser.userID

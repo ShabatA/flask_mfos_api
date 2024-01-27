@@ -14,7 +14,7 @@ from .models.users import Users, Role, UserPermissions
 from .models.cases import Cases
 from .models.regions import Regions
 from .models.accountfields import AccountFields
-from .models.projects import Projects
+
 # from .models.questions import Questions, CaseQuestionsMappings, AnswerFormats
 from flask_jwt_extended import JWTManager
 

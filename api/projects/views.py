@@ -2,9 +2,10 @@ from flask import request, current_app
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
+from api.models.regions import Regions
 
 from api.utils.project_requirement_processor import ProjectRequirementProcessor
-from ..models.projects import Projects, Questions, QuestionChoices, Answers, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData, TaskComments, TaskStatus, ProjectTaskAssignedTo, ProjectTaskCC, AssessmentAnswers, AssessmentQuestions, Requirements, RequirementSection
+from ..models.projects import ProjectsData, Questions, QuestionChoices, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData, Status, TaskComments, TaskStatus, ProjectTaskAssignedTo, ProjectTaskCC, AssessmentAnswers, AssessmentQuestions, Requirements, RequirementSection
 from ..utils.db import db
 from ..models.users import Users
 from flask import jsonify
@@ -104,6 +105,24 @@ project_input_model = project_namespace.model('ProjectInput', {
     'answers': fields.List(fields.Nested(answers_model), description='List of answers for the project')
 })
 
+projects_data_model = project_namespace.model('ProjectsDataInput', {
+    'projectName': fields.String(required=True, description='Name of the project'),
+    'regionID': fields.Integer(required=True, description='ID of the region'),
+    'createdBy': fields.Integer(description='ID of the user associated with the project'),
+    'budgetRequired': fields.Float(required=True, description='Required budget for the project'),
+    'projectScope': fields.Integer(description='Scope of the project'),
+    'projectIdea': fields.String(description='Idea and justification of the project'),
+    'solution': fields.String(description='Solution provided by the project'),
+    'addedValue': fields.String(description='Added value of the project'),
+    'projectNature': fields.Integer(description='Nature of the project'),
+    'beneficiaryCategory': fields.Integer(description='Beneficiary category of the project'),
+    'commitment': fields.Integer(description='Is there a commitment from external party'),
+    'commitmentType': fields.Integer(description='Commitment type'),
+    'supportingOrg': fields.String(description='Details of the supporting organization'),
+    'documents': fields.List(fields.Integer, description='List the document Ids'),
+    'recommendationLetter': fields.Integer(description='Is there a recomemendation letter')
+})
+
 project_update_status_model = project_namespace.model('ProjectUpdateStatus', {
     'projectStatus': fields.String(required=True, enum=['approved', 'pending','rejected'], description='Status of the project'),
     'status_data': fields.Raw(description='Status data associated with the project'),
@@ -168,43 +187,129 @@ link_project_to_stage_model = stage_namespace.model('LinkProjectToStageModel', {
     'completionDate': fields.Date(description="Completion Date")
 })
 
+regions_data_model = project_namespace.model('RegionData', {
+    'regionID': fields.Integer(description='ID of the region'),
+    'regionName': fields.String(description='Name of the region')
+})
+
+users_data_model = project_namespace.model('UserData', {
+    'userID': fields.Integer(description='ID of the user'),
+    'userFullName': fields.String(description='Full name of the user'),
+    'username': fields.String(description='Username of the user')
+})
+
+projects_result_model = project_namespace.model('ProjectsData', {
+    'projectID': fields.Integer(description='ID of the project'),
+    'projectName': fields.String(description='Name of the project'),
+    'region': fields.Nested(regions_data_model, description='Details of the region'),
+    'user': fields.Nested(users_data_model, description='Details of the user'),
+    'budgetRequired': fields.Float(description='Required budget for the project'),
+    'budgetApproved': fields.Float(description='Approved budget for the project'),
+    'projectStatus': fields.String(description='Status of the project'),
+    'projectScope': fields.Integer(description='Scope of the project'),
+    'projectIdea': fields.String(description='Idea and justification of the project'),
+    'solution': fields.String(description='Solution provided by the project'),
+    'category': fields.String(description='The category'),
+    'addedValue': fields.String(description='Added value of the project'),
+    'projectNature': fields.Integer(description='Nature of the project'),
+    'beneficiaryCategory': fields.Integer(description='Beneficiary category of the project'),
+    'commitment': fields.Integer(description='Is there a commitment from external party'),
+    'commitmentType': fields.Integer(description='Commitment type'),
+    'supportingOrg': fields.String(description='Details of the supporting organization'),
+    'documents': fields.List(fields.Integer, description='List the document Ids'),
+    'recommendationLetter': fields.Integer(description='Is there a recommendation letter'),
+    'createdAt': fields.DateTime(description='Creation date of the project'),
+    'dueDate': fields.Date(description='Due date of the project')
+})
 
 
-@project_namespace.route('/add')
+# @project_namespace.route('/add')
+# class ProjectAddResource(Resource):
+#     @jwt_required()  
+#     @project_namespace.expect(project_input_model)
+#     def post(self):
+#         # Get the current user ID from the JWT token
+#         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+#         # Parse the input data
+#         project_data = request.json
+#         answers_data = project_data.pop('answers', [])  
+
+#         # Check if a project with the given name already exists
+#         existing_project = Projects.query.filter_by(projectName=project_data['projectName']).first()
+#         if existing_project:
+#             return {'message': 'Project with this name already exists'}, HTTPStatus.CONFLICT
+
+#         # Create a new project instance
+#         new_project = Projects(
+#             projectName=project_data['projectName'],
+#             regionID=project_data['regionID'],
+#             budgetRequired=project_data['budgetRequired'],
+#             budgetAvailable=0,
+#             projectStatus=ProjectStatus.ASSESSMENT,
+#             projectScope=project_data.get('projectScope'),
+#             category=project_data.get('category'),
+#             userID=current_user.userID
+#         )
+
+#         # Save the project to the database
+#         try:
+#             new_project.save()
+
+#             # Assign answers to the project
+#             new_project.assign_answers(answers_data)
+
+#             # Add the current user to the ProjectUsers table for the new project
+#             project_user = ProjectUser(projectID=new_project.projectID, userID=current_user.userID)
+#             project_user.save()
+
+#             return {'message': 'Project added successfully'}, HTTPStatus.CREATED
+#         except Exception as e:
+#             # Handle exceptions (e.g., database errors) appropriately
+#             return {'message': f'Error adding project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@project_namespace.route('/add_or_edit', methods=['POST','PUT'])
 class ProjectAddResource(Resource):
     @jwt_required()  
-    @project_namespace.expect(project_input_model)
+    @project_namespace.expect(projects_data_model)
     def post(self):
         # Get the current user ID from the JWT token
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Parse the input data
         project_data = request.json
-        answers_data = project_data.pop('answers', [])  
+         
 
         # Check if a project with the given name already exists
-        existing_project = Projects.query.filter_by(projectName=project_data['projectName']).first()
+        existing_project = ProjectsData.query.filter_by(projectName=project_data['projectName']).first()
         if existing_project:
             return {'message': 'Project with this name already exists'}, HTTPStatus.CONFLICT
 
         # Create a new project instance
-        new_project = Projects(
+        new_project = ProjectsData(
             projectName=project_data['projectName'],
             regionID=project_data['regionID'],
+            createdBy=current_user.userID,
             budgetRequired=project_data['budgetRequired'],
-            budgetAvailable=0,
-            projectStatus=ProjectStatus.ASSESSMENT,
+            budgetApproved=project_data.get('budgetApproved', 0),
+            projectStatus=Status.ASSESSMENT,
             projectScope=project_data.get('projectScope'),
-            category=project_data.get('category'),
-            userID=current_user.userID
+            projectIdea=project_data.get('projectIdea'),
+            solution=project_data.get('solution'),
+            addedValue=project_data.get('addedValue'),
+            projectNature=project_data.get('projectNature'),
+            beneficiaryCategory=project_data.get('beneficiaryCategory'),
+            commitment=project_data.get('commitment'),
+            commitmentType=project_data.get('commitmentType'),
+            supportingOrg=project_data.get('supportingOrg'),
+            documents=project_data.get('documents', []),
+            recommendationLetter=project_data.get('recommendationLetter'),
+            createdAt=datetime.utcnow()
         )
 
         # Save the project to the database
         try:
             new_project.save()
-
-            # Assign answers to the project
-            new_project.assign_answers(answers_data)
 
             # Add the current user to the ProjectUsers table for the new project
             project_user = ProjectUser(projectID=new_project.projectID, userID=current_user.userID)
@@ -212,8 +317,97 @@ class ProjectAddResource(Resource):
 
             return {'message': 'Project added successfully'}, HTTPStatus.CREATED
         except Exception as e:
-            # Handle exceptions (e.g., database errors) appropriately
+            current_app.logger.error(f"Error adding requirements: {str(e)}")
             return {'message': f'Error adding project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+    
+    @jwt_required()
+    @project_namespace.expect(projects_data_model)
+    def put(self):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            project_data = request.json
+
+            project_id = project_data.get('projectID')
+            if not project_id:
+                return {'message': 'Project ID is required for updating a project'}, HTTPStatus.BAD_REQUEST
+
+            existing_project = ProjectsData.query.get_or_404(project_id)
+
+            # Update the project fields
+            existing_project.projectName = project_data['projectName']
+            existing_project.regionID = project_data['regionID']
+            existing_project.createdBy = current_user.userID
+            existing_project.budgetRequired = project_data['budgetRequired']
+            existing_project.budgetApproved = project_data.get('budgetApproved', 0)
+            existing_project.projectScope = project_data.get('projectScope')
+            existing_project.projectIdea = project_data.get('projectIdea')
+            existing_project.solution = project_data.get('solution')
+            existing_project.addedValue = project_data.get('addedValue')
+            existing_project.projectNature = project_data.get('projectNature')
+            existing_project.beneficiaryCategory = project_data.get('beneficiaryCategory')
+            existing_project.commitment = project_data.get('commitment')
+            existing_project.commitmentType = project_data.get('commitmentType')
+            existing_project.supportingOrg = project_data.get('supportingOrg')
+            existing_project.documents = project_data.get('documents', [])
+            existing_project.recommendationLetter = project_data.get('recommendationLetter')
+
+            existing_project.save()
+
+            return {'message': 'Project updated successfully'}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error updating project: {str(e)}")
+            return {'message': f'Error updating project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@project_namespace.route('/get_all', methods=['GET'])
+class ProjectGetAllResource(Resource):
+    @jwt_required()
+    # @project_namespace.marshal_list_with(projects_result_model)
+    def get(self):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            # Get the list of project IDs associated with the current user
+            project_ids = [project.projectID for project in current_user.projects_data]
+
+            # Fetch all projects with the given project IDs
+            projects = ProjectsData.query.filter(ProjectsData.projectID.in_(project_ids)).all()
+
+            # Prepare the list of projects with additional details
+            projects_data = []
+            for project in projects:
+                region_details = {'regionID': project.regionID, 'regionName': Regions.query.get(project.regionID).regionName}
+                user_details = {'userID': current_user.userID, 'userFullName': current_user.firstName + current_user.lastName, 'username': current_user.username}
+
+                project_details = {
+                    'projectID': project.projectID,
+                    'projectName': project.projectName,
+                    'region': region_details,
+                    'user': user_details,
+                    'budgetRequired': project.budgetRequired,
+                    'budgetApproved': project.budgetApproved,
+                    'projectStatus': project.projectStatus.value,
+                    'category': project.category.value if project.category else None,
+                    'projectScope': project.projectScope,
+                    'projectIdea': project.projectIdea,
+                    'solution': project.solution,
+                    'addedValue': project.addedValue,
+                    'projectNature': project.projectNature,
+                    'beneficiaryCategory': project.beneficiaryCategory,
+                    'commitment': project.commitment,
+                    'commitmentType': project.commitmentType,
+                    'supportingOrg': project.supportingOrg,
+                    'documents': project.documents,
+                    'recommendationLetter': project.recommendationLetter,
+                    'createdAt': project.createdAt.isoformat(),
+                    'dueDate': project.dueDate.isoformat() if project.dueDate else None,
+                    'startDate': project.startDate.isoformat() if project.startDate else None
+                }
+
+                projects_data.append(project_details)
+
+            return projects_data, HTTPStatus.OK
+        except Exception as e:
+            return {'message': f'Error fetching projects: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @project_namespace.route('/add/requirements/<int:project_id>')
 class ProjectAddRequirementsResource(Resource):
@@ -228,7 +422,7 @@ class ProjectAddRequirementsResource(Resource):
             if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
                 return {'message': 'Unauthorized. Only admin users can add requirements.'}, HTTPStatus.FORBIDDEN
             
-            project = Projects.get_by_id(project_id)
+            project = ProjectsData.get_by_id(project_id)
             # Parse the input data
             project_data = request.json
             status_data = project_data.pop('status_data', {})  # Assuming status_data is part of the input
@@ -344,7 +538,7 @@ class ProjectChangeStatusResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Get the project by ID
-        project = Projects.query.get(project_id)
+        project = ProjectsData.query.get(project_id)
         if not project:
             return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
 
@@ -464,29 +658,29 @@ class ProjectAddQuestionsResource(Resource):
             return {'message': str(e)}, HTTPStatus.BAD_REQUEST
 
 
-@project_namespace.route('/total_points/<int:project_id>', methods=['GET'])
-class ProjectTotalPointsResource(Resource):
-    def get(self, project_id):
-        # Get the project by ID
-        project = Projects.get_by_id(project_id)
+# @project_namespace.route('/total_points/<int:project_id>', methods=['GET'])
+# class ProjectTotalPointsResource(Resource):
+#     def get(self, project_id):
+#         # Get the project by ID
+#         project = Projects.get_by_id(project_id)
 
-        if not project:
-            return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
+#         if not project:
+#             return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
 
-        # Calculate total points using the calculate_total_points method
-        total_points = project.calculate_total_points()
+#         # Calculate total points using the calculate_total_points method
+#         total_points = project.calculate_total_points()
 
-        return {'total_points': total_points}, HTTPStatus.OK
+#         return {'total_points': total_points}, HTTPStatus.OK
 
-@project_namespace.route('/all', methods=['GET'])
-class AllProjectsResource(Resource):
-    def get(self):
-        projects = Projects.query.all()
+# @project_namespace.route('/all', methods=['GET'])
+# class AllProjectsResource(Resource):
+#     def get(self):
+#         projects = Projects.query.all()
 
-        # Convert the list of projects to a JSON response
-        projects_data = [{'projectID': project.projectID, 'projectName': project.projectName, 'projectStatus': project.projectStatus.value} for project in projects]
+#         # Convert the list of projects to a JSON response
+#         projects_data = [{'projectID': project.projectID, 'projectName': project.projectName, 'projectStatus': project.projectStatus.value} for project in projects]
 
-        return jsonify({'projects': projects_data})
+#         return jsonify({'projects': projects_data})
 
 @project_namespace.route('/user-projects/<string:username>', methods=['GET'])
 class UserProjectsResource(Resource):
@@ -499,9 +693,9 @@ class UserProjectsResource(Resource):
 
         # Fetch projects associated with the user using the ProjectUser model
         projects = (
-            Projects.query.join(ProjectUser)
+            ProjectsData.query.join(ProjectUser)
             .filter(ProjectUser.userID == user.userID)
-            .distinct(Projects.projectID)
+            .distinct(ProjectsData.projectID)
             .all()
         )
 
@@ -517,269 +711,269 @@ class UserProjectsResource(Resource):
 
         return jsonify({'projects': projects_data})
 
-@project_namespace.route('/<int:project_id>/answers', methods=['GET'])
-class ProjectAnswersResource(Resource):
-    def get(self, project_id):
-        # Get the project by ID
-        project = Projects.get_by_id(project_id)
+# @project_namespace.route('/<int:project_id>/answers', methods=['GET'])
+# class ProjectAnswersResource(Resource):
+#     def get(self, project_id):
+#         # Get the project by ID
+#         project = Projects.get_by_id(project_id)
 
-        if not project:
-            return jsonify({'message': 'Project not found'}), HTTPStatus.NOT_FOUND
+#         if not project:
+#             return jsonify({'message': 'Project not found'}), HTTPStatus.NOT_FOUND
 
-        # Fetch all answers associated with the project
-        all_answers = Answers.query.filter_by(projectID=project_id).all()
+#         # Fetch all answers associated with the project
+#         all_answers = Answers.query.filter_by(projectID=project_id).all()
 
-        # Prepare an ordered dictionary to store answers by question ID
-        answers_by_question = OrderedDict()
-        for answer in all_answers:
-            if answer.questionID not in answers_by_question:
-                answers_by_question[answer.questionID] = {'questionID': answer.questionID, 'answers': []}
-            answers_by_question[answer.questionID]['answers'].append(answer)
+#         # Prepare an ordered dictionary to store answers by question ID
+#         answers_by_question = OrderedDict()
+#         for answer in all_answers:
+#             if answer.questionID not in answers_by_question:
+#                 answers_by_question[answer.questionID] = {'questionID': answer.questionID, 'answers': []}
+#             answers_by_question[answer.questionID]['answers'].append(answer)
 
-        # Convert the list of answers to a JSON response
-        response_data = []
+#         # Convert the list of answers to a JSON response
+#         response_data = []
 
-        # Process each question and its associated answers
-        for question_id, question_data in answers_by_question.items():
-            question = Questions.get_by_id(question_id)
+#         # Process each question and its associated answers
+#         for question_id, question_data in answers_by_question.items():
+#             question = Questions.get_by_id(question_id)
 
-            if question.questionType == 'single choice':
-                # For single-choice questions, include the selected choice details in the response
-                response_data.append(OrderedDict([
-                    ('questionID', question_id),
-                    ('questionText', question.questionText),
-                    ('questionType', 'single choice'),
-                    ('answers', [{
-                        'answerID': answer.answerID,
-                        'choiceID': answer.choiceID,
-                        'choiceText': QuestionChoices.get_by_id(answer.choiceID).choiceText,
-                        'points': QuestionChoices.get_by_id(answer.choiceID).points
-                    } for answer in question_data['answers']])
-                ]))
-            elif question.questionType == 'multi choice':
-                # For multi-choice questions, include all selected choices in the response
-                response_data.append(OrderedDict([
-                    ('questionID', question_id),
-                    ('questionText', question.questionText),
-                    ('questionType', 'multi choice'),
-                    ('answers', [{
-                        'answerID': answer.answerID,
-                        'choiceID': choice_id,
-                        'choiceText': QuestionChoices.get_by_id(choice_id).choiceText,
-                        'points': QuestionChoices.get_by_id(choice_id).points
-                    } for answer in question_data['answers'] for choice_id in (
-                        [answer.choiceID] if isinstance(answer.choiceID, int) else answer.choiceID)
-                    ])
-                ]))
-            else:
-                # For text-based questions, include the answer text in the response
-                response_data.append(OrderedDict([
-                    ('questionID', question_id),
-                    ('questionText', question.questionText),
-                    ('questionType', 'text'),
-                    ('answers', [{
-                        'answerID': answer.answerID,
-                        'answerText': answer.answerText
-                    } for answer in question_data['answers']])
-                ]))
+#             if question.questionType == 'single choice':
+#                 # For single-choice questions, include the selected choice details in the response
+#                 response_data.append(OrderedDict([
+#                     ('questionID', question_id),
+#                     ('questionText', question.questionText),
+#                     ('questionType', 'single choice'),
+#                     ('answers', [{
+#                         'answerID': answer.answerID,
+#                         'choiceID': answer.choiceID,
+#                         'choiceText': QuestionChoices.get_by_id(answer.choiceID).choiceText,
+#                         'points': QuestionChoices.get_by_id(answer.choiceID).points
+#                     } for answer in question_data['answers']])
+#                 ]))
+#             elif question.questionType == 'multi choice':
+#                 # For multi-choice questions, include all selected choices in the response
+#                 response_data.append(OrderedDict([
+#                     ('questionID', question_id),
+#                     ('questionText', question.questionText),
+#                     ('questionType', 'multi choice'),
+#                     ('answers', [{
+#                         'answerID': answer.answerID,
+#                         'choiceID': choice_id,
+#                         'choiceText': QuestionChoices.get_by_id(choice_id).choiceText,
+#                         'points': QuestionChoices.get_by_id(choice_id).points
+#                     } for answer in question_data['answers'] for choice_id in (
+#                         [answer.choiceID] if isinstance(answer.choiceID, int) else answer.choiceID)
+#                     ])
+#                 ]))
+#             else:
+#                 # For text-based questions, include the answer text in the response
+#                 response_data.append(OrderedDict([
+#                     ('questionID', question_id),
+#                     ('questionText', question.questionText),
+#                     ('questionType', 'text'),
+#                     ('answers', [{
+#                         'answerID': answer.answerID,
+#                         'answerText': answer.answerText
+#                     } for answer in question_data['answers']])
+#                 ]))
 
-        return jsonify(OrderedDict([('answers', response_data)]))
+#         return jsonify(OrderedDict([('answers', response_data)]))
 
-@project_namespace.route('/<int:project_id>/answers/minified', methods=['GET'])
-class ProjectMinifiedAnswersResource(Resource):
-    def get(self, project_id):
-        # Get the project by ID
-        project = Projects.get_by_id(project_id)
+# @project_namespace.route('/<int:project_id>/answers/minified', methods=['GET'])
+# class ProjectMinifiedAnswersResource(Resource):
+#     def get(self, project_id):
+#         # Get the project by ID
+#         project = Projects.get_by_id(project_id)
 
-        if not project:
-            return jsonify({'message': 'Project not found'}), HTTPStatus.NOT_FOUND
+#         if not project:
+#             return jsonify({'message': 'Project not found'}), HTTPStatus.NOT_FOUND
 
-        # Fetch all answers associated with the project
-        all_answers = Answers.query.filter_by(projectID=project_id).all()
+#         # Fetch all answers associated with the project
+#         all_answers = Answers.query.filter_by(projectID=project_id).all()
 
-        # Prepare an ordered dictionary to store answers by question ID
-        answers_by_question = OrderedDict()
-        for answer in all_answers:
-            if answer.questionID not in answers_by_question:
-                answers_by_question[answer.questionID] = {'questionID': answer.questionID, 'answers': []}
-            answers_by_question[answer.questionID]['answers'].append(answer)
+#         # Prepare an ordered dictionary to store answers by question ID
+#         answers_by_question = OrderedDict()
+#         for answer in all_answers:
+#             if answer.questionID not in answers_by_question:
+#                 answers_by_question[answer.questionID] = {'questionID': answer.questionID, 'answers': []}
+#             answers_by_question[answer.questionID]['answers'].append(answer)
 
-        # Convert the list of answers to a JSON response
-        response_data = []
+#         # Convert the list of answers to a JSON response
+#         response_data = []
 
-        # Process each question and its associated answers
-        for question_id, question_data in answers_by_question.items():
-            question = Questions.get_by_id(question_id)
+#         # Process each question and its associated answers
+#         for question_id, question_data in answers_by_question.items():
+#             question = Questions.get_by_id(question_id)
 
-            if question.questionType == 'single choice':
-                # For single-choice questions, include the selected choice details in the response
-                response_data.append(OrderedDict([
-                    ('questionID', question_id),
-                    ('answer', {
-                        'choiceID': question_data['answers'][0].choiceID,
-                        'choiceText': QuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText
-                    })
-                ]))
-            elif question.questionType == 'multi choice':
-                # For multi-choice questions, include all selected choices in the response
-                response_data.append(OrderedDict([
-                    ('questionID', question_id),
-                    ('answer', {
-                        'choiceID': [choice.choiceID for choice in question_data['answers']],
-                        'choiceText': [QuestionChoices.get_by_id(choice.choiceID).choiceText for choice in
-                                       question_data['answers']]
-                    })
-                ]))
-            else:
-                # For text-based questions, include the answer text in the response
-                response_data.append(OrderedDict([
-                    ('questionID', question_id),
-                    ('answer', {'answerText': question_data['answers'][0].answerText})
-                ]))
+#             if question.questionType == 'single choice':
+#                 # For single-choice questions, include the selected choice details in the response
+#                 response_data.append(OrderedDict([
+#                     ('questionID', question_id),
+#                     ('answer', {
+#                         'choiceID': question_data['answers'][0].choiceID,
+#                         'choiceText': QuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText
+#                     })
+#                 ]))
+#             elif question.questionType == 'multi choice':
+#                 # For multi-choice questions, include all selected choices in the response
+#                 response_data.append(OrderedDict([
+#                     ('questionID', question_id),
+#                     ('answer', {
+#                         'choiceID': [choice.choiceID for choice in question_data['answers']],
+#                         'choiceText': [QuestionChoices.get_by_id(choice.choiceID).choiceText for choice in
+#                                        question_data['answers']]
+#                     })
+#                 ]))
+#             else:
+#                 # For text-based questions, include the answer text in the response
+#                 response_data.append(OrderedDict([
+#                     ('questionID', question_id),
+#                     ('answer', {'answerText': question_data['answers'][0].answerText})
+#                 ]))
 
-        return jsonify(OrderedDict([('answers', response_data)]))
-
-
-@project_namespace.route('/edit_answers/<int:project_id>', methods=['PUT'])
-class ProjectEditAnswersResource(Resource):
-    @jwt_required()
-    @project_namespace.expect(project_edit_model)
-    def put(self, project_id):
-        # Get the current user ID from the JWT token
-        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-
-        # Get the project by ID
-        project = Projects.query.get_or_404(project_id)
-
-        # Ensure the current user is authorized to edit the project
-        if current_user.userID != project.userID and not current_user.is_admin:
-            return {'message': 'Unauthorized. You do not have permission to edit this project.'}, HTTPStatus.FORBIDDEN
-
-        # Parse the input data
-        project_data = request.json
-        edited_answers_data = project_data.pop('edited_answers', [])  # Extract edited answers from project_data
+#         return jsonify(OrderedDict([('answers', response_data)]))
 
 
-        # Save the updated project details to the database
-        try:
-            # 
+# @project_namespace.route('/edit_answers/<int:project_id>', methods=['PUT'])
+# class ProjectEditAnswersResource(Resource):
+#     @jwt_required()
+#     @project_namespace.expect(project_edit_model)
+#     def put(self, project_id):
+#         # Get the current user ID from the JWT token
+#         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
-            # Update the answers for the project
-            project.edit_answers(project_id,edited_answers_data)
-            db.session.commit()
+#         # Get the project by ID
+#         project = Projects.query.get_or_404(project_id)
 
-            return {'message': 'Project details and answers updated successfully'}, HTTPStatus.OK
-        except Exception as e:
-            db.session.rollback()
-            return {'message': f'Error updating project details and answers: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+#         # Ensure the current user is authorized to edit the project
+#         if current_user.userID != project.userID and not current_user.is_admin:
+#             return {'message': 'Unauthorized. You do not have permission to edit this project.'}, HTTPStatus.FORBIDDEN
 
-
-@project_namespace.route('/edit_details/<int:project_id>', methods=['PATCH'])
-class ProjectEditDetailsResource(Resource):
-    @jwt_required()
-    @project_namespace.expect(project_edit_details_model)
-    def patch(self, project_id):
-        # Get the current user ID from the JWT token
-        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-
-        # Get the project by ID
-        project = Projects.query.get_or_404(project_id)
-
-        # Ensure the current user is authorized to edit the project
-        if current_user.userID != project.userID and not current_user.is_admin:
-            return {'message': 'Unauthorized. You do not have permission to edit this project.'}, HTTPStatus.FORBIDDEN
-
-        # Parse the input data
-        project_data = request.json
-
-        # Update the project details conditionally
-        for field in ['projectName', 'regionID', 'budgetRequired', 'projectStatus',
-                      'projectScope', 'category', 'startDate', 'dueDate']:
-            if field in project_data:
-                setattr(project, field, project_data[field])
-
-        # Save the updated project details to the database
-        try:
-            db.session.commit()
-            return {'message': 'Project details updated successfully'}, HTTPStatus.OK
-        except Exception as e:
-            db.session.rollback()
-            return {'message': f'Error updating project details: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+#         # Parse the input data
+#         project_data = request.json
+#         edited_answers_data = project_data.pop('edited_answers', [])  # Extract edited answers from project_data
 
 
-@project_namespace.route('/delete/<int:project_id>')
-class ProjectDeleteResource(Resource):
-    @jwt_required()  
-    def delete(self, project_id):
-        # Get the current user ID from the JWT token
-        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+#         # Save the updated project details to the database
+#         try:
+#             # 
 
-        # Check if the project exists and belongs to the current user
-        if current_user.is_admin:
-            project_to_delete = Projects.query.get_or_404(project_id)
-        else:
-            project_to_delete = Projects.query.filter_by(projectID=project_id, userID=current_user.userID).first()
+#             # Update the answers for the project
+#             project.edit_answers(project_id,edited_answers_data)
+#             db.session.commit()
 
-            if not project_to_delete:
-                return {'message': 'Project not found or unauthorized'}, HTTPStatus.NOT_FOUND
+#             return {'message': 'Project details and answers updated successfully'}, HTTPStatus.OK
+#         except Exception as e:
+#             db.session.rollback()
+#             return {'message': f'Error updating project details and answers: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-        try:
-            # Delete associated data
-            self.delete_associated_data(project_to_delete)
 
-            # Delete the project
-            project_to_delete.delete()
+# @project_namespace.route('/edit_details/<int:project_id>', methods=['PATCH'])
+# class ProjectEditDetailsResource(Resource):
+#     @jwt_required()
+#     @project_namespace.expect(project_edit_details_model)
+#     def patch(self, project_id):
+#         # Get the current user ID from the JWT token
+#         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
-            return {'message': 'Project and associated data deleted successfully'}, HTTPStatus.OK
-        except Exception as e:
-            # Handle exceptions (e.g., database errors) appropriately
-            return {'message': f'Error deleting project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+#         # Get the project by ID
+#         project = Projects.query.get_or_404(project_id)
 
-    def delete_associated_data(self, project):
-        # Delete associated data (use this method to handle relationships)
-        Answers.query.filter_by(projectID=project.projectID).delete()
-        AssessmentAnswers.query.filter_by(projectID=project.projectID).delete()
+#         # Ensure the current user is authorized to edit the project
+#         if current_user.userID != project.userID and not current_user.is_admin:
+#             return {'message': 'Unauthorized. You do not have permission to edit this project.'}, HTTPStatus.FORBIDDEN
 
-        # Delete linked projects
-        ProjectUser.query.filter_by(projectID=project.projectID).delete()
+#         # Parse the input data
+#         project_data = request.json
+
+#         # Update the project details conditionally
+#         for field in ['projectName', 'regionID', 'budgetRequired', 'projectStatus',
+#                       'projectScope', 'category', 'startDate', 'dueDate']:
+#             if field in project_data:
+#                 setattr(project, field, project_data[field])
+
+#         # Save the updated project details to the database
+#         try:
+#             db.session.commit()
+#             return {'message': 'Project details updated successfully'}, HTTPStatus.OK
+#         except Exception as e:
+#             db.session.rollback()
+#             return {'message': f'Error updating project details: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+# @project_namespace.route('/delete/<int:project_id>')
+# class ProjectDeleteResource(Resource):
+#     @jwt_required()  
+#     def delete(self, project_id):
+#         # Get the current user ID from the JWT token
+#         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+#         # Check if the project exists and belongs to the current user
+#         if current_user.is_admin:
+#             project_to_delete = Projects.query.get_or_404(project_id)
+#         else:
+#             project_to_delete = Projects.query.filter_by(projectID=project_id, userID=current_user.userID).first()
+
+#             if not project_to_delete:
+#                 return {'message': 'Project not found or unauthorized'}, HTTPStatus.NOT_FOUND
+
+#         try:
+#             # Delete associated data
+#             self.delete_associated_data(project_to_delete)
+
+#             # Delete the project
+#             project_to_delete.delete()
+
+#             return {'message': 'Project and associated data deleted successfully'}, HTTPStatus.OK
+#         except Exception as e:
+#             # Handle exceptions (e.g., database errors) appropriately
+#             return {'message': f'Error deleting project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+#     def delete_associated_data(self, project):
+#         # Delete associated data (use this method to handle relationships)
+#         Answers.query.filter_by(projectID=project.projectID).delete()
+#         AssessmentAnswers.query.filter_by(projectID=project.projectID).delete()
+
+#         # Delete linked projects
+#         ProjectUser.query.filter_by(projectID=project.projectID).delete()
         
-        #Delete linked stages
-        ProjectStage.query.filter_by(projectID=project.projectID).delete()
-        # Delete Tasks
-        task_ids = [task.taskID for task in ProjectTask.query.filter_by(projectID=project.projectID).all()]
+#         #Delete linked stages
+#         ProjectStage.query.filter_by(projectID=project.projectID).delete()
+#         # Delete Tasks
+#         task_ids = [task.taskID for task in ProjectTask.query.filter_by(projectID=project.projectID).all()]
 
-        # Delete associated TaskComments rows
-        TaskComments.query.filter(TaskComments.taskID.in_(task_ids)).delete()
-        #Delete Tasks
-        ProjectTask.query.filter_by(projectID=project.projectID).delete()
+#         # Delete associated TaskComments rows
+#         TaskComments.query.filter(TaskComments.taskID.in_(task_ids)).delete()
+#         #Delete Tasks
+#         ProjectTask.query.filter_by(projectID=project.projectID).delete()
 
-        #Delete Project Status Data
-        ProjectStatusData.query.filter_by(projectID=project.projectID).delete()
+#         #Delete Project Status Data
+#         ProjectStatusData.query.filter_by(projectID=project.projectID).delete()
         
         
-@project_namespace.route('/delete_question/<int:question_id>')
-class QuestionDeleteResource(Resource):
-    @jwt_required()  
-    def delete(self, question_id):
-        # Check if the question exists
-        question_to_delete = Questions.query.get(question_id)
-        if not question_to_delete:
-            return {'message': 'Question not found'}, HTTPStatus.NOT_FOUND
+# @project_namespace.route('/delete_question/<int:question_id>')
+# class QuestionDeleteResource(Resource):
+#     @jwt_required()  
+#     def delete(self, question_id):
+#         # Check if the question exists
+#         question_to_delete = Questions.query.get(question_id)
+#         if not question_to_delete:
+#             return {'message': 'Question not found'}, HTTPStatus.NOT_FOUND
 
-        # Delete the answers related to the question
-        Answers.query.filter_by(questionID=question_id).delete()
+#         # Delete the answers related to the question
+#         Answers.query.filter_by(questionID=question_id).delete()
 
-        # Delete the choices related to the question
-        QuestionChoices.query.filter_by(questionID=question_id).delete()
+#         # Delete the choices related to the question
+#         QuestionChoices.query.filter_by(questionID=question_id).delete()
 
-        # Delete the question from the database
-        try:
-            question_to_delete.delete()
+#         # Delete the question from the database
+#         try:
+#             question_to_delete.delete()
 
-            return {'message': 'Question and associated answers and choices deleted successfully'}, HTTPStatus.OK
-        except Exception as e:
-            # Handle exceptions (e.g., database errors) appropriately
-            return {'message': f'Error deleting question: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+#             return {'message': 'Question and associated answers and choices deleted successfully'}, HTTPStatus.OK
+#         except Exception as e:
+#             # Handle exceptions (e.g., database errors) appropriately
+#             return {'message': f'Error deleting question: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
     
    
 @project_namespace.route('/project_users/<int:project_id>')
@@ -790,7 +984,7 @@ class ProjectUsersResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Get the project by ID
-        project = Projects.query.get(project_id)
+        project = ProjectsData.query.get(project_id)
         if not project:
             return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
 
@@ -815,110 +1009,110 @@ class ProjectUsersResource(Resource):
 
 
 
-@project_namespace.route('/all_with_answers', methods=['GET'])
-class AllProjectsWithAnswersResource(Resource):
-    @jwt_required()
-    def get(self):
-        try:
-            # Get the current user ID from the JWT token
-            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+# @project_namespace.route('/all_with_answers', methods=['GET'])
+# class AllProjectsWithAnswersResource(Resource):
+#     @jwt_required()
+#     def get(self):
+#         try:
+#             # Get the current user ID from the JWT token
+#             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
-            if not current_user:
-                return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
+#             if not current_user:
+#                 return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
 
-            # Check if the user is an admin
-            if current_user.is_admin:
-                # If admin, fetch all projects
-                projects = Projects.query.all()
-            else:
-                # If not admin, fetch projects linked to the user through ProjectUser model
-                user_projects = ProjectUser.query.filter_by(userID=current_user.userID).all()
-                projects = [project_user.project for project_user in user_projects]
+#             # Check if the user is an admin
+#             if current_user.is_admin:
+#                 # If admin, fetch all projects
+#                 projects = Projects.query.all()
+#             else:
+#                 # If not admin, fetch projects linked to the user through ProjectUser model
+#                 user_projects = ProjectUser.query.filter_by(userID=current_user.userID).all()
+#                 projects = [project_user.project for project_user in user_projects]
                 
 
-            if not projects:
-                return {'message': 'No projects found'}, HTTPStatus.NOT_FOUND
+#             if not projects:
+#                 return {'message': 'No projects found'}, HTTPStatus.NOT_FOUND
 
-            # Initialize a list to store project data
-            projects_data = []
+#             # Initialize a list to store project data
+#             projects_data = []
 
-            # Iterate through each project
-            for project in projects:
+#             # Iterate through each project
+#             for project in projects:
                 
-                # Fetch all answers associated with the project
-                all_answers = Answers.query.filter_by(projectID=project.projectID).all()
+#                 # Fetch all answers associated with the project
+#                 all_answers = Answers.query.filter_by(projectID=project.projectID).all()
 
-                # Prepare an ordered dictionary to store answers by question ID
-                answers_by_question = OrderedDict()
-                for answer in all_answers:
-                    if answer.questionID not in answers_by_question:
-                        answers_by_question[answer.questionID] = {'questionID': answer.questionID, 'answers': []}
-                    answers_by_question[answer.questionID]['answers'].append(answer)
+#                 # Prepare an ordered dictionary to store answers by question ID
+#                 answers_by_question = OrderedDict()
+#                 for answer in all_answers:
+#                     if answer.questionID not in answers_by_question:
+#                         answers_by_question[answer.questionID] = {'questionID': answer.questionID, 'answers': []}
+#                     answers_by_question[answer.questionID]['answers'].append(answer)
 
-                # Convert the list of answers to a JSON response
-                response_data = []
+#                 # Convert the list of answers to a JSON response
+#                 response_data = []
 
-                # Process each question and its associated answers
-                for question_id, question_data in answers_by_question.items():
-                    question = Questions.get_by_id(question_id)
+#                 # Process each question and its associated answers
+#                 for question_id, question_data in answers_by_question.items():
+#                     question = Questions.get_by_id(question_id)
 
-                    extras = question_data['answers'][0].extras if hasattr(question_data['answers'][0], 'extras') else None
-                    if question.questionType == 'single choice':
-                        # For single-choice questions, include the selected choice details in the response
-                        response_data.append(OrderedDict([
-                            ('questionID', question_id),
-                            ('answer', {
-                                'choiceID': question_data['answers'][0].choiceID,
-                                'choiceText': QuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText,
-                                'extras': extras
-                            })
-                        ]))
-                    elif question.questionType == 'multi choice':
-                        # For multi-choice questions, include all selected choices in the response
-                        response_data.append(OrderedDict([
-                            ('questionID', question_id),
-                            ('answer', {
-                                'choices': [choice.choiceID for choice in question_data['answers']],
-                                'choiceText': [QuestionChoices.get_by_id(choice.choiceID).choiceText for choice in
-                                            question_data['answers']]
-                            })
-                        ]))
-                    else:
-                        # For text-based questions, include the answer text in the response
-                        response_data.append(OrderedDict([
-                            ('questionID', question_id),
-                            ('answer', {'answerText': question_data['answers'][0].answerText})
-                        ]))
+#                     extras = question_data['answers'][0].extras if hasattr(question_data['answers'][0], 'extras') else None
+#                     if question.questionType == 'single choice':
+#                         # For single-choice questions, include the selected choice details in the response
+#                         response_data.append(OrderedDict([
+#                             ('questionID', question_id),
+#                             ('answer', {
+#                                 'choiceID': question_data['answers'][0].choiceID,
+#                                 'choiceText': QuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText,
+#                                 'extras': extras
+#                             })
+#                         ]))
+#                     elif question.questionType == 'multi choice':
+#                         # For multi-choice questions, include all selected choices in the response
+#                         response_data.append(OrderedDict([
+#                             ('questionID', question_id),
+#                             ('answer', {
+#                                 'choices': [choice.choiceID for choice in question_data['answers']],
+#                                 'choiceText': [QuestionChoices.get_by_id(choice.choiceID).choiceText for choice in
+#                                             question_data['answers']]
+#                             })
+#                         ]))
+#                     else:
+#                         # For text-based questions, include the answer text in the response
+#                         response_data.append(OrderedDict([
+#                             ('questionID', question_id),
+#                             ('answer', {'answerText': question_data['answers'][0].answerText})
+#                         ]))
 
-                order_answers = response_data
+#                 order_answers = response_data
 
-                # Include answers and corresponding questions in the project details
-                project_details = {
-                    'projectID': project.projectID,
-                    'projectName': project.projectName,
-                    'projectStatus': project.projectStatus.value,
-                    'createdAt': project.createdAt,
-                    'startDate': project.startDate,
-                    'dueDate': project.dueDate,
-                    'userID': project.userID,
-                    'userFullName': current_user.firstName + current_user.lastName,
-                    'username': current_user.username,
-                    'regionID': project.regionID,
-                    'budgetRequired': project.budgetRequired,
-                    'budgetAvailable': project.budgetAvailable,
-                    'projectScope': project.projectScope,
-                    'category': project.category.value,
-                    'answers': order_answers
-                }
+#                 # Include answers and corresponding questions in the project details
+#                 project_details = {
+#                     'projectID': project.projectID,
+#                     'projectName': project.projectName,
+#                     'projectStatus': project.projectStatus.value,
+#                     'createdAt': project.createdAt,
+#                     'startDate': project.startDate,
+#                     'dueDate': project.dueDate,
+#                     'userID': project.userID,
+#                     'userFullName': current_user.firstName + current_user.lastName,
+#                     'username': current_user.username,
+#                     'regionID': project.regionID,
+#                     'budgetRequired': project.budgetRequired,
+#                     'budgetAvailable': project.budgetAvailable,
+#                     'projectScope': project.projectScope,
+#                     'category': project.category.value,
+#                     'answers': order_answers
+#                 }
 
-                # Append project details to the list
-                projects_data.append(project_details)
+#                 # Append project details to the list
+#                 projects_data.append(project_details)
 
-            return jsonify({'projects_with_answers': projects_data})
+#             return jsonify({'projects_with_answers': projects_data})
 
-        except Exception as e:
-            current_app.logger.error(f"Error retrieving projects with answers: {str(e)}")
-            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+#         except Exception as e:
+#             current_app.logger.error(f"Error retrieving projects with answers: {str(e)}")
+#             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 @project_namespace.route('/all_questions', methods=['GET'])
@@ -1069,51 +1263,51 @@ class AllStagesResource(Resource):
             current_app.logger.error(f"Error retrieving stages: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@stage_namespace.route('/link_project_to_stage', methods=['POST'])
-class LinkProjectToStageResource(Resource):
-    @stage_namespace.expect(link_project_to_stage_model, validate=True)
-    @stage_namespace.doc(
-        description = "Link a project to a stage"
-    )
-    def post(self):
-        try:
-            # Get project and stage IDs from the request data
-            data = stage_namespace.payload
-            project_id = data.get('project_id')
-            stage_id = data.get('stage_id')
-            started = data.get('started')
-            completed = data.get('completed')
-            completionDate = data.get('completionDate')
+# @stage_namespace.route('/link_project_to_stage', methods=['POST'])
+# class LinkProjectToStageResource(Resource):
+#     @stage_namespace.expect(link_project_to_stage_model, validate=True)
+#     @stage_namespace.doc(
+#         description = "Link a project to a stage"
+#     )
+#     def post(self):
+#         try:
+#             # Get project and stage IDs from the request data
+#             data = stage_namespace.payload
+#             project_id = data.get('project_id')
+#             stage_id = data.get('stage_id')
+#             started = data.get('started')
+#             completed = data.get('completed')
+#             completionDate = data.get('completionDate')
 
-            # Check if both project and stage IDs are provided
-            if project_id is None or stage_id is None:
-                return {'message': 'Both project_id and stage_id must be provided'}, HTTPStatus.BAD_REQUEST
+#             # Check if both project and stage IDs are provided
+#             if project_id is None or stage_id is None:
+#                 return {'message': 'Both project_id and stage_id must be provided'}, HTTPStatus.BAD_REQUEST
 
-            # Check if the project and stage exist in the database
-            project = Projects.query.get(project_id)
-            stage = Stage.query.get(stage_id)
+#             # Check if the project and stage exist in the database
+#             project = Projects.query.get(project_id)
+#             stage = Stage.query.get(stage_id)
 
-            if project is None or stage is None:
-                return {'message': 'Project or stage not found'}, HTTPStatus.NOT_FOUND
+#             if project is None or stage is None:
+#                 return {'message': 'Project or stage not found'}, HTTPStatus.NOT_FOUND
 
-            # Check if the project is already linked to the stage
-            existing_link = ProjectStage.query.filter_by(projectID=project_id, stageID=stage_id).first()
+#             # Check if the project is already linked to the stage
+#             existing_link = ProjectStage.query.filter_by(projectID=project_id, stageID=stage_id).first()
 
-            if existing_link:
-                return {'message': 'Project is already linked to the specified stage'}, HTTPStatus.BAD_REQUEST
+#             if existing_link:
+#                 return {'message': 'Project is already linked to the specified stage'}, HTTPStatus.BAD_REQUEST
 
-            # Create a new link between the project and stage
-            project_stage_link = ProjectStage(projectID=project_id, stageID=stage_id,
-                                              started=started, completed=completed,
-                                              completionDate=completionDate)
-            db.session.add(project_stage_link)
-            db.session.commit()
+#             # Create a new link between the project and stage
+#             project_stage_link = ProjectStage(projectID=project_id, stageID=stage_id,
+#                                               started=started, completed=completed,
+#                                               completionDate=completionDate)
+#             db.session.add(project_stage_link)
+#             db.session.commit()
 
-            return {'message': 'Project linked to stage successfully'}, HTTPStatus.OK
+#             return {'message': 'Project linked to stage successfully'}, HTTPStatus.OK
 
-        except Exception as e:
-            current_app.logger.error(f"Error linking project to stage: {str(e)}")
-            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+#         except Exception as e:
+#             current_app.logger.error(f"Error linking project to stage: {str(e)}")
+#             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
     
 @stage_namespace.route('/stages_for_project/<int:project_id>', methods=['GET'])
 class StagesForProjectResource(Resource):
@@ -1121,7 +1315,7 @@ class StagesForProjectResource(Resource):
     def get(self, project_id):
         try:
             # Check if the project exists in the database
-            project = Projects.query.get(project_id)
+            project = ProjectsData.query.get(project_id)
 
             if project is None:
                 return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
@@ -1153,7 +1347,7 @@ class CompleteStageForProjectResource(Resource):
     def put(self, project_id, stage_id):
         try:
             # Check if the project exists in the database
-            project = Projects.query.get(project_id)
+            project = ProjectsData.query.get(project_id)
 
             if project is None:
                 return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
@@ -1601,7 +1795,7 @@ class AddAssessmentAnswerResource(Resource):
         answers_data = assessment_data.pop('answers', [])
         try:
             # get the project this assessment is for
-            project = Projects.get_by_id(assessment_data['projectID'])
+            project = ProjectsData.get_by_id(assessment_data['projectID'])
             if not project:
                 return {'message': 'Project not found'}, HTTPStatus.BAD_REQUEST
             
@@ -1777,7 +1971,7 @@ class GetTasksForProjectResource(Resource):
     def get(self, project_id):
         try:
             # get the project 
-            project = Projects.get_by_id(project_id)
+            project = ProjectsData.get_by_id(project_id)
             
             if project is None:
                 return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND

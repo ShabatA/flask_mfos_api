@@ -4,6 +4,7 @@ from flask import jsonify
 from http import HTTPStatus
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY
 
 
 class ProjectStatus(Enum):
@@ -27,168 +28,230 @@ class ProjectCategory(Enum):
     C = 'C'
     D = 'D'
 
-class Projects(db.Model):
-    _tablename_ = 'projects'
+class Category(Enum):
+    A = 'A'
+    B = 'B'
+    C = 'C'
+    D = 'D'
+
+class Status(Enum):
+    PENDING = 'pending'
+    APPROVED = 'approved'
+    REJECTED = 'rejected'
+    ASSESSMENT = 'pending assessment'
+
+    def to_dict(self):
+        return {'status': self.value}
+
+# class Projects(db.Model):
+#     _tablename_ = 'projects'
+
+#     projectID = db.Column(db.Integer, primary_key=True)
+#     projectName = db.Column(db.String, nullable=False)
+#     regionID = db.Column(db.Integer, db.ForeignKey('regions.regionID'), nullable=False)
+#     budgetRequired = db.Column(db.Float, nullable=False)
+#     budgetAvailable = db.Column(db.Float, nullable=False)
+#     projectStatus = db.Column(db.Enum(ProjectStatus), nullable=False)
+#     projectScope = db.Column(db.String, nullable=True)  # You can replace 'String' with an appropriate type based on your needs
+#     category = db.Column(db.Enum(ProjectCategory), nullable=True)
+#     userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=True)
+#     startDate = db.Column(db.Date, nullable=True)
+#     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+#     dueDate = db.Column(db.Date, nullable=True)
+
+#     # Relationship with Questions
+#     # questions = db.relationship('Questions', backref='project', lazy=True)
+#     users = db.relationship('Users', secondary='project_user', backref='projects', lazy='dynamic')
+#     answers = db.relationship('Answers', backref='projects', lazy=True)
+#     tasks = db.relationship('ProjectTask', backref='projects', lazy=True)
+#     status_data = db.relationship('ProjectStatusData', backref='projects', uselist=False, lazy=True, overlaps="projects,status_data")
+
+#     def _repr_(self):
+#         return f"<Project {self.projectID} {self.projectName}>"
+    
+#     def delete(self):
+#         db.session.delete(self)
+#         db.session.commit()
+
+#     def save(self, answers=None, status_data=None):
+#         db.session.add(self)
+#         db.session.commit()
+
+#         # If answers are provided, create and assign them to the project
+#         if answers:
+#             self.assign_answers(answers)
+
+#         # If status_data is provided, create and assign it to the project
+#         if status_data:
+#             self.assign_status_data(status_data)
+    
+#     def calculate_total_points(self):
+#         total_points = 0
+
+#         # Fetch answers associated with the project
+#         answers = Answers.query.filter_by(projectID=self.projectID).all()
+
+#         for answer in answers:
+#             # If the answer is for a text-based question, add its points
+#             if answer.choice is None:
+#                 total_points += answer.question.points
+#             else:
+#                 # If the answer is for a single-choice question, add the points of the selected choice
+#                 total_points += answer.choice.points
+
+#         return total_points
+    
+#     def assign_status_data(self, status_data):
+        
+#         new_status_data = ProjectStatusData(projectID=self.projectID, status=self.projectStatus.value, data=status_data)
+#         self.startDate = status_data.get('startDate', self.startDate)
+#         self.dueDate = status_data.get('dueDate', self.dueDate)
+#         db.session.commit()
+#         new_status_data.save()
+
+
+#     def assign_answers(self, answers):
+#         for answer_data in answers:
+#             questionID = answer_data['questionID']
+#             answerText = answer_data.get('answerText')
+#             extras = answer_data.get('extras')  # Retrieve the 'extras' key if it exists
+
+#             # Assuming you have a method to get a Question by ID
+#             question = Questions.get_by_id(questionID)
+
+#             if question.questionType == 'single choice':
+#                 choiceID = answer_data.get('choiceID')
+#                 # For single-choice questions, associate the choice with the answer
+#                 new_answer = Answers(
+#                     projectID=self.projectID,
+#                     questionID=questionID,
+#                     choiceID=choiceID,
+#                     answerText=None,  # Set answerText to None for multiple-choice questions
+#                     extras=extras
+#                 )
+#                 new_answer.save()
+#             elif question.questionType == 'multi choice':
+#                 choiceIDs = answer_data.get('choiceID', [])
+#                 # For multiple-choice questions, associate the choices with the answer
+#                 for choiceID in choiceIDs:
+#                     choice = QuestionChoices.get_by_id(choiceID)
+#                     new_answer = Answers(
+#                         projectID=self.projectID,
+#                         questionID=questionID,
+#                         choiceID=choiceID,
+#                         answerText=None,  # Set answerText to None for multiple-choice questions
+#                         extras=extras
+#                     )
+#                     new_answer.save()
+#             else:
+#                 # For text-based questions, associate the answer text with the answer
+#                 new_answer = Answers(
+#                     projectID=self.projectID,
+#                     questionID=questionID,
+#                     answerText=answerText,
+#                     choiceID=None,  # Set choiceID to None for text-based questions
+#                     extras=extras
+#                 )
+#                 new_answer.save()
+
+#             # Save the answer to the database
+#             # new_answer.save()
+
+#     @classmethod
+#     def get_by_id(cls, projectID):
+#         return cls.query.get_or_404(projectID)
+    
+#     def edit_answers(self, projectID,edited_answers):
+#         for edited_answer_data in edited_answers:
+#             questionID = edited_answer_data['questionID']
+#             new_answer_text = edited_answer_data.get('answerText')
+#             new_choice_id = edited_answer_data.get('choiceID')
+#             extras = edited_answer_data.get('extras')
+
+#             # Assuming you have a method to get a Question by ID
+#             question = Questions.get_by_id(questionID)
+
+#             if not question:
+#                 response = jsonify({'message': 'Question not found'})
+#                 response.status_code = HTTPStatus.NOT_FOUND
+#                 return response
+
+#             # Delete existing answers for the given question ID
+#             Answers.query.filter_by(questionID=questionID,projectID=projectID).delete()
+
+#             if question.questionType == 'multi choice' and isinstance(new_choice_id, list):
+#                 # For multiple-choice questions, add new rows for each choice
+#                 for choice_id in new_choice_id:
+#                     new_answer = Answers(
+#                         projectID=self.projectID,
+#                         questionID=questionID,
+#                         choiceID=choice_id,
+#                         answerText=None
+#                     )
+#                     db.session.add(new_answer)
+#             else:
+#                 # For single-choice or text-based questions, update the existing row
+#                 new_answer = Answers(
+#                     projectID=self.projectID,
+#                     questionID=questionID,
+#                     choiceID=new_choice_id if question.questionType == 'single choice' else None,
+#                     answerText=new_answer_text if question.questionType == 'text' else None,
+#                     extras = extras
+#                 ) 
+                
+#                 db.session.add(new_answer)
+
+#         # Commit the changes to the database
+#         db.session.commit()
+
+#         return jsonify({'message': 'Answers updated successfully'})
+
+class ProjectsData(db.Model):
+    __tablename__ = 'projects_data'
 
     projectID = db.Column(db.Integer, primary_key=True)
-    projectName = db.Column(db.String, nullable=False)
+    createdBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=True)
     regionID = db.Column(db.Integer, db.ForeignKey('regions.regionID'), nullable=False)
+    projectName = db.Column(db.String, nullable=False)
     budgetRequired = db.Column(db.Float, nullable=False)
-    budgetAvailable = db.Column(db.Float, nullable=False)
-    projectStatus = db.Column(db.Enum(ProjectStatus), nullable=False)
-    projectScope = db.Column(db.String, nullable=True)  # You can replace 'String' with an appropriate type based on your needs
-    category = db.Column(db.Enum(ProjectCategory), nullable=True)
-    userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=True)
+    budgetApproved = db.Column(db.Float, nullable=True)
+    projectStatus = db.Column(db.Enum(Status), nullable=False)
+    projectScope = db.Column(db.Integer, nullable=False)
+    projectIdea = db.Column(db.Text, nullable=False)
+    solution = db.Column(db.Text, nullable=False)
+    addedValue = db.Column(db.Text, nullable=False)
+    projectNature = db.Column(db.Integer, nullable=False)
+    beneficiaryCategory = db.Column(db.Integer, nullable=False)
+    commitment = db.Column(db.Integer, nullable=False)
+    commitmentType = db.Column(db.Integer, nullable=True)
+    supportingOrg = db.Column(db.Text, nullable=True)
+    documents = db.Column(ARRAY(db.Integer))
+    recommendationLetter = db.Column(db.Integer, nullable=True)  
+    category = db.Column(db.Enum(Category), nullable=True)
     startDate = db.Column(db.Date, nullable=True)
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     dueDate = db.Column(db.Date, nullable=True)
 
-    # Relationship with Questions
-    # questions = db.relationship('Questions', backref='project', lazy=True)
-    users = db.relationship('Users', secondary='project_user', backref='projects', lazy='dynamic')
-    answers = db.relationship('Answers', backref='projects', lazy=True)
-    tasks = db.relationship('ProjectTask', backref='projects', lazy=True)
-    status_data = db.relationship('ProjectStatusData', backref='projects', uselist=False, lazy=True, overlaps="projects,status_data")
 
+    users = db.relationship('Users', secondary='project_user', backref='projects_data', lazy='dynamic')
+    tasks = db.relationship('ProjectTask', backref='projects_data', lazy=True)
+    status_data = db.relationship('ProjectStatusData', backref='projects_data', uselist=False, lazy=True, overlaps="projects_data,status_data")
+    
     def _repr_(self):
-        return f"<Project {self.projectID} {self.projectName}>"
+        return f"<ProjectsData {self.projectID} {self.projectName} {self.createdAt}>"
+    
+    def save(self):
+        
+        db.session.add(self)
+        db.session.commit()
     
     def delete(self):
         db.session.delete(self)
         db.session.commit()
-
-    def save(self, answers=None, status_data=None):
-        db.session.add(self)
-        db.session.commit()
-
-        # If answers are provided, create and assign them to the project
-        if answers:
-            self.assign_answers(answers)
-
-        # If status_data is provided, create and assign it to the project
-        if status_data:
-            self.assign_status_data(status_data)
     
-    def calculate_total_points(self):
-        total_points = 0
-
-        # Fetch answers associated with the project
-        answers = Answers.query.filter_by(projectID=self.projectID).all()
-
-        for answer in answers:
-            # If the answer is for a text-based question, add its points
-            if answer.choice is None:
-                total_points += answer.question.points
-            else:
-                # If the answer is for a single-choice question, add the points of the selected choice
-                total_points += answer.choice.points
-
-        return total_points
-    
-    def assign_status_data(self, status_data):
-        
-        new_status_data = ProjectStatusData(projectID=self.projectID, status=self.projectStatus.value, data=status_data)
-        self.startDate = status_data.get('startDate', self.startDate)
-        self.dueDate = status_data.get('dueDate', self.dueDate)
-        db.session.commit()
-        new_status_data.save()
-
-
-    def assign_answers(self, answers):
-        for answer_data in answers:
-            questionID = answer_data['questionID']
-            answerText = answer_data.get('answerText')
-            extras = answer_data.get('extras')  # Retrieve the 'extras' key if it exists
-
-            # Assuming you have a method to get a Question by ID
-            question = Questions.get_by_id(questionID)
-
-            if question.questionType == 'single choice':
-                choiceID = answer_data.get('choiceID')
-                # For single-choice questions, associate the choice with the answer
-                new_answer = Answers(
-                    projectID=self.projectID,
-                    questionID=questionID,
-                    choiceID=choiceID,
-                    answerText=None,  # Set answerText to None for multiple-choice questions
-                    extras=extras
-                )
-                new_answer.save()
-            elif question.questionType == 'multi choice':
-                choiceIDs = answer_data.get('choiceID', [])
-                # For multiple-choice questions, associate the choices with the answer
-                for choiceID in choiceIDs:
-                    choice = QuestionChoices.get_by_id(choiceID)
-                    new_answer = Answers(
-                        projectID=self.projectID,
-                        questionID=questionID,
-                        choiceID=choiceID,
-                        answerText=None,  # Set answerText to None for multiple-choice questions
-                        extras=extras
-                    )
-                    new_answer.save()
-            else:
-                # For text-based questions, associate the answer text with the answer
-                new_answer = Answers(
-                    projectID=self.projectID,
-                    questionID=questionID,
-                    answerText=answerText,
-                    choiceID=None,  # Set choiceID to None for text-based questions
-                    extras=extras
-                )
-                new_answer.save()
-
-            # Save the answer to the database
-            # new_answer.save()
-
     @classmethod
     def get_by_id(cls, projectID):
         return cls.query.get_or_404(projectID)
-    
-    def edit_answers(self, projectID,edited_answers):
-        for edited_answer_data in edited_answers:
-            questionID = edited_answer_data['questionID']
-            new_answer_text = edited_answer_data.get('answerText')
-            new_choice_id = edited_answer_data.get('choiceID')
-            extras = edited_answer_data.get('extras')
-
-            # Assuming you have a method to get a Question by ID
-            question = Questions.get_by_id(questionID)
-
-            if not question:
-                response = jsonify({'message': 'Question not found'})
-                response.status_code = HTTPStatus.NOT_FOUND
-                return response
-
-            # Delete existing answers for the given question ID
-            Answers.query.filter_by(questionID=questionID,projectID=projectID).delete()
-
-            if question.questionType == 'multi choice' and isinstance(new_choice_id, list):
-                # For multiple-choice questions, add new rows for each choice
-                for choice_id in new_choice_id:
-                    new_answer = Answers(
-                        projectID=self.projectID,
-                        questionID=questionID,
-                        choiceID=choice_id,
-                        answerText=None
-                    )
-                    db.session.add(new_answer)
-            else:
-                # For single-choice or text-based questions, update the existing row
-                new_answer = Answers(
-                    projectID=self.projectID,
-                    questionID=questionID,
-                    choiceID=new_choice_id if question.questionType == 'single choice' else None,
-                    answerText=new_answer_text if question.questionType == 'text' else None,
-                    extras = extras
-                ) 
-                
-                db.session.add(new_answer)
-
-        # Commit the changes to the database
-        db.session.commit()
-
-        return jsonify({'message': 'Answers updated successfully'})
 
 
 
@@ -233,35 +296,35 @@ class Questions(db.Model):
         new_choice.save()
     
 
-class Answers(db.Model):
-    _tablename_ = 'answers'
+# class Answers(db.Model):
+#     _tablename_ = 'answers'
 
-    answerID = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
-    questionID = db.Column(db.Integer, db.ForeignKey('questions.questionID'), nullable=False)
-    answerText = db.Column(db.String, nullable=True)  # Adjust based on the answer format
-    extras = db.Column(JSONB, nullable=True)
-     # Add a foreign key reference to the choices table
-    question = db.relationship('Questions', backref='answers', lazy=True)
-    choiceID = db.Column(db.Integer, db.ForeignKey('question_choices.choiceID'), nullable=True)
+#     answerID = db.Column(db.Integer, primary_key=True)
+#     projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
+#     questionID = db.Column(db.Integer, db.ForeignKey('questions.questionID'), nullable=False)
+#     answerText = db.Column(db.String, nullable=True)  # Adjust based on the answer format
+#     extras = db.Column(JSONB, nullable=True)
+#      # Add a foreign key reference to the choices table
+#     question = db.relationship('Questions', backref='answers', lazy=True)
+#     choiceID = db.Column(db.Integer, db.ForeignKey('question_choices.choiceID'), nullable=True)
 
-    # Define a relationship with the choices table
-    choice = db.relationship('QuestionChoices', foreign_keys=[choiceID], backref='answer', lazy=True)
+#     # Define a relationship with the choices table
+#     choice = db.relationship('QuestionChoices', foreign_keys=[choiceID], backref='answer', lazy=True)
 
-    def _repr_(self):
-        return f"<Answer {self.answerID} {self.answerText}>"
+#     def _repr_(self):
+#         return f"<Answer {self.answerID} {self.answerText}>"
     
-    def save(self):
-        db.session.add(self)
-        db.session.commit()
+#     def save(self):
+#         db.session.add(self)
+#         db.session.commit()
     
-    def delete(self):
-        db.session.delete(self)
-        db.session.commit()
+#     def delete(self):
+#         db.session.delete(self)
+#         db.session.commit()
     
-    @classmethod
-    def get_by_id(cls, answerID):
-        return cls.query.get_or_404(answerID)
+#     @classmethod
+#     def get_by_id(cls, answerID):
+#         return cls.query.get_or_404(answerID)
 
 class QuestionChoices(db.Model):
     _tablename_ = 'question_choices'
@@ -289,10 +352,10 @@ class QuestionChoices(db.Model):
     
 
 class ProjectUser(db.Model):
-    _tablename_ = 'project_user'
+    __tablename__ = 'project_user'
 
     id = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=False)
     userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
 
     def _repr_(self):
@@ -330,13 +393,13 @@ class Stage(db.Model):
 class ProjectStage(db.Model):
     _tablename_ = 'project_stages'
 
-    projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), primary_key=True)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), primary_key=True)
     stageID = db.Column(db.Integer, db.ForeignKey('stage.stageID'), primary_key=True)
     started = db.Column(db.Boolean, default=False)
     completed = db.Column(db.Boolean, default=False)
     completionDate = db.Column(db.Date, nullable=True)
 
-    project = db.relationship('Projects', backref='project_stages', lazy=True)
+    project = db.relationship('ProjectsData', backref='project_stages', lazy=True)
     stage = db.relationship('Stage', backref='project_stages', lazy=True)
     
     def delete(self):
@@ -348,7 +411,7 @@ class ProjectTask(db.Model):
     __tablename__ = 'project_task'
 
     taskID = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=False)
     title = db.Column(db.String, nullable=False)
     deadline = db.Column(db.Date, nullable=False)
     assignedTo = db.relationship('Users', secondary='project_task_assigned_to', backref='assigned_tasks', lazy='dynamic', single_parent=True)
@@ -475,7 +538,7 @@ class AssessmentAnswers(db.Model):
     __tablename__ = 'assessment_answers'
 
     answerID = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=False)
     questionID = db.Column(db.Integer, db.ForeignKey('assessment_questions.questionID'), nullable=False)
     answerText = db.Column(db.String, nullable=True)  # Adjust based on the answer format
     notes = db.Column(db.String, nullable=True)
@@ -532,11 +595,11 @@ class ProjectStatusData(db.Model):
     _tablename_ = 'project_status_data'
 
     id = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=False)
     status = db.Column(db.String, nullable=False)
     data = db.Column(JSONB, nullable=True)  # You can adjust the type based on the data you want to store
 
-    project = db.relationship('Projects', backref='project_status_data', lazy=True, overlaps='projects')
+    project = db.relationship('ProjectsData', backref='project_status_data', lazy=True, overlaps='projects_data')
 
     def _repr_(self):
         return f"<ProjectStatusData {self.id} ProjectID: {self.projectID}, Status: {self.status}>"
