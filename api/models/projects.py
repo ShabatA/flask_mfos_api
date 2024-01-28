@@ -252,6 +252,14 @@ class ProjectsData(db.Model):
     @classmethod
     def get_by_id(cls, projectID):
         return cls.query.get_or_404(projectID)
+    
+    def assign_status_data(self, status_data):
+        
+        new_status_data = ProjectStatusData(projectID=self.projectID, status=self.projectStatus.value, data=status_data)
+        self.startDate = datetime.utcnow().date()
+        self.dueDate = status_data.get('dueDate', self.dueDate)
+        db.session.commit()
+        new_status_data.save()
 
 
 
