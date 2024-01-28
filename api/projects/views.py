@@ -119,7 +119,7 @@ projects_data_model = project_namespace.model('ProjectsDataInput', {
     'commitment': fields.Integer(description='Is there a commitment from external party'),
     'commitmentType': fields.Integer(description='Commitment type'),
     'supportingOrg': fields.String(description='Details of the supporting organization'),
-    'documents': fields.List(fields.Integer, description='List the document Ids'),
+    'documents': fields.List(fields.String, description='List the document types'),
     'recommendationLetter': fields.Integer(description='Is there a recomemendation letter')
 })
 

@@ -316,6 +316,12 @@ class UpdateUserByUser(Resource):
             # Exclude 'permission_level' from the data dictionary if it's present
             if 'permission_level' in data:
                 del data['permission_level']
+            
+            if 'projects' in data:
+                del data['projects']
+            
+            if 'cases' in data:
+                del data['cases']
 
             # Update user fields using the update method
             user_to_update.update(data)

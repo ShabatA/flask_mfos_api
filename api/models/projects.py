@@ -225,7 +225,7 @@ class ProjectsData(db.Model):
     commitment = db.Column(db.Integer, nullable=False)
     commitmentType = db.Column(db.Integer, nullable=True)
     supportingOrg = db.Column(db.Text, nullable=True)
-    documents = db.Column(ARRAY(db.Integer))
+    documents = db.Column(ARRAY(db.String))
     recommendationLetter = db.Column(db.Integer, nullable=True)  
     category = db.Column(db.Enum(Category), nullable=True)
     startDate = db.Column(db.Date, nullable=True)
