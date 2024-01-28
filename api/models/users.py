@@ -1,3 +1,5 @@
+from api.models.cases import CaseUser
+from api.models.projects import ProjectUser
 from ..utils.db import db
 from enum import Enum
 from datetime import datetime
@@ -123,6 +125,10 @@ class Users(db.Model):
                     raise ValueError('Region not found.')
             elif key == 'permission_level':
                 self.update_permissions(value)
+            elif key == 'projects':
+                self.update_projects(value)
+            elif key == 'cases':
+                self.update_cases(value)
 
             else:
                 # For other fields, simply update them
@@ -130,6 +136,21 @@ class Users(db.Model):
 
         # Assuming db is an instance of SQLAlchemy
         db.session.commit()
+    
+    def update_cases(self, case_list):
+        # Delete linked cases
+        CaseUser.query.filter_by(userID=self.userID).delete()
+        for case in case_list:
+            case_user = CaseUser(caseID=case, userID=self.userID)
+            case_user.save()
+    
+    def update_projects(self, project_list):
+        # Delete linked cases
+        ProjectUser.query.filter_by(userID=self.userID).delete()
+        for project in project_list:
+            pro_user = ProjectUser(projectID=project, userID=self.userID)
+            pro_user.save()
+            
     
     def remove_permission(self, permission):
         """

@@ -605,10 +605,34 @@ class AllUsers(Resource):
         
         
         # Fetch all projects the user has access to
-        projects = ProjectsData.query.join(Users, Users.userID == ProjectsData.createdBy).filter(Users.userID == user.userID).all()
+        projects = (
+            ProjectsData.query.join(Users, Users.userID == ProjectsData.createdBy)
+            .filter(Users.userID == user.userID)
+            .all()
+        )
 
         # Fetch all cases the user has access to
         cases = Cases.query.filter(Cases.userID == user.userID).all()
+
+        # Fetch all projects associated with the user through ProjectUser
+        project_user_projects = (
+            ProjectsData.query.join(ProjectUser, ProjectsData.projectID == ProjectUser.projectID)
+            .filter(ProjectUser.userID == user.userID)
+            .all()
+        )
+
+        # Fetch all cases associated with the user through CaseUser
+        case_user_cases = (
+            Cases.query.join(CaseUser, Cases.caseID == CaseUser.caseID)
+            .filter(CaseUser.userID == user.userID)
+            .all()
+        )
+
+        # Combine the projects and remove duplicates
+        all_projects = list(set(projects + project_user_projects))
+
+        # Combine the cases and remove duplicates
+        all_cases = list(set(cases + case_user_cases))
 
         # Fetch all ProjectTasks the user is assigned to
         project_tasks = ProjectTask.query.join(Users.assigned_tasks).filter(Users.userID == user.userID).all()
@@ -636,11 +660,11 @@ class AllUsers(Resource):
             'projects': [{'projectID': project.projectID,
                           'projectName': project.projectName,
                           'status': project.projectStatus.value,
-                          'dueDate': project.dueDate.isoformat() if project.dueDate else None} for project in projects] if projects else [],
+                          'dueDate': project.dueDate.isoformat() if project.dueDate else None} for project in all_projects] if all_projects else [],
             'cases': [{'caseID': case.caseID,
                        'caseName': case.caseName,
                        'status': case.caseStatus.value,
-                       'dueDate': case.dueDate.isoformat() if case.dueDate else None} for case in cases] if cases else [],
+                       'dueDate': case.dueDate.isoformat() if case.dueDate else None} for case in all_cases] if all_cases else [],
             'project_tasks': [{'taskID': task.taskID,
                                'description': task.description,
                                'status': task.status.value,
