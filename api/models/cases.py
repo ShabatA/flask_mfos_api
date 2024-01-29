@@ -6,7 +6,7 @@ from flask import jsonify
 from http import HTTPStatus
 from sqlalchemy.dialects.postgresql import JSONB
 
-class CaseStatus(Enum):
+class CaseStat(Enum):
     PENDING = "pending"
     APPROVED = "approved"
     INPROGRESS = "in progress"
@@ -14,7 +14,7 @@ class CaseStatus(Enum):
     COMPLETED = "completed"
     ASSESSMENT = "pending assessment"
 
-class CaseCategory(Enum):
+class CaseCat(Enum):
     A = 'A'
     B = 'B'
     C = 'C'
@@ -26,17 +26,17 @@ class CaseTaskStatus(Enum):
     DONE = 'Done'
     OVERDUE = 'Overdue'
 
-class Cases(db.Model):
+class CasesData(db.Model):
     
-    __tablename__ = 'cases'
+    __tablename__ = 'cases_data'
 
     caseID = db.Column(db.Integer, primary_key=True)
     userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
     regionID = db.Column(db.Integer, db.ForeignKey('regions.regionID'))
     caseName = db.Column(db.String, nullable=False)
-    question1 = db.Column(db.String, nullable=False)
-    question2 = db.Column(db.Integer, nullable=False)
-    question3 = db.Column(db.Integer, nullable=False)
+    question1 = db.Column(JSONB, nullable=False)
+    question2 = db.Column(JSONB, nullable=False)
+    question3 = db.Column(JSONB, nullable=False)
     question4 = db.Column(JSONB, nullable=False)
     question5 = db.Column(JSONB, nullable=False)
     question6 = db.Column(JSONB, nullable=False)
@@ -45,18 +45,18 @@ class Cases(db.Model):
     question9 = db.Column(JSONB, nullable=False)
     question10 = db.Column(db.Integer, nullable=False)
     question11 = db.Column(db.Float, nullable=False)
-    question12 = db.Column(db.String, nullable=False)
-    caseStatus = db.Column(db.Enum(CaseStatus), nullable=False)
-    category = db.Column(db.Enum(CaseCategory), nullable=True)
+    question12 = db.Column(db.Integer, nullable=False)
+    caseStatus = db.Column(db.Enum(CaseStat), nullable=False)
+    category = db.Column(db.Enum(CaseCat), nullable=True)
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     startDate = db.Column(db.Date, nullable=True)
     dueDate = db.Column(db.Date, nullable=True)
     
-    region = db.relationship('Regions', backref='cases', foreign_keys=[regionID])
-    users = db.relationship('Users', secondary='case_users', backref='cases', lazy='dynamic')
-    beneficaries = db.relationship('CaseBeneficiary', backref='cases', lazy=True)
-    tasks = db.relationship('CaseTask', backref='cases', lazy=True)
-    status_data = db.relationship('CaseStatusData', backref='cases', uselist=False, lazy=True)
+    region = db.relationship('Regions', backref='cases_data', foreign_keys=[regionID])
+    users = db.relationship('Users', secondary='case_users', backref='cases_data', lazy='dynamic')
+    beneficaries = db.relationship('CaseBeneficiary', backref='cases_data', lazy=True)
+    tasks = db.relationship('CaseTask', backref='cases_data', lazy=True)
+    status_data = db.relationship('CaseStatusData', backref='cases_data', uselist=False, lazy=True)
 
     def __repr__(self):
         return f"<Case {self.caseID} {self.caseName}>"
@@ -116,7 +116,7 @@ class CaseBeneficiary(db.Model):
     __tablename__ = 'case_beneficiary'
     
     beneficiaryID = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases.caseID'))
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'))
     name = db.Column(db.String, nullable=False)
     
     def save(self):
@@ -131,7 +131,7 @@ class BeneficiaryForm(db.Model):
     __tablename__ = 'beneficiary_form'
     
     formID = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases.caseID'), nullable=False)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
     url = db.Column(db.String, nullable=False)
     used = db.Column(db.Boolean, nullable=False, default=False)
     
@@ -167,13 +167,13 @@ class CaseStage(db.Model):
 class CaseToStage(db.Model):
     __tablename__ = 'case_to_stage'
 
-    caseID = db.Column(db.Integer, db.ForeignKey('cases.caseID'), primary_key=True)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), primary_key=True)
     stageID = db.Column(db.Integer, db.ForeignKey('case_stage.stageID'), primary_key=True)
     started = db.Column(db.Boolean, default=False)
     completed = db.Column(db.Boolean, default=False)
     completionDate = db.Column(db.Date, nullable=True)
 
-    case = db.relationship('Cases', backref='case_to_stage', lazy=True)
+    case = db.relationship('CasesData', backref='case_to_stage', lazy=True)
     stage = db.relationship('CaseStage', backref='case_to_stage', lazy=True)
     
     def save(self):
@@ -189,7 +189,7 @@ class CaseUser(db.Model):
     __tablename__ = 'case_users'
 
     id = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases.caseID'), nullable=False)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
     userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
 
     def __repr__(self):
@@ -209,7 +209,7 @@ class CaseTask(db.Model):
     __tablename__ = 'case_task'
 
     taskID = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases.caseID'), nullable=False)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
     title = db.Column(db.String, nullable=False)
     deadline = db.Column(db.Date, nullable=False)
     assignedTo = db.relationship('Users', secondary='c_task_assigned_to', backref='c_assigned_tasks', lazy='dynamic', single_parent=True)
@@ -316,11 +316,11 @@ class CaseStatusData(db.Model):
     __tablename__ = 'case_status_data'
 
     id = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases.caseID'), nullable=False)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
     status = db.Column(db.String, nullable=False)
     data = db.Column(JSONB, nullable=True)  # You can adjust the type based on the data you want to store
 
-    project = db.relationship('Cases', backref='case_status_data', lazy=True)
+    project = db.relationship('CasesData', backref='case_status_data', lazy=True)
 
     def _repr_(self):
         return f"<CaseStatusData {self.id} caseID: {self.caseID}, Status: {self.status}>"
@@ -374,7 +374,7 @@ class CaseAssessmentAnswers(db.Model):
     __tablename__ = 'case_assessment_answers'
 
     answerID = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases.caseID'), nullable=False)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
     questionID = db.Column(db.Integer, db.ForeignKey('case_assessment_questions.questionID'), nullable=False)
     answerText = db.Column(db.String, nullable=True)
     extras = db.Column(JSONB, nullable=True)

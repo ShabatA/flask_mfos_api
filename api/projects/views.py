@@ -425,7 +425,8 @@ class ProjectGetAllResource(Resource):
                     'recommendationLetter': project.recommendationLetter,
                     'createdAt': project.createdAt.isoformat(),
                     'dueDate': project.dueDate.isoformat() if project.dueDate else None,
-                    'startDate': project.startDate.isoformat() if project.startDate else None
+                    'startDate': project.startDate.isoformat() if project.startDate else None,
+                    'totalPoints': project.totalPoints
                 }
 
                 projects_data.append(project_details)

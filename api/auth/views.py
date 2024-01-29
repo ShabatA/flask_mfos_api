@@ -2,7 +2,7 @@ from api.config.config import Config
 from flask_restx import Resource, Namespace, fields
 from flask import request, current_app
 
-from api.models.cases import CaseTask, Cases, CaseUser
+from api.models.cases import CaseTask, CaseUser, CasesData
 from ..models.users import Users, Role, UserPermissions, PermissionLevel
 from ..models.projects import ProjectUser, ProjectTask, ProjectsData
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -619,7 +619,7 @@ class AllUsers(Resource):
             )
 
             # Fetch all cases the user has access to
-            cases = Cases.query.filter(Cases.userID == user.userID).all()
+            cases = CasesData.query.filter(CasesData.userID == user.userID).all()
 
             # Fetch all projects associated with the user through ProjectUser
             project_user_projects = (
@@ -630,7 +630,7 @@ class AllUsers(Resource):
 
             # Fetch all cases associated with the user through CaseUser
             case_user_cases = (
-                Cases.query.join(CaseUser, Cases.caseID == CaseUser.caseID)
+                CasesData.query.join(CaseUser, CasesData.caseID == CaseUser.caseID)
                 .filter(CaseUser.userID == user.userID)
                 .all()
             )
@@ -642,7 +642,7 @@ class AllUsers(Resource):
             all_cases = list(set(cases + case_user_cases))
         else:
             all_projects = ProjectsData.query.all()
-            all_cases = Cases.query.all()
+            all_cases = CasesData.query.all()
 
         # Fetch all ProjectTasks the user is assigned to
         project_tasks = ProjectTask.query.join(Users.assigned_tasks).filter(Users.userID == user.userID).all()
@@ -676,11 +676,13 @@ class AllUsers(Resource):
                        'status': case.caseStatus.value,
                        'dueDate': case.dueDate.isoformat() if case.dueDate else None} for case in all_cases] if all_cases else [],
             'project_tasks': [{'taskID': task.taskID,
+                               'title': task.title,
                                'description': task.description,
                                'status': task.status.value,
                                'stageName': task.stage.name,
                                'completionDate': task.completionDate.isoformat() if task.completionDate else None} for task in project_tasks] if project_tasks else [],
             'case_tasks': [{'taskID': task.taskID,
+                            'title': task.title,
                             'description': task.description,
                             'status': task.status.value,
                             'stageName': task.stage.name,
@@ -915,7 +917,7 @@ class TakeoverResource(Resource):
                     project_user.userID = touser.userID
                     project_user.save()
             
-            cases = Cases.query.filter_by(userID=fromuser.userID).all()
+            cases = CasesData.query.filter_by(userID=fromuser.userID).all()
             if cases:
                 for case in cases:
                     case.userID = touser.userID
@@ -958,7 +960,7 @@ class AssignUserToCaseResource(Resource):
                 return {'message': 'Unauthorized. You do not have permission to link users to cases.'}, HTTPStatus.FORBIDDEN
 
             # Get the case by ID
-            case = Cases.query.get(case_id)
+            case = CasesData.query.get(case_id)
             if not case:
                 return {'message': 'Case not found'}, HTTPStatus.NOT_FOUND
 
@@ -1012,7 +1014,7 @@ class ReassignUserToCaseResource(Resource):
                 return {'message': 'Unauthorized. You do not have permission to link users to cases.'}, HTTPStatus.FORBIDDEN
 
             # Get the case by ID
-            case = Cases.query.get(case_id)
+            case = CasesData.query.get(case_id)
             if not case:
                 return {'message': 'Case not found'}, HTTPStatus.NOT_FOUND
 

@@ -14,7 +14,7 @@ class RegionAccount(db.Model):
     availableFund = db.Column(db.Float, nullable=False)
     
     projectsFunds = db.relationship('ProjectFunds', backref='projects_data', lazy=True)
-    casesFunds = db.relationship('CaseFunds', backref='cases', lazy=True)
+    casesFunds = db.relationship('CaseFunds', backref='cases_data', lazy=True)
     
     def save(self):
         db.session.add(self)
@@ -30,7 +30,7 @@ class ProjectFunds(db.Model):
     __tablename__ = 'project_funds'
     
     fundID = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=False)
     fundsAllocated = db.Column(db.Float, nullable=True)
     
     def save(self):
@@ -45,7 +45,7 @@ class CaseFunds(db.Model):
     __tablename__ = 'case_funds'
     
     fundID = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases.caseID'), nullable=False)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
     fundsAllocated = db.Column(db.Float, nullable=True)
     
     def save(self):

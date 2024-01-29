@@ -11,9 +11,6 @@ from flask_cors import CORS
 from .config.config import config_dict
 from .utils.db import db
 from .models.users import Users, Role, UserPermissions
-from .models.cases import Cases
-from .models.regions import Regions
-from .models.accountfields import AccountFields
 
 # from .models.questions import Questions, CaseQuestionsMappings, AnswerFormats
 from flask_jwt_extended import JWTManager

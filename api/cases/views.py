@@ -4,7 +4,7 @@ from werkzeug.exceptions import NotFound
 from http import HTTPStatus
 
 from api.utils.case_requirement_processor import CaseRequirementProcessor
-from ..models.cases import CaseCategory, Cases, CaseStatus, CaseUser, CaseTaskAssignedTo, CaseStage, CaseToStage, CaseTaskComments, CaseStatusData, CaseTask, CaseTaskCC, CaseTaskStatus, CaseAssessmentAnswers, CaseAssessmentQuestions
+from ..models.cases import CaseCat, CasesData, CaseStat, CaseUser, CaseTaskAssignedTo, CaseStage, CaseToStage, CaseTaskComments, CaseStatusData, CaseTask, CaseTaskCC, CaseTaskStatus, CaseAssessmentAnswers, CaseAssessmentQuestions
 from ..models.users import Users
 from ..models.regions import Regions
 from ..utils.db import db
@@ -125,18 +125,18 @@ case_model = case_namespace.model(
 cases_data_model = case_namespace.model('CasesDataInput', {
     'regionID': fields.Integer(description='ID of the region'),
     'caseName': fields.String(required=True, description='Name of the case'),
-    'question1': fields.String(required=True, description='Question 1'),
-    'question2': fields.Integer(required=True, description='Question 2'),
-    'question3': fields.Integer(required=True, description='Question 3'),
+    'question1': fields.Raw(required=True, description='Question 1'),
+    'question2': fields.Raw(required=True, description='Question 2'),
+    'question3': fields.Raw(required=True, description='Question 3'),
     'question4': fields.Raw(description='Question 4 (JSONB)'),
     'question5': fields.Raw(description='Question 5 (JSONB)'),
     'question6': fields.Raw(description='Question 6 (JSONB)'),
     'question7': fields.Raw(description='Question 7 (JSONB)'),
     'question8': fields.Raw(description='Question 8 (JSONB)'),
     'question9': fields.Raw(description='Question 9 (JSONB)'),
-    'question10': fields.Integer(required=True, description='Question 10'),
+    'question10': fields.Raw(required=True, description='Question 10'),
     'question11': fields.Float(required=True, description='Question 11'),
-    'question12': fields.String(required=True, description='Question 12')
+    'question12': fields.Integer(required=True, description='Question 12')
 
 })
 
@@ -147,7 +147,7 @@ case_model_2 = case_namespace.model(
         'caseName': fields.String(required=True, description="A case name"),
         'budgetRequired': fields.Float(required=True, description="Budget required"),
         'caseCategory': fields.String(description="Case category"),
-        'caseStatus': fields.String(enum=[status.value for status in CaseStatus], description="Case status"),
+        'caseStatus': fields.String(enum=[status.value for status in CaseStat], description="Case status"),
     })
 
 edited_answers_model = case_namespace.model('EditedAnswers', {
@@ -177,12 +177,12 @@ class CasesAddResource(Resource):
             case_data = request.json
 
             # Check if a case with the given name already exists
-            existing_case = Cases.query.filter_by(caseName=case_data['caseName']).first()
+            existing_case = CasesData.query.filter_by(caseName=case_data['caseName']).first()
             if existing_case:
                 return {'message': 'Case with this name already exists'}, HTTPStatus.CONFLICT
 
             # Create a new case instance
-            new_case = Cases(
+            new_case = CasesData(
                 userID=current_user.userID,
                 regionID=case_data.get('regionID'),
                 caseName=case_data['caseName'],
@@ -198,7 +198,7 @@ class CasesAddResource(Resource):
                 question10=case_data['question10'],
                 question11=case_data['question11'],
                 question12=case_data['question12'],
-                caseStatus=CaseStatus.ASSESSMENT,
+                caseStatus=CaseStat.ASSESSMENT,
                 createdAt=datetime.utcnow()
             )
 
@@ -225,7 +225,7 @@ class CasesAddResource(Resource):
             if not case_id:
                 return {'message': 'Case ID is required for updating a case'}, HTTPStatus.BAD_REQUEST
 
-            existing_case = Cases.query.get_or_404(case_id)
+            existing_case = CasesData.query.get_or_404(case_id)
 
             # Update the case fields
             existing_case.userID = current_user.userID
@@ -263,14 +263,14 @@ class CaseGetAllResource(Resource):
             if not current_user.is_admin:
                 # Fetch all cases the user has access to
                 cases = (
-                    Cases.query.join(Users, Users.userID == Cases.userID)
+                    CasesData.query.join(Users, Users.userID == CasesData.userID)
                     .filter(Users.userID == current_user.userID)
                     .all()
                 )
 
                 # Fetch all cases associated with the user through CaseUser
                 case_user_cases = (
-                    Cases.query.join(CaseUser, Cases.caseID == CaseUser.caseID)
+                    CasesData.query.join(CaseUser, CasesData.caseID == CaseUser.caseID)
                     .filter(CaseUser.userID == current_user.userID)
                     .all()
                 )
@@ -278,7 +278,7 @@ class CaseGetAllResource(Resource):
                 # Combine the cases and remove duplicates
                 all_cases = list(set(cases + case_user_cases))
             else:
-                all_cases = Cases.query.all()
+                all_cases = CasesData.query.all()
 
             # Check if all_cases is empty
             if not all_cases:
@@ -307,7 +307,7 @@ class CaseGetAllResource(Resource):
                     'question10': case.question10,
                     'question11': case.question11,
                     'question12': case.question12,
-                    'caseStatus': 'Assessment' if case.caseStatus == CaseStatus.ASSESSMENT else case.caseStatus.value,
+                    'caseStatus': 'Assessment' if case.caseStatus == CaseStat.ASSESSMENT else case.caseStatus.value,
                     'category': case.category.value if case.category else None,
                     'createdAt': case.createdAt.isoformat(),
                     'dueDate': case.dueDate.isoformat() if case.dueDate else None,
@@ -336,7 +336,7 @@ class CaseAddRequirementsResource(Resource):
             if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
                 return {'message': 'Unauthorized. Only admin users can add requirements.'}, HTTPStatus.FORBIDDEN
         
-            case = Cases.get_by_id(case_id)
+            case = CasesData.get_by_id(case_id)
             # Parse the input data
             case_data = request.json
             status_data = case_data.pop('status_data', {})  # Assuming status_data is part of the input
@@ -389,7 +389,7 @@ class CaseChangeStatusResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Get the case by ID
-        case = Cases.query.get(case_id)
+        case = CasesData.query.get(case_id)
         if not case:
             return {'message': 'Case not found'}, HTTPStatus.NOT_FOUND
 
@@ -522,7 +522,7 @@ class StagesForCaseResource(Resource):
     def get(self, case_id):
         try:
             # Check if the case exists in the database
-            case = Cases.query.get(case_id)
+            case = CasesData.query.get(case_id)
 
             if case is None:
                 return {'message': 'Case not found'}, HTTPStatus.NOT_FOUND
@@ -553,7 +553,7 @@ class CompleteStageForCaseResource(Resource):
     def put(self, case_id, stage_id):
         try:
             # Check if the case exists in the database
-            case = Cases.query.get(case_id)
+            case = CasesData.query.get(case_id)
 
             if case is None:
                 return {'message': 'Case not found'}, HTTPStatus.NOT_FOUND
@@ -1017,7 +1017,7 @@ class AddAssessmentAnswerResource(Resource):
         answers_data = assessment_data.pop('answers', [])
         try:
             # get the case this assessment is for
-            case = Cases.get_by_id(assessment_data['caseID'])
+            case = CasesData.get_by_id(assessment_data['caseID'])
             if not case:
                 return {'message': 'Case not found'}, HTTPStatus.BAD_REQUEST
             
@@ -1048,7 +1048,7 @@ class AddAssessmentAnswerResource(Resource):
                 
                     new_answer.save()
             #now update case status to PENDING
-            case.caseStatus = CaseStatus.PENDING
+            case.caseStatus = CaseStat.PENDING
             db.session.commit()
             return {'message': 'All Assessment Answers were saved.'}, HTTPStatus.OK
                 
@@ -1143,7 +1143,7 @@ class GetTasksForCaseResource(Resource):
     def get(self, case_id):
         try:
             # get the case 
-            case = Cases.get_by_id(case_id)
+            case = CasesData.get_by_id(case_id)
             
             if case is None:
                 return {'message': 'Case not found'}, HTTPStatus.NOT_FOUND
