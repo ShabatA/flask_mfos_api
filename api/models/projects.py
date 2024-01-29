@@ -254,6 +254,8 @@ class ProjectsData(db.Model):
         return cls.query.get_or_404(projectID)
     
     def assign_status_data(self, status_data):
+        #Delete Project Status Data
+        ProjectStatusData.query.filter_by(projectID=self.projectID).delete()
         
         new_status_data = ProjectStatusData(projectID=self.projectID, status=self.projectStatus.value, data=status_data)
         self.startDate = datetime.utcnow().date()

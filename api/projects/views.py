@@ -546,11 +546,6 @@ class ProjectChangeStatusResource(Resource):
         if current_user.is_admin or current_user.userID == project.userID:
             # Parse the new status from the request
             new_status = request.json.get('projectStatus')
-            # valid_statuses = [status for status in ProjectStatus]
-
-            # Check if the new status is valid
-            # if new_status not in valid_statuses:
-            #     return {'message': 'Invalid project status'}, HTTPStatus.BAD_REQUEST
 
             # Update the project status
             project.projectStatus = new_status
@@ -561,6 +556,8 @@ class ProjectChangeStatusResource(Resource):
                 db.session.commit()
                 # Check if the new status is 'Approved' and add stages if true
                 if new_status == "APPROVED":
+                    #Delete linked stages
+                    ProjectStage.query.filter_by(projectID=project.projectID).delete()
                     # Add three stages for the project
                     initiated_stage = Stage.query.filter_by(name='Project Initiated').first()
                     progress_stage = Stage.query.filter_by(name='In Progress').first()
