@@ -84,6 +84,12 @@ question_input_model = case_namespace.model('QuestionInput', {
     'choices': fields.List(fields.String, description='List of choices for multiple-choice questions')
 })
 
+checklist_model = case_task_namespace.model('CheckListItem', {
+    'item': fields.String(required=True, description='The checklist item name/description'),
+    'checked': fields.Boolean(required=True, description='Whether this is checked out or not')
+})
+
+
 # Define a model for the input data (assuming JSON format)
 new_task_model = case_task_namespace.model('NewTaskModel', {
     'title': fields.String(required=True, description='Title of the task'),
@@ -91,9 +97,8 @@ new_task_model = case_task_namespace.model('NewTaskModel', {
     'description': fields.String(description='Description of the task'),
     'assigned_to': fields.List(fields.Integer, description='List of user IDs assigned to the task'),
     'cc': fields.List(fields.Integer, description='List of user IDs to be CCed on the task'),
-    # 'created_by': fields.Integer(required=True, description='User ID of the task creator'),
     'attached_files': fields.String(description='File attachments for the task'),
-    # 'stage_id': fields.Integer(required=True, description='ID of the linked stage'),
+    'checklist': fields.List(fields.Nested(checklist_model),description='optional checklist')
 })
 
 edit_task_model = case_task_namespace.model('EditTaskModel', {
@@ -102,7 +107,8 @@ edit_task_model = case_task_namespace.model('EditTaskModel', {
     'description': fields.String(description='Description of the task'),
     'assigned_to': fields.List(fields.Integer, description='List of user IDs assigned to the task'),
     'cc': fields.List(fields.Integer, description='List of user IDs to be CCed on the task'),
-    'attached_files': fields.String(description='File attachments for the task')
+    'attached_files': fields.String(description='File attachments for the task'),
+    'checklist': fields.List(fields.Nested(checklist_model),description='optional checklist')
 })
 
 case_model = case_namespace.model(
@@ -116,15 +122,22 @@ case_model = case_namespace.model(
     }
 )
 
-# Define the expected input model using Flask-RESTx fields
-case_input_model = case_namespace.model('CaseInput', {
+cases_data_model = case_namespace.model('CasesDataInput', {
+    'regionID': fields.Integer(description='ID of the region'),
     'caseName': fields.String(required=True, description='Name of the case'),
-    'regionID': fields.Integer(required=True, description='ID of the region'),
-    'budgetRequired': fields.Float(required=True, description='Required budget for the case'),
-    'serviceRequired': fields.String(required=True, description='The service that is needed'),
-    'userID': fields.Integer(description='ID of the user associated with the case'),
-    'dueDate': fields.Date(description='Due date of the case'),
-    'answers': fields.List(fields.Nested(answers_model), description='List of answers for the case')
+    'question1': fields.String(required=True, description='Question 1'),
+    'question2': fields.Integer(required=True, description='Question 2'),
+    'question3': fields.Integer(required=True, description='Question 3'),
+    'question4': fields.Raw(description='Question 4 (JSONB)'),
+    'question5': fields.Raw(description='Question 5 (JSONB)'),
+    'question6': fields.Raw(description='Question 6 (JSONB)'),
+    'question7': fields.Raw(description='Question 7 (JSONB)'),
+    'question8': fields.Raw(description='Question 8 (JSONB)'),
+    'question9': fields.Raw(description='Question 9 (JSONB)'),
+    'question10': fields.Integer(required=True, description='Question 10'),
+    'question11': fields.Float(required=True, description='Question 11'),
+    'question12': fields.String(required=True, description='Question 12')
+
 })
 
 
@@ -154,80 +167,158 @@ link_case_to_stage_model = case_stage_namespace.model('LinkCaseToStageModel', {
 })
 
 
-@case_namespace.route('/add')
-class CaseAddResource(Resource):
-    @jwt_required()  
-    @case_namespace.expect(case_input_model)
-    @case_namespace.doc(
-        description='Add a new case',
-        responses={
-            201: 'Case added successfully',
-            409: 'Case with the same name already exists',
-            500: 'Internal Server Error'
-        },
-        body=case_model,
-        examples={
-            'success': {
-                'description': 'Case added successfully',
-                'summary': 'Successful Response',
-                'value': {'message': 'Case added successfully'}
-            },
-            'conflict': {
-                'description': 'Case with this name already exists',
-                'summary': 'Conflict Response',
-                'value': {'message': 'Case with this name already exists'}
-            },
-            'error': {
-                'description': 'Error adding case: Internal Server Error',
-                'summary': 'Internal Server Error Response',
-                'value': {'message': 'Error adding case: Internal Server Error'}
-            }
-        }
-    )
+@case_namespace.route('/add_or_edit', methods=['POST', 'PUT'])
+class CasesAddResource(Resource):
+    @jwt_required()
+    @case_namespace.expect(cases_data_model)
     def post(self):
-        # Get the current user ID from the JWT token
-        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-
-        # Parse the input data
-        case_data = request.json
-        answers_data = case_data.pop('answers', [])  
-
-        # Check if a case with the given name already exists
-        existing_case = Cases.query.filter_by(caseName=case_data['caseName']).first()
-        if existing_case:
-            return {'message': 'Case with this name already exists'}, HTTPStatus.CONFLICT
-        
-        
-        # Create a new case instance
-        new_case = Cases(
-            caseName = case_data['caseName'],
-            regionID = case_data['regionID'],
-            budgetRequired = case_data['budgetRequired'],
-            budgetAvailable = 0,
-            caseStatus = CaseStatus.ASSESSMENT,
-            category = CaseCategory.A,
-            serviceRequired = case_data['serviceRequired'],
-            userID=current_user.userID,
-            createdAt = datetime.utcnow().date(),
-            startDate = datetime.utcnow().date(),
-            dueDate = datetime.utcnow().date()
-        )
-
-        # Save the case to the database
         try:
-            new_case.save()
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            case_data = request.json
 
-            # Assign answers to the case
-            new_case.assign_answers(answers_data)
+            # Check if a case with the given name already exists
+            existing_case = Cases.query.filter_by(caseName=case_data['caseName']).first()
+            if existing_case:
+                return {'message': 'Case with this name already exists'}, HTTPStatus.CONFLICT
+
+            # Create a new case instance
+            new_case = Cases(
+                userID=current_user.userID,
+                regionID=case_data.get('regionID'),
+                caseName=case_data['caseName'],
+                question1=case_data['question1'],
+                question2=case_data['question2'],
+                question3=case_data['question3'],
+                question4=case_data.get('question4', {}),
+                question5=case_data.get('question5', {}),
+                question6=case_data.get('question6', {}),
+                question7=case_data.get('question7', {}),
+                question8=case_data.get('question8', {}),
+                question9=case_data.get('question9', {}),
+                question10=case_data['question10'],
+                question11=case_data['question11'],
+                question12=case_data['question12'],
+                caseStatus=CaseStatus.ASSESSMENT,
+                createdAt=datetime.utcnow()
+            )
+
+            # Save the case to the database
+            new_case.save()
 
             # Add the current user to the CaseUsers table for the new case
             case_user = CaseUser(caseID=new_case.caseID, userID=current_user.userID)
             case_user.save()
 
-            return {'message': 'case added successfully'}, HTTPStatus.CREATED
+            return {'message': 'Case added successfully'}, HTTPStatus.CREATED
         except Exception as e:
-            # Handle exceptions (e.g., database errors) appropriately
+            current_app.logger.error(f"Error adding case: {str(e)}")
             return {'message': f'Error adding case: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+    @jwt_required()
+    @case_namespace.expect(cases_data_model)
+    def put(self):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            case_data = request.json
+
+            case_id = case_data.get('caseID')
+            if not case_id:
+                return {'message': 'Case ID is required for updating a case'}, HTTPStatus.BAD_REQUEST
+
+            existing_case = Cases.query.get_or_404(case_id)
+
+            # Update the case fields
+            existing_case.userID = current_user.userID
+            existing_case.regionID = case_data.get('regionID')
+            existing_case.caseName = case_data['caseName']
+            existing_case.question1 = case_data['question1']
+            existing_case.question2 = case_data['question2']
+            existing_case.question3 = case_data['question3']
+            existing_case.question4 = case_data.get('question4', {})
+            existing_case.question5 = case_data.get('question5', {})
+            existing_case.question6 = case_data.get('question6', {})
+            existing_case.question7 = case_data.get('question7', {})
+            existing_case.question8 = case_data.get('question8', {})
+            existing_case.question9 = case_data.get('question9', {})
+            existing_case.question10 = case_data['question10']
+            existing_case.question11 = case_data['question11']
+            existing_case.question12 = case_data['question12']
+            existing_case.startDate = case_data.get('startDate', existing_case.startDate)
+            existing_case.dueDate = case_data.get('dueDate', existing_case.dueDate)
+
+            existing_case.save()
+
+            return {'message': 'Case updated successfully'}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error updating case: {str(e)}")
+            return {'message': f'Error updating case: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_namespace.route('/get_all', methods=['GET'])
+class CaseGetAllResource(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            if not current_user.is_admin:
+                # Fetch all cases the user has access to
+                cases = (
+                    Cases.query.join(Users, Users.userID == Cases.userID)
+                    .filter(Users.userID == current_user.userID)
+                    .all()
+                )
+
+                # Fetch all cases associated with the user through CaseUser
+                case_user_cases = (
+                    Cases.query.join(CaseUser, Cases.caseID == CaseUser.caseID)
+                    .filter(CaseUser.userID == current_user.userID)
+                    .all()
+                )
+            
+                # Combine the cases and remove duplicates
+                all_cases = list(set(cases + case_user_cases))
+            else:
+                all_cases = Cases.query.all()
+
+            # Check if all_cases is empty
+            if not all_cases:
+                return [], HTTPStatus.OK  # Return an empty list
+
+            # Prepare the list of cases with additional details
+            cases_data = [] 
+            for case in all_cases:
+                region_details = {'regionID': case.regionID, 'regionName': Regions.query.get(case.regionID).regionName}
+                user_details = {'userID': current_user.userID, 'userFullName': current_user.firstName + current_user.lastName, 'username': current_user.username}
+
+                case_details = {
+                    'caseID': case.caseID,
+                    'caseName': case.caseName,
+                    'region': region_details,
+                    'user': user_details,
+                    'question1': case.question1,
+                    'question2': case.question2,
+                    'question3': case.question3,
+                    'question4': case.question4,
+                    'question5': case.question5,
+                    'question6': case.question6,
+                    'question7': case.question7,
+                    'question8': case.question8,
+                    'question9': case.question9,
+                    'question10': case.question10,
+                    'question11': case.question11,
+                    'question12': case.question12,
+                    'caseStatus': 'Assessment' if case.caseStatus == CaseStatus.ASSESSMENT else case.caseStatus.value,
+                    'category': case.category.value if case.category else None,
+                    'createdAt': case.createdAt.isoformat(),
+                    'dueDate': case.dueDate.isoformat() if case.dueDate else None,
+                    'startDate': case.startDate.isoformat() if case.startDate else None
+                }
+
+                cases_data.append(case_details)
+
+            return cases_data, HTTPStatus.OK
+        except Exception as e:
+            return {'message': f'Error fetching cases: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 
@@ -531,6 +622,7 @@ class AddTaskForStageResource(Resource):
             cc_ids = data.get('cc', [])
             created_by = current_user.userID
             attached_files = data.get('attached_files')
+            checklist = data.get('checklist',{})
 
             # Fetch user instances based on IDs
             assigned_to_users = Users.query.filter(Users.userID.in_(assigned_to_ids)).all()
@@ -547,7 +639,8 @@ class AddTaskForStageResource(Resource):
                 createdBy=created_by,
                 attachedFiles=attached_files,
                 stageID=stage_id,
-                status = CaseTaskStatus.TODO
+                status = CaseTaskStatus.TODO,
+                checklist = checklist
             )
 
             # Save the new task to the database
@@ -804,7 +897,8 @@ class GetTasksForStageResource(Resource):
                     'attachedFiles': task.attachedFiles,
                     'status': task.status.value,
                     'completionDate': str(task.completionDate) if task.completionDate else None,
-                    'comments': comments_list
+                    'comments': comments_list,
+                    'checklist': task.checklist
                 })
 
             return {'tasks': tasks_list}, HTTPStatus.OK
@@ -839,6 +933,7 @@ class EditTaskForStageResource(Resource):
             assigned_to_ids = data.get('assigned_to', [])
             cc_ids = data.get('cc', [])
             task.attachedFiles = data.get('attached_files', task.attachedFiles)
+            task.checklist = data.get('checklist', task.checklist)
 
             # Fetch user instances based on IDs
             assigned_to_users = Users.query.filter(Users.userID.in_(assigned_to_ids)).all()
@@ -1083,7 +1178,8 @@ class GetTasksForCaseResource(Resource):
                     'attachedFiles': task.attachedFiles,
                     'status': task.status.value,
                     'completionDate': str(task.completionDate) if task.completionDate else None,
-                    'comments': comments_list
+                    'comments': comments_list,
+                    'checklist': task.checklist
                 })
 
             return {'tasks': tasks_list}, HTTPStatus.OK

@@ -610,35 +610,39 @@ class AllUsers(Resource):
     def get_user_data(user):
         
         
-        # Fetch all projects the user has access to
-        projects = (
-            ProjectsData.query.join(Users, Users.userID == ProjectsData.createdBy)
-            .filter(Users.userID == user.userID)
-            .all()
-        )
+        if not user.is_admin:
+            # Fetch all projects the user has access to
+            projects = (
+                ProjectsData.query.join(Users, Users.userID == ProjectsData.createdBy)
+                .filter(Users.userID == user.userID)
+                .all()
+            )
 
-        # Fetch all cases the user has access to
-        cases = Cases.query.filter(Cases.userID == user.userID).all()
+            # Fetch all cases the user has access to
+            cases = Cases.query.filter(Cases.userID == user.userID).all()
 
-        # Fetch all projects associated with the user through ProjectUser
-        project_user_projects = (
-            ProjectsData.query.join(ProjectUser, ProjectsData.projectID == ProjectUser.projectID)
-            .filter(ProjectUser.userID == user.userID)
-            .all()
-        )
+            # Fetch all projects associated with the user through ProjectUser
+            project_user_projects = (
+                ProjectsData.query.join(ProjectUser, ProjectsData.projectID == ProjectUser.projectID)
+                .filter(ProjectUser.userID == user.userID)
+                .all()
+            )
 
-        # Fetch all cases associated with the user through CaseUser
-        case_user_cases = (
-            Cases.query.join(CaseUser, Cases.caseID == CaseUser.caseID)
-            .filter(CaseUser.userID == user.userID)
-            .all()
-        )
+            # Fetch all cases associated with the user through CaseUser
+            case_user_cases = (
+                Cases.query.join(CaseUser, Cases.caseID == CaseUser.caseID)
+                .filter(CaseUser.userID == user.userID)
+                .all()
+            )
 
-        # Combine the projects and remove duplicates
-        all_projects = list(set(projects + project_user_projects))
+            # Combine the projects and remove duplicates
+            all_projects = list(set(projects + project_user_projects))
 
-        # Combine the cases and remove duplicates
-        all_cases = list(set(cases + case_user_cases))
+            # Combine the cases and remove duplicates
+            all_cases = list(set(cases + case_user_cases))
+        else:
+            all_projects = ProjectsData.query.all()
+            all_cases = Cases.query.all()
 
         # Fetch all ProjectTasks the user is assigned to
         project_tasks = ProjectTask.query.join(Users.assigned_tasks).filter(Users.userID == user.userID).all()

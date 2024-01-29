@@ -68,6 +68,12 @@ assessment_model = assessment_namespace.model('ProjectAssessment', {
     'answers': fields.List(fields.Nested(assessment_answer_model), description='List of answers for the assessment')
 })
 
+checklist_model = task_namespace.model('CheckListItem', {
+    'item': fields.String(required=True, description='The checklist item name/description'),
+    'checked': fields.Boolean(required=True, description='Whether this is checked out or not')
+})
+
+
 # Define a model for the input data (assuming JSON format)
 new_task_model = task_namespace.model('NewTaskModel', {
     'title': fields.String(required=True, description='Title of the task'),
@@ -75,10 +81,10 @@ new_task_model = task_namespace.model('NewTaskModel', {
     'description': fields.String(description='Description of the task'),
     'assigned_to': fields.List(fields.Integer, description='List of user IDs assigned to the task'),
     'cc': fields.List(fields.Integer, description='List of user IDs to be CCed on the task'),
-    # 'created_by': fields.Integer(required=True, description='User ID of the task creator'),
     'attached_files': fields.String(description='File attachments for the task'),
-    # 'stage_id': fields.Integer(required=True, description='ID of the linked stage'),
+    'checklist': fields.List(fields.Nested(checklist_model),description='optional checklist')
 })
+
 
 assign_task = task_namespace.model('AssignTask', {
     'assigned_to': fields.List(fields.Integer, description='List of user IDs assigned to the task'),
@@ -91,7 +97,8 @@ edit_task_model = task_namespace.model('EditTaskModel', {
     'description': fields.String(description='Description of the task'),
     'assigned_to': fields.List(fields.Integer, description='List of user IDs assigned to the task'),
     'cc': fields.List(fields.Integer, description='List of user IDs to be CCed on the task'),
-    'attached_files': fields.String(description='File attachments for the task')
+    'attached_files': fields.String(description='File attachments for the task'),
+    'checklist': fields.List(fields.Nested(checklist_model),description='optional checklist')
 })
 
 # Define the expected input model using Flask-RESTx fields
@@ -366,15 +373,33 @@ class ProjectGetAllResource(Resource):
         try:
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
-            # Get the list of project IDs associated with the current user
-            project_ids = [project.projectID for project in current_user.projects_data]
+            if not current_user.is_admin:
+                # Fetch all projects the user has access to
+                projects = (
+                    ProjectsData.query.join(Users, Users.userID == ProjectsData.createdBy)
+                    .filter(Users.userID == current_user.userID)
+                    .all()
+                )
 
-            # Fetch all projects with the given project IDs
-            projects = ProjectsData.query.filter(ProjectsData.projectID.in_(project_ids)).all()
-
+                # Fetch all projects associated with the user through ProjectUser
+                project_user_projects = (
+                    ProjectsData.query.join(ProjectUser, ProjectsData.projectID == ProjectUser.projectID)
+                    .filter(ProjectUser.userID == current_user.userID)
+                    .all()
+                )
+            
+                # Combine the projects and remove duplicates
+                all_projects = list(set(projects + project_user_projects))
+            else:
+                all_projects = ProjectsData.query.all()
+                
+            # Check if all_cases is empty
+            if not all_projects:
+                return [], HTTPStatus.OK  # Return an empty list    
+            
             # Prepare the list of projects with additional details
             projects_data = []
-            for project in projects:
+            for project in all_projects:
                 region_details = {'regionID': project.regionID, 'regionName': Regions.query.get(project.regionID).regionName}
                 user_details = {'userID': current_user.userID, 'userFullName': current_user.firstName + current_user.lastName, 'username': current_user.username}
 
@@ -1413,6 +1438,7 @@ class AddTaskForStageResource(Resource):
             cc_ids = data.get('cc', [])
             created_by = current_user.userID
             attached_files = data.get('attached_files')
+            checklist = data.get('checklist',{})
 
             # Fetch user instances based on IDs
             assigned_to_users = Users.query.filter(Users.userID.in_(assigned_to_ids)).all()
@@ -1429,7 +1455,8 @@ class AddTaskForStageResource(Resource):
                 createdBy=created_by,
                 attachedFiles=attached_files,
                 stageID=stage_id,
-                status = TaskStatus.TODO
+                status = TaskStatus.TODO,
+                checklist = checklist
             )
 
             # Save the new task to the database
@@ -1468,6 +1495,7 @@ class EditTaskForStageResource(Resource):
             assigned_to_ids = data.get('assigned_to', [])
             cc_ids = data.get('cc', [])
             task.attachedFiles = data.get('attached_files', task.attachedFiles)
+            task.checklist = data.get('checklist', task.checklist)
 
             # Fetch user instances based on IDs
             assigned_to_users = Users.query.filter(Users.userID.in_(assigned_to_ids)).all()
@@ -1953,7 +1981,8 @@ class GetTasksForStageResource(Resource):
                     'attachedFiles': task.attachedFiles,
                     'status': task.status.value,
                     'completionDate': str(task.completionDate) if task.completionDate else None,
-                    'comments': comments_list
+                    'comments': comments_list,
+                    'checklist': task.checklist
                 })
 
             return {'tasks': tasks_list}, HTTPStatus.OK
@@ -2007,7 +2036,8 @@ class GetTasksForProjectResource(Resource):
                     'attachedFiles': task.attachedFiles,
                     'status': task.status.value,
                     'completionDate': str(task.completionDate) if task.completionDate else None,
-                    'comments': comments_list
+                    'comments': comments_list,
+                    'checklist': task.checklist
                 })
 
             return {'tasks': tasks_list}, HTTPStatus.OK

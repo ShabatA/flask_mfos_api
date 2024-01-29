@@ -432,6 +432,7 @@ class ProjectTask(db.Model):
     stageID = db.Column(db.Integer, db.ForeignKey('stage.stageID'), nullable=False)
     status = db.Column(db.Enum(TaskStatus), nullable=False)
     completionDate = db.Column(db.Date, nullable=True)
+    checklist = db.Column(JSONB, nullable=True)
 
     stage = db.relationship('Stage', backref='tasks', lazy=True)
 

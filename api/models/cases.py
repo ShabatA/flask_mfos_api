@@ -220,6 +220,7 @@ class CaseTask(db.Model):
     stageID = db.Column(db.Integer, db.ForeignKey('case_stage.stageID'), nullable=False)
     status = db.Column(db.Enum(CaseTaskStatus), nullable=False)
     completionDate = db.Column(db.Date, nullable=True)
+    checklist = db.Column(JSONB, nullable=True)
 
     stage = db.relationship('CaseStage', backref='tasks', lazy=True)
 
