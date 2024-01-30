@@ -123,7 +123,7 @@ case_model = case_namespace.model(
 )
 
 cases_data_model = case_namespace.model('CasesDataInput', {
-    'regionID': fields.Integer(description='ID of the region'),
+    'regionID': fields.Integer(required=True,description='ID of the region'),
     'caseName': fields.String(required=True, description='Name of the case'),
     'question1': fields.Raw(required=True, description='Question 1'),
     'question2': fields.Raw(required=True, description='Question 2'),
@@ -195,7 +195,7 @@ class CasesAddResource(Resource):
                 question7=case_data.get('question7', {}),
                 question8=case_data.get('question8', {}),
                 question9=case_data.get('question9', {}),
-                question10=case_data['question10'],
+                question10=case_data.get('question10', {}),
                 question11=case_data['question11'],
                 question12=case_data['question12'],
                 caseStatus=CaseStat.ASSESSMENT,

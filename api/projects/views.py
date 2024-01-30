@@ -2028,6 +2028,8 @@ class GetTasksForProjectResource(Resource):
 
                 tasks_list.append({
                     'taskID': task.taskID,
+                    'stageID': task.stageID,
+                    'stageName': task.stage.name,
                     'title': task.title,
                     'deadline': str(task.deadline),
                     'description': task.description,

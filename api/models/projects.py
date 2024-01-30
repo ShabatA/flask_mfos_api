@@ -99,7 +99,11 @@ class ProjectsData(db.Model):
         
         new_status_data = ProjectStatusData(projectID=self.projectID, status=self.projectStatus.value, data=status_data)
         self.startDate = datetime.utcnow().date()
-        self.dueDate = status_data.get('dueDate', self.dueDate)
+        # Assuming status_data.get('dueDate', self.dueDate) returns a string
+        due_date_string = status_data.get('dueDate', str(self.dueDate))
+        # Convert the string to a date object
+        self.dueDate = datetime.strptime(due_date_string, '%Y-%m-%d').date()
+        self.budgetApproved = status_data.get('approvedFunding')
         db.session.commit()
         new_status_data.save()
 

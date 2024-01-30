@@ -43,7 +43,7 @@ class CasesData(db.Model):
     question7 = db.Column(JSONB, nullable=False)
     question8 = db.Column(JSONB, nullable=False)
     question9 = db.Column(JSONB, nullable=False)
-    question10 = db.Column(db.Integer, nullable=False)
+    question10 = db.Column(JSONB, nullable=False)
     question11 = db.Column(db.Float, nullable=False)
     question12 = db.Column(db.Integer, nullable=False)
     caseStatus = db.Column(db.Enum(CaseStat), nullable=False)
