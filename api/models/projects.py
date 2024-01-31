@@ -94,17 +94,31 @@ class ProjectsData(db.Model):
         return cls.query.get_or_404(projectID)
     
     def assign_status_data(self, status_data):
-        #Delete Project Status Data
+        # Delete Project Status Data
         ProjectStatusData.query.filter_by(projectID=self.projectID).delete()
-        
+
         new_status_data = ProjectStatusData(projectID=self.projectID, status=self.projectStatus.value, data=status_data)
+        
+        # Set the startDate to the current date
         self.startDate = datetime.utcnow().date()
+
         # Assuming status_data.get('dueDate', self.dueDate) returns a string
-        due_date_string = status_data.get('dueDate', str(self.dueDate))
-        # Convert the string to a date object
-        self.dueDate = datetime.strptime(due_date_string, '%Y-%m-%d').date()
+        due_date_string = status_data.get('dueDate') or str(self.dueDate)
+
+        # Handle the case when due_date_string is an empty string
+        if due_date_string:
+            # Convert the string to a date object
+            self.dueDate = datetime.strptime(due_date_string, '%Y-%m-%d').date()
+        else:
+            self.dueDate = None  # or set it to an appropriate default value
+
+        # Set the budgetApproved attribute
         self.budgetApproved = status_data.get('approvedFunding')
+
+        # Commit changes to the database
         db.session.commit()
+
+        # Save the new status data
         new_status_data.save()
 
 
