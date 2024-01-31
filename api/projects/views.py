@@ -3,6 +3,7 @@ from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
 from api.models.regions import Regions
+from api.utils.project_category_calculator import ProjectCategoryCalculator
 
 from api.utils.project_requirement_processor import ProjectRequirementProcessor
 from ..models.projects import ProjectsData, Questions, QuestionChoices, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData, Status, TaskComments, TaskStatus, ProjectTaskAssignedTo, ProjectTaskCC, AssessmentAnswers, AssessmentQuestions, Requirements, RequirementSection
@@ -230,51 +231,6 @@ projects_result_model = project_namespace.model('ProjectsData', {
 })
 
 
-# @project_namespace.route('/add')
-# class ProjectAddResource(Resource):
-#     @jwt_required()  
-#     @project_namespace.expect(project_input_model)
-#     def post(self):
-#         # Get the current user ID from the JWT token
-#         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-
-#         # Parse the input data
-#         project_data = request.json
-#         answers_data = project_data.pop('answers', [])  
-
-#         # Check if a project with the given name already exists
-#         existing_project = Projects.query.filter_by(projectName=project_data['projectName']).first()
-#         if existing_project:
-#             return {'message': 'Project with this name already exists'}, HTTPStatus.CONFLICT
-
-#         # Create a new project instance
-#         new_project = Projects(
-#             projectName=project_data['projectName'],
-#             regionID=project_data['regionID'],
-#             budgetRequired=project_data['budgetRequired'],
-#             budgetAvailable=0,
-#             projectStatus=ProjectStatus.ASSESSMENT,
-#             projectScope=project_data.get('projectScope'),
-#             category=project_data.get('category'),
-#             userID=current_user.userID
-#         )
-
-#         # Save the project to the database
-#         try:
-#             new_project.save()
-
-#             # Assign answers to the project
-#             new_project.assign_answers(answers_data)
-
-#             # Add the current user to the ProjectUsers table for the new project
-#             project_user = ProjectUser(projectID=new_project.projectID, userID=current_user.userID)
-#             project_user.save()
-
-#             return {'message': 'Project added successfully'}, HTTPStatus.CREATED
-#         except Exception as e:
-#             # Handle exceptions (e.g., database errors) appropriately
-#             return {'message': f'Error adding project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
-
 @project_namespace.route('/add_or_edit', methods=['POST','PUT'])
 class ProjectAddResource(Resource):
     @jwt_required()  
@@ -373,7 +329,7 @@ class ProjectGetAllResource(Resource):
         try:
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
-            if not current_user.is_admin:
+            if not current_user.is_admin():
                 # Fetch all projects the user has access to
                 projects = (
                     ProjectsData.query.join(Users, Users.userID == ProjectsData.createdBy)
@@ -445,7 +401,7 @@ class ProjectAddRequirementsResource(Resource):
             # Get the current user ID from the JWT token
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
             
-            if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+            if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
                 return {'message': 'Unauthorized. Only admin users can add requirements.'}, HTTPStatus.FORBIDDEN
             
             project = ProjectsData.get_by_id(project_id)
@@ -497,7 +453,7 @@ class AddRequirementsResource(Resource):
         # Get the current user ID from the JWT token
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
          # Check if the current user is an admin
-        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+        if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
             return {'message': 'Unauthorized. Only admin users can add requirements.'}, HTTPStatus.FORBIDDEN
         # Parse the input data
         requirements_data = request.json
@@ -528,7 +484,7 @@ class GetRequirementsResource(Resource):
             return {'message': 'Unauthorized'}, HTTPStatus.UNAUTHORIZED
 
         # Check if the current user is an admin
-        # if not current_user.is_admin:
+        # if not current_user.is_admin():
         #     return {'message': 'Unauthorized. Only admin users can retrieve all requirements.'}, HTTPStatus.FORBIDDEN
 
         try:
@@ -569,7 +525,7 @@ class ProjectChangeStatusResource(Resource):
             return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
 
         # Check if the current user has permission to change the status
-        if current_user.is_admin or current_user.userID == project.userID:
+        if current_user.is_admin() or current_user.userID == project.userID:
             # Parse the new status from the request
             new_status = request.json.get('projectStatus')
 
@@ -612,24 +568,7 @@ class ProjectChangeStatusResource(Resource):
 
 @project_namespace.route('/add_questions')
 class ProjectAddQuestionsResource(Resource):
-#     [
-#   {
-#     "questionText": "How satisfied are you with our service?",
-#     "questionType": "single choice",
-#     "choices": [
-#       {"choiceText": "Very Satisfied", "points": 5},
-#       {"choiceText": "Satisfied", "points": 4},
-#       {"choiceText": "Neutral", "points": 3},
-#       {"choiceText": "Unsatisfied", "points": 2},
-#       {"choiceText": "Very Unsatisfied", "points": 1}
-#     ]
-#   }, 
-# {
-#     "questionText": "Test text question?",
-#     "questionType": "text",
-#     "points": 33
-#   }
-# ]
+
     @jwt_required()  
     @project_namespace.expect([question_input_model]) 
     def post(self):
@@ -637,7 +576,7 @@ class ProjectAddQuestionsResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Check if the current user is an admin
-        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+        if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
             return {'message': 'Unauthorized. Only admin users can add questions.'}, HTTPStatus.FORBIDDEN
 
         # Parse the input data for questions
@@ -681,30 +620,6 @@ class ProjectAddQuestionsResource(Resource):
             return {'message': str(e)}, HTTPStatus.BAD_REQUEST
 
 
-# @project_namespace.route('/total_points/<int:project_id>', methods=['GET'])
-# class ProjectTotalPointsResource(Resource):
-#     def get(self, project_id):
-#         # Get the project by ID
-#         project = Projects.get_by_id(project_id)
-
-#         if not project:
-#             return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
-
-#         # Calculate total points using the calculate_total_points method
-#         total_points = project.calculate_total_points()
-
-#         return {'total_points': total_points}, HTTPStatus.OK
-
-# @project_namespace.route('/all', methods=['GET'])
-# class AllProjectsResource(Resource):
-#     def get(self):
-#         projects = Projects.query.all()
-
-#         # Convert the list of projects to a JSON response
-#         projects_data = [{'projectID': project.projectID, 'projectName': project.projectName, 'projectStatus': project.projectStatus.value} for project in projects]
-
-#         return jsonify({'projects': projects_data})
-
 @project_namespace.route('/user-projects/<string:username>', methods=['GET'])
 class UserProjectsResource(Resource):
     def get(self, username):
@@ -734,271 +649,7 @@ class UserProjectsResource(Resource):
 
         return jsonify({'projects': projects_data})
 
-# @project_namespace.route('/<int:project_id>/answers', methods=['GET'])
-# class ProjectAnswersResource(Resource):
-#     def get(self, project_id):
-#         # Get the project by ID
-#         project = Projects.get_by_id(project_id)
 
-#         if not project:
-#             return jsonify({'message': 'Project not found'}), HTTPStatus.NOT_FOUND
-
-#         # Fetch all answers associated with the project
-#         all_answers = Answers.query.filter_by(projectID=project_id).all()
-
-#         # Prepare an ordered dictionary to store answers by question ID
-#         answers_by_question = OrderedDict()
-#         for answer in all_answers:
-#             if answer.questionID not in answers_by_question:
-#                 answers_by_question[answer.questionID] = {'questionID': answer.questionID, 'answers': []}
-#             answers_by_question[answer.questionID]['answers'].append(answer)
-
-#         # Convert the list of answers to a JSON response
-#         response_data = []
-
-#         # Process each question and its associated answers
-#         for question_id, question_data in answers_by_question.items():
-#             question = Questions.get_by_id(question_id)
-
-#             if question.questionType == 'single choice':
-#                 # For single-choice questions, include the selected choice details in the response
-#                 response_data.append(OrderedDict([
-#                     ('questionID', question_id),
-#                     ('questionText', question.questionText),
-#                     ('questionType', 'single choice'),
-#                     ('answers', [{
-#                         'answerID': answer.answerID,
-#                         'choiceID': answer.choiceID,
-#                         'choiceText': QuestionChoices.get_by_id(answer.choiceID).choiceText,
-#                         'points': QuestionChoices.get_by_id(answer.choiceID).points
-#                     } for answer in question_data['answers']])
-#                 ]))
-#             elif question.questionType == 'multi choice':
-#                 # For multi-choice questions, include all selected choices in the response
-#                 response_data.append(OrderedDict([
-#                     ('questionID', question_id),
-#                     ('questionText', question.questionText),
-#                     ('questionType', 'multi choice'),
-#                     ('answers', [{
-#                         'answerID': answer.answerID,
-#                         'choiceID': choice_id,
-#                         'choiceText': QuestionChoices.get_by_id(choice_id).choiceText,
-#                         'points': QuestionChoices.get_by_id(choice_id).points
-#                     } for answer in question_data['answers'] for choice_id in (
-#                         [answer.choiceID] if isinstance(answer.choiceID, int) else answer.choiceID)
-#                     ])
-#                 ]))
-#             else:
-#                 # For text-based questions, include the answer text in the response
-#                 response_data.append(OrderedDict([
-#                     ('questionID', question_id),
-#                     ('questionText', question.questionText),
-#                     ('questionType', 'text'),
-#                     ('answers', [{
-#                         'answerID': answer.answerID,
-#                         'answerText': answer.answerText
-#                     } for answer in question_data['answers']])
-#                 ]))
-
-#         return jsonify(OrderedDict([('answers', response_data)]))
-
-# @project_namespace.route('/<int:project_id>/answers/minified', methods=['GET'])
-# class ProjectMinifiedAnswersResource(Resource):
-#     def get(self, project_id):
-#         # Get the project by ID
-#         project = Projects.get_by_id(project_id)
-
-#         if not project:
-#             return jsonify({'message': 'Project not found'}), HTTPStatus.NOT_FOUND
-
-#         # Fetch all answers associated with the project
-#         all_answers = Answers.query.filter_by(projectID=project_id).all()
-
-#         # Prepare an ordered dictionary to store answers by question ID
-#         answers_by_question = OrderedDict()
-#         for answer in all_answers:
-#             if answer.questionID not in answers_by_question:
-#                 answers_by_question[answer.questionID] = {'questionID': answer.questionID, 'answers': []}
-#             answers_by_question[answer.questionID]['answers'].append(answer)
-
-#         # Convert the list of answers to a JSON response
-#         response_data = []
-
-#         # Process each question and its associated answers
-#         for question_id, question_data in answers_by_question.items():
-#             question = Questions.get_by_id(question_id)
-
-#             if question.questionType == 'single choice':
-#                 # For single-choice questions, include the selected choice details in the response
-#                 response_data.append(OrderedDict([
-#                     ('questionID', question_id),
-#                     ('answer', {
-#                         'choiceID': question_data['answers'][0].choiceID,
-#                         'choiceText': QuestionChoices.get_by_id(question_data['answers'][0].choiceID).choiceText
-#                     })
-#                 ]))
-#             elif question.questionType == 'multi choice':
-#                 # For multi-choice questions, include all selected choices in the response
-#                 response_data.append(OrderedDict([
-#                     ('questionID', question_id),
-#                     ('answer', {
-#                         'choiceID': [choice.choiceID for choice in question_data['answers']],
-#                         'choiceText': [QuestionChoices.get_by_id(choice.choiceID).choiceText for choice in
-#                                        question_data['answers']]
-#                     })
-#                 ]))
-#             else:
-#                 # For text-based questions, include the answer text in the response
-#                 response_data.append(OrderedDict([
-#                     ('questionID', question_id),
-#                     ('answer', {'answerText': question_data['answers'][0].answerText})
-#                 ]))
-
-#         return jsonify(OrderedDict([('answers', response_data)]))
-
-
-# @project_namespace.route('/edit_answers/<int:project_id>', methods=['PUT'])
-# class ProjectEditAnswersResource(Resource):
-#     @jwt_required()
-#     @project_namespace.expect(project_edit_model)
-#     def put(self, project_id):
-#         # Get the current user ID from the JWT token
-#         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-
-#         # Get the project by ID
-#         project = Projects.query.get_or_404(project_id)
-
-#         # Ensure the current user is authorized to edit the project
-#         if current_user.userID != project.userID and not current_user.is_admin:
-#             return {'message': 'Unauthorized. You do not have permission to edit this project.'}, HTTPStatus.FORBIDDEN
-
-#         # Parse the input data
-#         project_data = request.json
-#         edited_answers_data = project_data.pop('edited_answers', [])  # Extract edited answers from project_data
-
-
-#         # Save the updated project details to the database
-#         try:
-#             # 
-
-#             # Update the answers for the project
-#             project.edit_answers(project_id,edited_answers_data)
-#             db.session.commit()
-
-#             return {'message': 'Project details and answers updated successfully'}, HTTPStatus.OK
-#         except Exception as e:
-#             db.session.rollback()
-#             return {'message': f'Error updating project details and answers: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
-
-
-# @project_namespace.route('/edit_details/<int:project_id>', methods=['PATCH'])
-# class ProjectEditDetailsResource(Resource):
-#     @jwt_required()
-#     @project_namespace.expect(project_edit_details_model)
-#     def patch(self, project_id):
-#         # Get the current user ID from the JWT token
-#         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-
-#         # Get the project by ID
-#         project = Projects.query.get_or_404(project_id)
-
-#         # Ensure the current user is authorized to edit the project
-#         if current_user.userID != project.userID and not current_user.is_admin:
-#             return {'message': 'Unauthorized. You do not have permission to edit this project.'}, HTTPStatus.FORBIDDEN
-
-#         # Parse the input data
-#         project_data = request.json
-
-#         # Update the project details conditionally
-#         for field in ['projectName', 'regionID', 'budgetRequired', 'projectStatus',
-#                       'projectScope', 'category', 'startDate', 'dueDate']:
-#             if field in project_data:
-#                 setattr(project, field, project_data[field])
-
-#         # Save the updated project details to the database
-#         try:
-#             db.session.commit()
-#             return {'message': 'Project details updated successfully'}, HTTPStatus.OK
-#         except Exception as e:
-#             db.session.rollback()
-#             return {'message': f'Error updating project details: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
-
-
-# @project_namespace.route('/delete/<int:project_id>')
-# class ProjectDeleteResource(Resource):
-#     @jwt_required()  
-#     def delete(self, project_id):
-#         # Get the current user ID from the JWT token
-#         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-
-#         # Check if the project exists and belongs to the current user
-#         if current_user.is_admin:
-#             project_to_delete = Projects.query.get_or_404(project_id)
-#         else:
-#             project_to_delete = Projects.query.filter_by(projectID=project_id, userID=current_user.userID).first()
-
-#             if not project_to_delete:
-#                 return {'message': 'Project not found or unauthorized'}, HTTPStatus.NOT_FOUND
-
-#         try:
-#             # Delete associated data
-#             self.delete_associated_data(project_to_delete)
-
-#             # Delete the project
-#             project_to_delete.delete()
-
-#             return {'message': 'Project and associated data deleted successfully'}, HTTPStatus.OK
-#         except Exception as e:
-#             # Handle exceptions (e.g., database errors) appropriately
-#             return {'message': f'Error deleting project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
-
-#     def delete_associated_data(self, project):
-#         # Delete associated data (use this method to handle relationships)
-#         Answers.query.filter_by(projectID=project.projectID).delete()
-#         AssessmentAnswers.query.filter_by(projectID=project.projectID).delete()
-
-#         # Delete linked projects
-#         ProjectUser.query.filter_by(projectID=project.projectID).delete()
-        
-#         #Delete linked stages
-#         ProjectStage.query.filter_by(projectID=project.projectID).delete()
-#         # Delete Tasks
-#         task_ids = [task.taskID for task in ProjectTask.query.filter_by(projectID=project.projectID).all()]
-
-#         # Delete associated TaskComments rows
-#         TaskComments.query.filter(TaskComments.taskID.in_(task_ids)).delete()
-#         #Delete Tasks
-#         ProjectTask.query.filter_by(projectID=project.projectID).delete()
-
-#         #Delete Project Status Data
-#         ProjectStatusData.query.filter_by(projectID=project.projectID).delete()
-        
-        
-# @project_namespace.route('/delete_question/<int:question_id>')
-# class QuestionDeleteResource(Resource):
-#     @jwt_required()  
-#     def delete(self, question_id):
-#         # Check if the question exists
-#         question_to_delete = Questions.query.get(question_id)
-#         if not question_to_delete:
-#             return {'message': 'Question not found'}, HTTPStatus.NOT_FOUND
-
-#         # Delete the answers related to the question
-#         Answers.query.filter_by(questionID=question_id).delete()
-
-#         # Delete the choices related to the question
-#         QuestionChoices.query.filter_by(questionID=question_id).delete()
-
-#         # Delete the question from the database
-#         try:
-#             question_to_delete.delete()
-
-#             return {'message': 'Question and associated answers and choices deleted successfully'}, HTTPStatus.OK
-#         except Exception as e:
-#             # Handle exceptions (e.g., database errors) appropriately
-#             return {'message': f'Error deleting question: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
-    
-   
 @project_namespace.route('/project_users/<int:project_id>')
 class ProjectUsersResource(Resource):
     @jwt_required()
@@ -1012,7 +663,7 @@ class ProjectUsersResource(Resource):
             return {'message': 'Project not found'}, HTTPStatus.NOT_FOUND
 
         # Check if the current user has access to the project
-        if current_user.is_admin or current_user in project.users:
+        if current_user.is_admin() or current_user in project.users:
             # Retrieve all users who have access to the project
             project_users = (
                 db.session.query(Users)
@@ -1044,7 +695,7 @@ class ProjectUsersResource(Resource):
 #                 return {'message': 'User not found'}, HTTPStatus.NOT_FOUND
 
 #             # Check if the user is an admin
-#             if current_user.is_admin:
+#             if current_user.is_admin():
 #                 # If admin, fetch all projects
 #                 projects = Projects.query.all()
 #             else:
@@ -1220,7 +871,7 @@ class AddStageResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Check if the current user has permission to add a stage
-        if not current_user.is_admin:  # Adjust the condition based on your specific requirements
+        if not current_user.is_admin():  # Adjust the condition based on your specific requirements
             return {'message': 'Unauthorized. Only admin users can add stages.'}, HTTPStatus.FORBIDDEN
 
         # Parse input data
@@ -1251,7 +902,7 @@ class DeleteStageResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Check if the current user has permission to delete a stage
-        if not current_user.is_admin:  # Adjust the condition based on your specific requirements
+        if not current_user.is_admin():  # Adjust the condition based on your specific requirements
             return {'message': 'Unauthorized. Only admin users can delete stages.'}, HTTPStatus.FORBIDDEN
 
         # Get the stage by ID
@@ -1477,7 +1128,7 @@ class EditTaskForStageResource(Resource):
     def put(self, task_id):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
         # Check if the current user has permission to delete a stage
-        if not current_user.is_admin:  # Adjust the condition based on your specific requirements
+        if not current_user.is_admin():  # Adjust the condition based on your specific requirements
             return {'message': 'Unauthorized. Only admin users can edit Task details.'}, HTTPStatus.FORBIDDEN
 
         try:
@@ -1520,7 +1171,7 @@ class AssignTaskResource(Resource):
     def put(self, task_id):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
         # Check if the current user has permission to delete a stage
-        if not current_user.is_admin:  # Adjust the condition based on your specific requirements
+        if not current_user.is_admin():  # Adjust the condition based on your specific requirements
             return {'message': 'Unauthorized. Only admin users can edit Task details.'}, HTTPStatus.FORBIDDEN
 
         try:
@@ -1764,7 +1415,7 @@ class AddAssessmentQuestionResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Check if the current user is an admin
-        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+        if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
             return {'message': 'Unauthorized. Only admin users can add questions.'}, HTTPStatus.FORBIDDEN
 
         # Parse the input data for questions
@@ -1813,7 +1464,7 @@ class AddAssessmentAnswerResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Check if the current user is an admin
-        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+        if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
             return {'message': 'Unauthorized. Only admin users can add answers.'}, HTTPStatus.FORBIDDEN
 
         # Parse the input data for answers
@@ -1854,10 +1505,52 @@ class AddAssessmentAnswerResource(Resource):
             #now update project status to PENDING
             project.projectStatus = Status.PENDING
             db.session.commit()
+            # Fetch all assessment answers for the given project_id
+            assessment_answers = (
+                AssessmentAnswers.query
+                .join(AssessmentQuestions)
+                .filter(AssessmentAnswers.projectID == assessment_data['projectID'])
+                .add_columns(AssessmentQuestions.questionText, AssessmentAnswers.answerText, AssessmentAnswers.notes)
+                .all()
+            )
+
+            # Convert the list of answers to a JSON response
+            answers_data = [
+                answer.answerText
+                for answer in assessment_answers
+            ]
+            categoryCalculator = ProjectCategoryCalculator(project, answers_data)
+            categoryCalculator.calculateCategory()
             return {'message': 'All Assessment Answers were saved.'}, HTTPStatus.OK
                 
         except Exception as e:
             current_app.logger.error(f"Error In adding AssessmentQuestion: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@assessment_namespace.route('/assessment/calculate-category/<int:project_id>')
+class CalculateCategoryResource(Resource):
+    def put(self, project_id):
+        try:
+            project = ProjectsData.get_by_id(project_id)
+            assessment_answers = (
+                AssessmentAnswers.query
+                .join(AssessmentQuestions)
+                .filter(AssessmentAnswers.projectID == project_id)
+                .add_columns(AssessmentQuestions.questionText, AssessmentAnswers.answerText, AssessmentAnswers.notes)
+                .all()
+            )
+
+            # Correct way of constructing answers_data
+            answers_data = [
+                answer.answerText
+                for answer in assessment_answers
+            ]
+            categoryCalculator = ProjectCategoryCalculator(project, answers_data)
+            categoryCalculator.calculateCategory()
+            return {'message': f'Calculation Complete. Category is {project.category.value} and total points is {project.totalPoints}'}, HTTPStatus.OK
+        except Exception as e:
+            print(e)
+            current_app.logger.error(f"Error Calculating Category: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @assessment_namespace.route('/assessment/answers/get/<int:project_id>', methods=['GET'])
@@ -1898,7 +1591,7 @@ class DeleteAssessmentResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Check if the current user is an admin
-        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+        if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
             return {'message': 'Unauthorized. Only admin users can delete answers.'}, HTTPStatus.FORBIDDEN
 
         try:
@@ -1922,7 +1615,7 @@ class DeleteAssessmentQuestionResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Check if the current user is an admin
-        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+        if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
             return {'message': 'Unauthorized. Only admin users can delete questions.'}, HTTPStatus.FORBIDDEN
 
         try:

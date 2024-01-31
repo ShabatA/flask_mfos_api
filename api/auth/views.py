@@ -245,11 +245,16 @@ class AdminOnlyResource(Resource):
     )
     def get(self):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+        users = Users.query.all()
+        count = 0
+        for user in users:
+            if user.is_admin():
+                count+=1
+        return {'message': count}, HTTPStatus.OK  
 
-        if current_user.is_admin():
-            return {'message': 'Welcome, Admin!'}, HTTPStatus.FORBIDDEN
+        
 
-        return {'message': 'Access forbidden. Admins only.'}, HTTPStatus.OK
+        
 
 @auth_namespace.route('/admin/update-user/<int:user_id>')
 class UpdateUserByAdmin(Resource):
@@ -595,9 +600,13 @@ class AllUsers(Resource):
             users_data = []
 
             # Iterate through each user and extract relevant information
+            admins = 0
             for user in all_users:
+                if user.is_admin():
+                    admins += 1
                 user_data = self.get_user_data(user)
                 users_data.append(user_data)
+            print(admins)
 
             # Return the user data as JSON
             return {'users': users_data}, HTTPStatus.OK
@@ -610,7 +619,10 @@ class AllUsers(Resource):
     def get_user_data(user):
         
         
-        if not user.is_admin:
+        if user.is_admin():
+            all_projects = ProjectsData.query.all()
+            all_cases = CasesData.query.all()
+        else:
             # Fetch all projects the user has access to
             projects = (
                 ProjectsData.query.join(Users, Users.userID == ProjectsData.createdBy)
@@ -640,9 +652,9 @@ class AllUsers(Resource):
 
             # Combine the cases and remove duplicates
             all_cases = list(set(cases + case_user_cases))
-        else:
-            all_projects = ProjectsData.query.all()
-            all_cases = CasesData.query.all()
+
+        if user.userID == 27:
+            print(all_cases)
 
         # Fetch all ProjectTasks the user is assigned to
         project_tasks = ProjectTask.query.join(Users.assigned_tasks).filter(Users.userID == user.userID).all()

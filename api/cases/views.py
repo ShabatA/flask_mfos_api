@@ -260,7 +260,7 @@ class CaseGetAllResource(Resource):
         try:
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
-            if not current_user.is_admin:
+            if not current_user.is_admin():
                 # Fetch all cases the user has access to
                 cases = (
                     CasesData.query.join(Users, Users.userID == CasesData.userID)
@@ -334,7 +334,7 @@ class CaseAddRequirementsResource(Resource):
              # Get the current user ID from the JWT token
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
             
-            if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+            if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
                 return {'message': 'Unauthorized. Only admin users can add requirements.'}, HTTPStatus.FORBIDDEN
         
             case = CasesData.get_by_id(case_id)
@@ -395,7 +395,7 @@ class CaseChangeStatusResource(Resource):
             return {'message': 'Case not found'}, HTTPStatus.NOT_FOUND
 
         # Check if the current user has permission to change the status
-        if current_user.is_admin or current_user.userID == case.userID:
+        if current_user.is_admin() or current_user.userID == case.userID:
             # Parse the new status from the request
             new_status = request.json.get('caseStatus')
             
@@ -451,7 +451,7 @@ class AddStageResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Check if the current user has permission to add a stage
-        if not current_user.is_admin:  # Adjust the condition based on your specific requirements
+        if not current_user.is_admin():  # Adjust the condition based on your specific requirements
             return {'message': 'Unauthorized. Only admin users can add stages.'}, HTTPStatus.FORBIDDEN
 
         # Parse input data
@@ -482,7 +482,7 @@ class DeleteStageResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Check if the current user has permission to delete a stage
-        if not current_user.is_admin:  # Adjust the condition based on your specific requirements
+        if not current_user.is_admin():  # Adjust the condition based on your specific requirements
             return {'message': 'Unauthorized. Only admin users can delete stages.'}, HTTPStatus.FORBIDDEN
 
         # Get the stage by ID
@@ -915,7 +915,7 @@ class EditTaskForStageResource(Resource):
     def put(self, task_id):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
         # Check if the current user has permission to delete a stage
-        if not current_user.is_admin:  # Adjust the condition based on your specific requirements
+        if not current_user.is_admin():  # Adjust the condition based on your specific requirements
             return {'message': 'Unauthorized. Only admin users can edit Task details.'}, HTTPStatus.FORBIDDEN
 
         try:
@@ -961,7 +961,7 @@ class AddAssessmentQuestionResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Check if the current user is an admin
-        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+        if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
             return {'message': 'Unauthorized. Only admin users can add questions.'}, HTTPStatus.FORBIDDEN
 
         # Parse the input data for questions
@@ -1010,7 +1010,7 @@ class AddAssessmentAnswerResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Check if the current user is an admin
-        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+        if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
             return {'message': 'Unauthorized. Only admin users can add answers.'}, HTTPStatus.FORBIDDEN
 
         # Parse the input data for answers
@@ -1095,7 +1095,7 @@ class DeleteAssessmentResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Check if the current user is an admin
-        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+        if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
             return {'message': 'Unauthorized. Only admin users can delete answers.'}, HTTPStatus.FORBIDDEN
 
         try:
@@ -1119,7 +1119,7 @@ class DeleteAssessmentQuestionResource(Resource):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Check if the current user is an admin
-        if not current_user.is_admin:  # Assuming you have an 'is_admin' property in the Users model
+        if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
             return {'message': 'Unauthorized. Only admin users can delete questions.'}, HTTPStatus.FORBIDDEN
 
         try:

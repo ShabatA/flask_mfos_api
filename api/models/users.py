@@ -111,7 +111,7 @@ class Users(db.Model):
         Check if the user has the 'admin' role.
         :return: True if the user has the 'admin' role, False otherwise.
         """
-        return self.role and self.role.RoleID == 1
+        return True if self.role.RoleID == 1 else False
     
     def update(self, data):
         for key, value in data.items():
