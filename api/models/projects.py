@@ -108,7 +108,7 @@ class ProjectsData(db.Model):
         # Handle the case when due_date_string is an empty string
         if due_date_string:
             # Convert the string to a date object
-            self.dueDate = datetime.strptime(due_date_string, '%Y-%m-%d').date()
+            self.dueDate = datetime.strptime(due_date_string, '%Y-%m-%d %H:%M:%S.%f').date()
         else:
             self.dueDate = None  # or set it to an appropriate default value
 

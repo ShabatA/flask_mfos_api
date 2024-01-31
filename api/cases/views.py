@@ -295,6 +295,7 @@ class CaseGetAllResource(Resource):
                     'caseName': case.caseName,
                     'region': region_details,
                     'user': user_details,
+                    'budgetApproved': case.budgetApproved,
                     'question1': case.question1,
                     'question2': case.question2,
                     'question3': case.question3,
