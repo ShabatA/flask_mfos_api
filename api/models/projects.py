@@ -99,24 +99,25 @@ class ProjectsData(db.Model):
 
         new_status_data = ProjectStatusData(projectID=self.projectID, status=self.projectStatus.value, data=status_data)
         
-        # Set the startDate to the current date
-        self.startDate = datetime.utcnow().date()
+        if len(status_data) > 2:
+            # Set the startDate to the current date
+            self.startDate = datetime.utcnow().date()
 
-        # Assuming status_data.get('dueDate', self.dueDate) returns a string
-        due_date_string = status_data.get('dueDate') or str(self.dueDate)
+            # Assuming status_data.get('dueDate', self.dueDate) returns a string
+            due_date_string = status_data.get('dueDate') or str(self.dueDate)
 
-        # Handle the case when due_date_string is an empty string
-        if due_date_string:
-            # Convert the string to a date object
-            self.dueDate = datetime.strptime(due_date_string, '%Y-%m-%d %H:%M:%S.%f').date()
-        else:
-            self.dueDate = None  # or set it to an appropriate default value
+            # Handle the case when due_date_string is an empty string
+            if due_date_string:
+                # Convert the string to a date object
+                self.dueDate = datetime.strptime(due_date_string, '%Y-%m-%d %H:%M:%S.%f').date()
+            else:
+                self.dueDate = None  # or set it to an appropriate default value
 
-        # Set the budgetApproved attribute
-        self.budgetApproved = status_data.get('approvedFunding')
+            # Set the budgetApproved attribute
+            self.budgetApproved = status_data.get('approvedFunding')
 
-        # Commit changes to the database
-        db.session.commit()
+            # Commit changes to the database
+            db.session.commit()
 
         # Save the new status data
         new_status_data.save()
@@ -164,35 +165,6 @@ class Questions(db.Model):
         new_choice.save()
     
 
-# class Answers(db.Model):
-#     _tablename_ = 'answers'
-
-#     answerID = db.Column(db.Integer, primary_key=True)
-#     projectID = db.Column(db.Integer, db.ForeignKey('projects.projectID'), nullable=False)
-#     questionID = db.Column(db.Integer, db.ForeignKey('questions.questionID'), nullable=False)
-#     answerText = db.Column(db.String, nullable=True)  # Adjust based on the answer format
-#     extras = db.Column(JSONB, nullable=True)
-#      # Add a foreign key reference to the choices table
-#     question = db.relationship('Questions', backref='answers', lazy=True)
-#     choiceID = db.Column(db.Integer, db.ForeignKey('question_choices.choiceID'), nullable=True)
-
-#     # Define a relationship with the choices table
-#     choice = db.relationship('QuestionChoices', foreign_keys=[choiceID], backref='answer', lazy=True)
-
-#     def _repr_(self):
-#         return f"<Answer {self.answerID} {self.answerText}>"
-    
-#     def save(self):
-#         db.session.add(self)
-#         db.session.commit()
-    
-#     def delete(self):
-#         db.session.delete(self)
-#         db.session.commit()
-    
-#     @classmethod
-#     def get_by_id(cls, answerID):
-#         return cls.query.get_or_404(answerID)
 
 class QuestionChoices(db.Model):
     _tablename_ = 'question_choices'

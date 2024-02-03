@@ -34,6 +34,7 @@ class CasesData(db.Model):
     userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
     regionID = db.Column(db.Integer, db.ForeignKey('regions.regionID'))
     caseName = db.Column(db.String, nullable=False)
+    sponsorAvailable = db.Column(db.String, nullable=True)
     budgetApproved = db.Column(db.Float, nullable=True)
     question1 = db.Column(JSONB, nullable=False)
     question2 = db.Column(JSONB, nullable=False)
@@ -79,21 +80,22 @@ class CasesData(db.Model):
             
         new_status_data = CaseStatusData(caseID=self.caseID, status=self.caseStatus.value, data=status_data)
         
-        # Set the startDate to the current date
-        self.startDate = datetime.utcnow().date()
+        if len(status_data) > 2:
+            # Set the startDate to the current date
+            self.startDate = datetime.utcnow().date()
 
-        # Assuming status_data.get('dueDate', self.dueDate) returns a string
-        due_date_string = status_data.get('dueDate') or str(self.dueDate)
+            # Assuming status_data.get('dueDate', self.dueDate) returns a string
+            due_date_string = status_data.get('dueDate') or str(self.dueDate)
 
-        # Handle the case when due_date_string is an empty string
-        if due_date_string:
-            # Convert the string to a date object
-            self.dueDate = datetime.strptime(due_date_string, '%Y-%m-%d %H:%M:%S.%f').date()
-        else:
-            self.dueDate = None  # or set it to an appropriate default value
+            # Handle the case when due_date_string is an empty string
+            if due_date_string:
+                # Convert the string to a date object
+                self.dueDate = datetime.strptime(due_date_string, '%Y-%m-%d %H:%M:%S.%f').date()
+            else:
+                self.dueDate = None  # or set it to an appropriate default value
 
-        # Set the budgetApproved attribute
-        self.budgetApproved = status_data.get('approvedFunding')
+            # Set the budgetApproved attribute
+            self.budgetApproved = status_data.get('approvedFunding')
 
         # Commit changes to the database
         db.session.commit()
@@ -232,8 +234,8 @@ class CaseTask(db.Model):
     caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
     title = db.Column(db.String, nullable=False)
     deadline = db.Column(db.Date, nullable=False)
-    assignedTo = db.relationship('Users', secondary='c_task_assigned_to', backref='c_assigned_tasks', lazy='dynamic', single_parent=True)
-    cc = db.relationship('Users', secondary='c_task_cc', backref='c_cc_tasks', lazy='dynamic', single_parent=True)
+    assignedTo = db.relationship('Users', secondary='case_task_assigned_to', backref='case_assigned_tasks', lazy='dynamic', single_parent=True)
+    cc = db.relationship('Users', secondary='case_task_cc', backref='case_cc_tasks', lazy='dynamic', single_parent=True)
     description = db.Column(db.String, nullable=True)
     createdBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
     attachedFiles = db.Column(db.String, nullable=True)
@@ -298,7 +300,7 @@ class CaseTaskComments(db.Model):
         return cls.query.get_or_404(commentID)
 
 class CaseTaskAssignedTo(db.Model):
-    __tablename__ = 'c_task_assigned_to'
+    __tablename__ = 'case_task_assigned_to'
     id = db.Column(db.Integer, primary_key=True)
     task_id = db.Column(db.Integer, db.ForeignKey('case_task.taskID'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
@@ -316,7 +318,7 @@ class CaseTaskAssignedTo(db.Model):
 
 
 class CaseTaskCC(db.Model):
-    __tablename__ = 'c_task_cc'
+    __tablename__ = 'case_task_cc'
     id = db.Column(db.Integer, primary_key=True)
     task_id = db.Column(db.Integer, db.ForeignKey('case_task.taskID'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)

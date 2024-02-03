@@ -55,7 +55,7 @@ class ProjectCategoryCalculator:
             self.points_for_c += 0
     
     def legalforC(self, legal):
-        if(legal.lower() == 'registered'):
+        if(legal.lower() == 'not registered'):
             self.points_for_c += 10
         else:
             self.points_for_c += 0

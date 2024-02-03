@@ -4,7 +4,7 @@ from werkzeug.exceptions import NotFound
 from http import HTTPStatus
 
 from api.utils.case_requirement_processor import CaseRequirementProcessor
-from ..models.cases import CaseCat, CasesData, CaseStat, CaseUser, CaseTaskAssignedTo, CaseStage, CaseToStage, CaseTaskComments, CaseStatusData, CaseTask, CaseTaskCC, CaseTaskStatus, CaseAssessmentAnswers, CaseAssessmentQuestions
+from ..models.cases import CaseCat, CasesData, CaseStat, CaseUser, CaseBeneficiary, CaseStage, CaseToStage, CaseTaskComments, CaseStatusData, CaseTask, BeneficiaryForm, CaseTaskStatus, CaseAssessmentAnswers, CaseAssessmentQuestions
 from ..models.users import Users
 from ..models.regions import Regions
 from ..utils.db import db
@@ -125,6 +125,7 @@ case_model = case_namespace.model(
 cases_data_model = case_namespace.model('CasesDataInput', {
     'regionID': fields.Integer(required=True,description='ID of the region'),
     'caseName': fields.String(required=True, description='Name of the case'),
+    'sponsorAvailable': fields.String(required=True),
     'question1': fields.Raw(required=True, description='Question 1'),
     'question2': fields.Raw(required=True, description='Question 2'),
     'question3': fields.Raw(required=True, description='Question 3'),
@@ -186,6 +187,7 @@ class CasesAddResource(Resource):
                 userID=current_user.userID,
                 regionID=case_data.get('regionID'),
                 caseName=case_data['caseName'],
+                sponsorAvailable=case_data['sponsorAvailable'],
                 question1=case_data['question1'],
                 question2=case_data['question2'],
                 question3=case_data['question3'],
@@ -208,6 +210,12 @@ class CasesAddResource(Resource):
             # Add the current user to the CaseUsers table for the new case
             case_user = CaseUser(caseID=new_case.caseID, userID=current_user.userID)
             case_user.save()
+            
+            beneficiary_form = BeneficiaryForm(
+                caseID=new_case.caseID, 
+                url=f'https://gog-web-13346.web.app/#/case-beneficiary-form?{new_case.caseID}',
+                used=False)
+            beneficiary_form.save()
 
             return {'message': 'Case added successfully'}, HTTPStatus.CREATED
         except Exception as e:
@@ -231,6 +239,7 @@ class CasesAddResource(Resource):
             existing_case.userID = current_user.userID
             existing_case.regionID = case_data.get('regionID')
             existing_case.caseName = case_data['caseName']
+            existing_case.sponsorAvailable = case_data['sponsorAvailable']
             existing_case.question1 = case_data['question1']
             existing_case.question2 = case_data['question2']
             existing_case.question3 = case_data['question3']
@@ -296,6 +305,7 @@ class CaseGetAllResource(Resource):
                     'region': region_details,
                     'user': user_details,
                     'budgetApproved': case.budgetApproved,
+                    'sponsorAvailable': case.sponsorAvailable,
                     'question1': case.question1,
                     'question2': case.question2,
                     'question3': case.question3,
@@ -437,6 +447,69 @@ class CaseChangeStatusResource(Resource):
         else:
             return {'message': 'Unauthorized. You do not have permission to change the status of this case.'}, HTTPStatus.FORBIDDEN
 
+#######################################
+# CASE BENEFICIARY
+######################################
+@case_namespace.route('/get/beneficiary_form/<int:case_id>', methods=['GET'])
+class GetBeneficiaryFormResource(Resource):
+    
+    def get(self, case_id):
+        
+        try:
+            case = CasesData.query.get(case_id)
+       
+            if not case:
+                return {'message': 'Case not found.'}, HTTPStatus.NOT_FOUND
+            
+            form = BeneficiaryForm.query.filter_by(caseID=case_id).first()
+            if not form:
+                return {'message': 'no form found for this case.'}, HTTPStatus.NOT_FOUND
+            form_dict = {
+                'formID': form.formID,
+                'caseID': form.caseID,
+                'url': form.url,
+                'used': form.used
+            }
+            return {'form': form_dict}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error retrieving form: {str(e)}")
+            return {'message': f'Error getting form: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_namespace.route('/add/beneficiary_form/<int:case_id>', methods=['POST'])
+class AddBeneficiaryFormResource(Resource):
+    def post(self, case_id):
+        try:
+            case = CasesData.query.get(case_id)
+       
+            if not case:
+                return {'message': 'Case not found.'}, HTTPStatus.NOT_FOUND
+            
+            form = BeneficiaryForm.query.filter_by(caseID=case_id).first()
+            if form:
+                form_dict = {
+                'formID': form.formID,
+                'caseID': form.caseID,
+                'url': form.url,
+                'used': form.used
+                }
+                return {'form': form_dict}, HTTPStatus.OK
+            
+            beneficiary_form = BeneficiaryForm(
+                caseID=case.caseID, 
+                url=f'https://gog-web-13346.web.app/#/case-beneficiary-form?{case.caseID}',
+                used=False)
+            beneficiary_form.save()
+            
+            form_dict = {
+                'formID': beneficiary_form.formID,
+                'caseID': beneficiary_form.caseID,
+                'url': beneficiary_form.url,
+                'used': beneficiary_form.used
+                }
+            return {'form': form_dict}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error adding form: {str(e)}")
+            return {'message': f'Error adding form: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 #####################################################
