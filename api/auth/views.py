@@ -660,7 +660,7 @@ class AllUsers(Resource):
         project_tasks = ProjectTask.query.join(Users.assigned_tasks).filter(Users.userID == user.userID).all()
 
         # Fetch all CaseTasks the user is assigned to
-        case_tasks = CaseTask.query.join(Users.c_assigned_tasks).filter(Users.userID == user.userID).all()
+        case_tasks = CaseTask.query.join(Users.case_assigned_tasks).filter(Users.userID == user.userID).all()
         
         user_data = {
             'userID': user.userID,
