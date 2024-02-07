@@ -142,12 +142,10 @@ cases_data_model = case_namespace.model('CasesDataInput', {
 })
 
 case_beneficiary_form = case_namespace.model('BeneficiaryForm',{
-    'uuid': fields.String(required=True, description="Uniquely generated on the app."),
     'url': fields.String(required=True, description="The url with the uuid as a URL param.")
 })
 
 case_beneficiary_form_edit = case_namespace.model('EditBeneficiaryForm',{
-    'uuid': fields.String(required=True, description="Uniquely generated on the app."),
     'url': fields.String(required=True, description="The url with the uuid as a URL param."),
     'used': fields.Boolean(required=True)
 })
@@ -455,29 +453,9 @@ class CaseChangeStatusResource(Resource):
 #######################################
 # CASE BENEFICIARY
 ######################################
-@case_namespace.route('/get/beneficiary_form/uui/<string:uuid>', methods=['GET'])
-class GetBeneficiaryFormResource(Resource):
-    
-    def get(self, uuid):
-        
-        try:
-            
-            form = BeneficiaryForm.query.filter_by(uuid=uuid).first()
-            if not form:
-                return {'message': 'no form found for this case.'}, HTTPStatus.NOT_FOUND
-            form_dict = {
-                'formID': form.formID,
-                'caseID': form.caseID,
-                'url': form.url,
-                'uuid': form.uuid,
-                'used': form.used
-            }
-            return {'form': form_dict}, HTTPStatus.OK
-        except Exception as e:
-            current_app.logger.error(f"Error retrieving form: {str(e)}")
-            return {'message': f'Error getting form: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@case_namespace.route('/get/beneficiary_form/case-id/<int:case_id>', methods=['GET'])
+
+@case_namespace.route('/get/beneficiary_form/<int:case_id>', methods=['GET'])
 class GetBeneficiaryFormByCaseResource(Resource):
     
     def get(self, case_id):
@@ -495,7 +473,6 @@ class GetBeneficiaryFormByCaseResource(Resource):
                 'formID': form.formID,
                 'caseID': form.caseID,
                 'url': form.url,
-                'uuid': form.uuid,
                 'used': form.used
             }
             return {'form': form_dict}, HTTPStatus.OK
@@ -523,15 +500,13 @@ class AddBeneficiaryFormResource(Resource):
                 'formID': form.formID,
                 'caseID': form.caseID,
                 'url': form.url,
-                'used': form.used,
-                'uuid': form.uuid
+                'used': form.used
                 }
                 return {'form': form_dict}, HTTPStatus.OK
             
             beneficiary_form = BeneficiaryForm(
                 caseID=case.caseID, 
                 url=form_data['url'],
-                uuid=form_data['uuid'],
                 used=False
             )
             beneficiary_form.save()
@@ -540,8 +515,7 @@ class AddBeneficiaryFormResource(Resource):
                 'formID': beneficiary_form.formID,
                 'caseID': beneficiary_form.caseID,
                 'url': beneficiary_form.url,
-                'used': beneficiary_form.used,
-                'uuid': beneficiary_form.uuid
+                'used': beneficiary_form.used
             }
             return {'form': form_dict}, HTTPStatus.OK
         except Exception as e:
@@ -561,7 +535,6 @@ class AddBeneficiaryFormResource(Resource):
                 return {'message': 'No form was found.'}, HTTPStatus.NOT_FOUND
             
             
-            form.uuid = form_data['uuid']
             form.url = form_data['url']
             form.used = form_data['used']
             
@@ -571,8 +544,7 @@ class AddBeneficiaryFormResource(Resource):
                 'formID': form.formID,
                 'caseID': form.caseID,
                 'url': form.url,
-                'used': form.used,
-                'uuid': form.uuid
+                'used': form.used
             }
             return {'form': form_dict}, HTTPStatus.OK
         except Exception as e:

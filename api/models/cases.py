@@ -154,7 +154,6 @@ class BeneficiaryForm(db.Model):
     caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
     url = db.Column(db.String, nullable=False)
     used = db.Column(db.Boolean, nullable=False, default=False)
-    uuid = db.Column(db.String, nullable=True)
     
     def save(self):
         db.session.add(self)
