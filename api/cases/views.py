@@ -141,7 +141,16 @@ cases_data_model = case_namespace.model('CasesDataInput', {
 
 })
 
+case_beneficiary_form = case_namespace.model('BeneficiaryForm',{
+    'uuid': fields.String(required=True, description="Uniquely generated on the app."),
+    'url': fields.String(required=True, description="The url with the uuid as a URL param.")
+})
 
+case_beneficiary_form_edit = case_namespace.model('EditBeneficiaryForm',{
+    'uuid': fields.String(required=True, description="Uniquely generated on the app."),
+    'url': fields.String(required=True, description="The url with the uuid as a URL param."),
+    'used': fields.Boolean(required=True)
+})
 
 case_model_2 = case_namespace.model(
     'Case2', {
@@ -211,13 +220,9 @@ class CasesAddResource(Resource):
             case_user = CaseUser(caseID=new_case.caseID, userID=current_user.userID)
             case_user.save()
             
-            beneficiary_form = BeneficiaryForm(
-                caseID=new_case.caseID, 
-                url=f'https://gog-web-13346.web.app/#/case-beneficiary-form?{new_case.caseID}',
-                used=False)
-            beneficiary_form.save()
-
-            return {'message': 'Case added successfully'}, HTTPStatus.CREATED
+            
+            return {'message': 'Case added successfully',
+                    'case_id': new_case.caseID}, HTTPStatus.CREATED
         except Exception as e:
             current_app.logger.error(f"Error adding case: {str(e)}")
             return {'message': f'Error adding case: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
@@ -450,8 +455,30 @@ class CaseChangeStatusResource(Resource):
 #######################################
 # CASE BENEFICIARY
 ######################################
-@case_namespace.route('/get/beneficiary_form/<int:case_id>', methods=['GET'])
+@case_namespace.route('/get/beneficiary_form/uui/<string:uuid>', methods=['GET'])
 class GetBeneficiaryFormResource(Resource):
+    
+    def get(self, uuid):
+        
+        try:
+            
+            form = BeneficiaryForm.query.filter_by(uuid=uuid).first()
+            if not form:
+                return {'message': 'no form found for this case.'}, HTTPStatus.NOT_FOUND
+            form_dict = {
+                'formID': form.formID,
+                'caseID': form.caseID,
+                'url': form.url,
+                'uuid': form.uuid,
+                'used': form.used
+            }
+            return {'form': form_dict}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error retrieving form: {str(e)}")
+            return {'message': f'Error getting form: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_namespace.route('/get/beneficiary_form/case-id/<int:case_id>', methods=['GET'])
+class GetBeneficiaryFormByCaseResource(Resource):
     
     def get(self, case_id):
         
@@ -468,6 +495,7 @@ class GetBeneficiaryFormResource(Resource):
                 'formID': form.formID,
                 'caseID': form.caseID,
                 'url': form.url,
+                'uuid': form.uuid,
                 'used': form.used
             }
             return {'form': form_dict}, HTTPStatus.OK
@@ -475,8 +503,11 @@ class GetBeneficiaryFormResource(Resource):
             current_app.logger.error(f"Error retrieving form: {str(e)}")
             return {'message': f'Error getting form: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@case_namespace.route('/add/beneficiary_form/<int:case_id>', methods=['POST'])
+
+@case_namespace.route('/add_or_edit/beneficiary_form/<int:case_id>', methods=['POST', 'PUT'])
 class AddBeneficiaryFormResource(Resource):
+    @jwt_required()
+    @case_namespace.expect(case_beneficiary_form)
     def post(self, case_id):
         try:
             case = CasesData.query.get(case_id)
@@ -484,28 +515,65 @@ class AddBeneficiaryFormResource(Resource):
             if not case:
                 return {'message': 'Case not found.'}, HTTPStatus.NOT_FOUND
             
+            form_data = request.json
+            
             form = BeneficiaryForm.query.filter_by(caseID=case_id).first()
             if form:
                 form_dict = {
                 'formID': form.formID,
                 'caseID': form.caseID,
                 'url': form.url,
-                'used': form.used
+                'used': form.used,
+                'uuid': form.uuid
                 }
                 return {'form': form_dict}, HTTPStatus.OK
             
             beneficiary_form = BeneficiaryForm(
                 caseID=case.caseID, 
-                url=f'https://gog-web-13346.web.app/#/case-beneficiary-form?{case.caseID}',
-                used=False)
+                url=form_data['url'],
+                uuid=form_data['uuid'],
+                used=False
+            )
             beneficiary_form.save()
             
             form_dict = {
                 'formID': beneficiary_form.formID,
                 'caseID': beneficiary_form.caseID,
                 'url': beneficiary_form.url,
-                'used': beneficiary_form.used
-                }
+                'used': beneficiary_form.used,
+                'uuid': beneficiary_form.uuid
+            }
+            return {'form': form_dict}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error adding form: {str(e)}")
+            return {'message': f'Error adding form: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+    
+    @jwt_required()
+    @case_namespace.expect(case_beneficiary_form_edit)
+    def put(self, case_id):
+        try:
+            
+            form_data = request.json
+            
+            form = BeneficiaryForm.query.filter_by(caseID=case_id).first()
+            if not form:
+                
+                return {'message': 'No form was found.'}, HTTPStatus.NOT_FOUND
+            
+            
+            form.uuid = form_data['uuid']
+            form.url = form_data['url']
+            form.used = form_data['used']
+            
+            form.save()
+            
+            form_dict = {
+                'formID': form.formID,
+                'caseID': form.caseID,
+                'url': form.url,
+                'used': form.used,
+                'uuid': form.uuid
+            }
             return {'form': form_dict}, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error adding form: {str(e)}")
