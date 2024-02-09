@@ -2,6 +2,7 @@ from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.exceptions import NotFound
 from http import HTTPStatus
+from api.utils.case_category_calculator import CaseCategoryCalculator
 
 from api.utils.case_requirement_processor import CaseRequirementProcessor
 from ..models.cases import CaseCat, CasesData, CaseStat, CaseUser, CaseBeneficiary, CaseStage, CaseToStage, CaseTaskComments, CaseStatusData, CaseTask, BeneficiaryForm, CaseTaskStatus, CaseAssessmentAnswers, CaseAssessmentQuestions
@@ -218,6 +219,8 @@ class CasesAddResource(Resource):
             case_user = CaseUser(caseID=new_case.caseID, userID=current_user.userID)
             case_user.save()
             
+            categoryCalculator = CaseCategoryCalculator(new_case)
+            categoryCalculator.calculate_category()
             
             return {'message': 'Case added successfully',
                     'case_id': new_case.caseID}, HTTPStatus.CREATED
@@ -259,11 +262,27 @@ class CasesAddResource(Resource):
             existing_case.dueDate = case_data.get('dueDate', existing_case.dueDate)
 
             existing_case.save()
+            categoryCalculator = CaseCategoryCalculator(existing_case)
+            categoryCalculator.calculate_category()
 
             return {'message': 'Case updated successfully'}, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error updating case: {str(e)}")
             return {'message': f'Error updating case: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_namespace.route('/calculate-case-category/<int:case_id>', methods=['PUT'])
+class CalculateCaseCategoryResource(Resource):
+    @jwt_required()
+    def put(self, case_id):
+        try:
+            case_data = CasesData.query.get_or_404(case_id)
+            categoryCalculator = CaseCategoryCalculator(case_data)
+            categoryCalculator.calculate_category()
+            return {'message': f'Success, category is {case_data.category.value}, and {case_data.total_points} total points'}
+        except Exception as e:
+            current_app.logger.error(f"Error calculating category: {str(e)}")
+            return {'message': f'Error updating case: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
 
 @case_namespace.route('/get_all', methods=['GET'])
 class CaseGetAllResource(Resource):
@@ -325,7 +344,8 @@ class CaseGetAllResource(Resource):
                     'category': case.category.value if case.category else None,
                     'createdAt': case.createdAt.isoformat(),
                     'dueDate': case.dueDate.isoformat() if case.dueDate else None,
-                    'startDate': case.startDate.isoformat() if case.startDate else None
+                    'startDate': case.startDate.isoformat() if case.startDate else None,
+                    'totalPoints': case.total_points
                 }
 
                 cases_data.append(case_details)

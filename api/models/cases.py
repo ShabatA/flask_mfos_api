@@ -53,12 +53,14 @@ class CasesData(db.Model):
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     startDate = db.Column(db.Date, nullable=True)
     dueDate = db.Column(db.Date, nullable=True)
+    total_points = db.Column(db.Integer, nullable=True)
     
     region = db.relationship('Regions', backref='cases_data', foreign_keys=[regionID])
     users = db.relationship('Users', secondary='case_users', backref='cases_data', lazy='dynamic')
     beneficaries = db.relationship('CaseBeneficiary', backref='cases_data', lazy=True)
     tasks = db.relationship('CaseTask', backref='cases_data', lazy=True)
     status_data = db.relationship('CaseStatusData', backref='cases_data', uselist=False, lazy=True)
+    
 
     def __repr__(self):
         return f"<Case {self.caseID} {self.caseName}>"
@@ -138,6 +140,13 @@ class CaseBeneficiary(db.Model):
     beneficiaryID = db.Column(db.Integer, primary_key=True)
     caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'))
     name = db.Column(db.String, nullable=False)
+    surname = db.Column(db.String, nullable=False)
+    gender = db.Column(db.Integer, nullable=False)
+    birthDate = db.Column(db.String, nullable=False)
+    birthPlace = db.Column(db.String, nullable=False)
+    nationality = db.Column(db.String, nullable=False)
+    idType = db.Column(db.Integer, nullable=False)
+    idNumber = db.Column(db.String, nullable=False)
     
     def save(self):
         db.session.add(self)
