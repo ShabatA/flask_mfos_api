@@ -278,7 +278,8 @@ class ProjectAddResource(Resource):
             project_user = ProjectUser(projectID=new_project.projectID, userID=current_user.userID)
             project_user.save()
 
-            return {'message': 'Project added successfully'}, HTTPStatus.CREATED
+            return {'message': 'Project added successfully',
+                    'project_id': new_project.projectID}, HTTPStatus.CREATED
         except Exception as e:
             current_app.logger.error(f"Error adding requirements: {str(e)}")
             return {'message': f'Error adding project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
@@ -316,7 +317,8 @@ class ProjectAddResource(Resource):
 
             existing_project.save()
 
-            return {'message': 'Project updated successfully'}, HTTPStatus.OK
+            return {'message': 'Project updated successfully',
+                    'project_id': existing_project.projectID}, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error updating project: {str(e)}")
             return {'message': f'Error updating project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
