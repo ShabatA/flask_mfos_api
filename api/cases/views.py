@@ -142,6 +142,41 @@ cases_data_model = case_namespace.model('CasesDataInput', {
 
 })
 
+beneficiary_data_model = case_namespace.model('BeneficiaryData', {
+    'caseID': fields.Integer(required=True),
+    'firstName': fields.String(required=True),
+    'surName': fields.String(required=True),
+    'gender': fields.String(required=True),
+    'birthDate': fields.Date(required=True),
+    'birthPlace': fields.String(required=True),
+    'nationality': fields.String(required=True),
+    'idType': fields.String(required=True),
+    'idNumber': fields.String(required=True),
+    'phoneNumber': fields.String(required=True),
+    'altPhoneNumber': fields.String(),
+    'email': fields.String(required=True),
+    'serviceRequired': fields.String(required=True),
+    'otherServiceRequired': fields.String(),
+    'problemDescription': fields.String(),
+    'serviceDescription': fields.String(),
+    'totalSupportCost': fields.Float(),
+    'receiveFundDate': fields.Date(),
+    'paymentMethod': fields.String(),
+    'paymentsType': fields.String(),
+    'otherPaymentType': fields.String(),
+    'incomeType': fields.String(),
+    'otherIncomeType': fields.String(),
+    'housing': fields.String(),
+    'otherHousing': fields.String(),
+    'housingType': fields.String(),
+    'otherHousingType': fields.String(),
+    'totalFamilyMembers': fields.Integer(),
+    'childrenUnder15': fields.String(),
+    'isOldPeople': fields.Boolean(),
+    'isDisabledPeople': fields.Boolean(),
+    'isStudentsPeople': fields.Boolean()
+})
+
 case_beneficiary_form = case_namespace.model('BeneficiaryForm',{
     'url': fields.String(required=True, description="The url with the uuid as a URL param.")
 })
@@ -318,6 +353,48 @@ class CaseGetAllResource(Resource):
             # Prepare the list of cases with additional details
             cases_data = [] 
             for case in all_cases:
+                beneficiaries = CaseBeneficiary.query.filter_by(caseID=case.caseID).all()
+                
+                    
+                serialized_beneficiaries = []
+                if beneficiaries:
+                    for beneficiary in beneficiaries:
+                        serialized_beneficiary = {
+                            'beneficiaryID': beneficiary.beneficiaryID,
+                            'firstName': beneficiary.firstName,
+                            'surName': beneficiary.surName,
+                            'gender': beneficiary.gender,
+                            'birthDate': beneficiary.birthDate,
+                            'birthPlace': beneficiary.birthPlace,
+                            'nationality': beneficiary.nationality,
+                            'idType': beneficiary.idType,
+                            'idNumber': beneficiary.idNumber,
+                            'phoneNumber': beneficiary.phoneNumber,
+                            'altPhoneNumber': beneficiary.altPhoneNumber,
+                            'email': beneficiary.email,
+                            'serviceRequired': beneficiary.serviceRequired,
+                            'otherServiceRequired': beneficiary.otherServiceRequired,
+                            'problemDescription': beneficiary.problemDescription,
+                            'serviceDescription': beneficiary.serviceDescription,
+                            'totalSupportCost': beneficiary.totalSupportCost,
+                            'receiveFundDate': beneficiary.receiveFundDate.isoformat(),
+                            'paymentMethod': beneficiary.paymentMethod,
+                            'paymentsType': beneficiary.paymentsType,
+                            'otherPaymentType': beneficiary.otherPaymentType,
+                            'incomeType': beneficiary.incomeType,
+                            'otherIncomeType': beneficiary.otherIncomeType,
+                            'housing': beneficiary.housing,
+                            'otherHousing': beneficiary.otherHousing,
+                            'housingType': beneficiary.housingType,
+                            'otherHousingType': beneficiary.otherHousingType,
+                            'totalFamilyMembers': beneficiary.totalFamilyMembers,
+                            'childrenUnder15': beneficiary.childrenUnder15,
+                            'isOldPeople': beneficiary.isOldPeople,
+                            'isDisabledPeople': beneficiary.isDisabledPeople,
+                            'isStudentsPeople': beneficiary.isStudentsPeople
+                        }
+                        serialized_beneficiaries.append(serialized_beneficiary)
+                
                 region_details = {'regionID': case.regionID, 'regionName': Regions.query.get(case.regionID).regionName}
                 user_details = {'userID': current_user.userID, 'userFullName': current_user.firstName + current_user.lastName, 'username': current_user.username}
 
@@ -345,7 +422,8 @@ class CaseGetAllResource(Resource):
                     'createdAt': case.createdAt.isoformat(),
                     'dueDate': case.dueDate.isoformat() if case.dueDate else None,
                     'startDate': case.startDate.isoformat() if case.startDate else None,
-                    'totalPoints': case.total_points
+                    'totalPoints': case.total_points,
+                    'beneficaries': serialized_beneficiaries
                 }
 
                 cases_data.append(case_details)
@@ -353,6 +431,172 @@ class CaseGetAllResource(Resource):
             return cases_data, HTTPStatus.OK
         except Exception as e:
             return {'message': f'Error fetching cases: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@case_namespace.route('/beneficiary/add_or_edit', methods=['POST', 'PUT'])
+class CaseBeneficiaryAddOrEditResource(Resource):
+    @jwt_required()
+    @case_namespace.expect(beneficiary_data_model)
+    def post(self):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            beneficiary_data = request.json
+            case_id = beneficiary_data.get('caseID')
+            if not case_id:
+                return {'message': 'Case ID is required for updating a case'}, HTTPStatus.BAD_REQUEST
+
+            existing_case = CasesData.query.get_or_404(case_id)
+            if not existing_case:
+                return {'message': 'Case not found'}, HTTPStatus.NOT_FOUND
+            
+            new_beneficiary = CaseBeneficiary(
+                caseID=beneficiary_data['caseID'],
+                firstName=beneficiary_data['firstName'],
+                surName=beneficiary_data['surName'],
+                gender=beneficiary_data['gender'],
+                birthDate=beneficiary_data['birthDate'],
+                birthPlace=beneficiary_data['birthPlace'],
+                nationality=beneficiary_data['nationality'],
+                idType=beneficiary_data['idType'],
+                idNumber=beneficiary_data['idNumber'],
+                phoneNumber=beneficiary_data['phoneNumber'],
+                altPhoneNumber=beneficiary_data.get('altPhoneNumber'),
+                email=beneficiary_data['email'],
+                serviceRequired=beneficiary_data['serviceRequired'],
+                otherServiceRequired=beneficiary_data.get('otherServiceRequired'),
+                problemDescription=beneficiary_data.get('problemDescription'),
+                serviceDescription=beneficiary_data.get('serviceDescription'),
+                totalSupportCost=beneficiary_data.get('totalSupportCost'),
+                receiveFundDate=beneficiary_data.get('receiveFundDate'),
+                paymentMethod=beneficiary_data.get('paymentMethod'),
+                paymentsType=beneficiary_data.get('paymentsType'),
+                otherPaymentType=beneficiary_data.get('otherPaymentType'),
+                incomeType=beneficiary_data.get('incomeType'),
+                otherIncomeType=beneficiary_data.get('otherIncomeType'),
+                housing=beneficiary_data.get('housing'),
+                otherHousing=beneficiary_data.get('otherHousing'),
+                housingType=beneficiary_data.get('housingType'),
+                otherHousingType=beneficiary_data.get('otherHousingType'),
+                totalFamilyMembers=beneficiary_data.get('totalFamilyMembers'),
+                childrenUnder15=beneficiary_data.get('childrenUnder15'),
+                isOldPeople=beneficiary_data.get('isOldPeople'),
+                isDisabledPeople=beneficiary_data.get('isDisabledPeople'),
+                isStudentsPeople=beneficiary_data.get('isStudentsPeople')
+            )
+
+            new_beneficiary.save()
+            form = BeneficiaryForm.query.filter_by(caseID=case_id).first()
+            form.used = True
+            form.save()
+            return {'message': 'CaseBeneficiary added successfully',
+                    'beneficiary_id': new_beneficiary.beneficiaryID}, HTTPStatus.OK
+       
+        except Exception as e:
+            current_app.logger.error(f"Error adding beneficiary: {str(e)}")
+            return {'message': f'Error adding CaseBeneficiary: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+    @jwt_required()
+    @case_namespace.expect(beneficiary_data_model)
+    def put(self):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            beneficiary_data = request.json
+
+            beneficiary_id = beneficiary_data.get('beneficiaryID')
+            if not beneficiary_id:
+                return {'message': 'Beneficiary ID is required for updating a beneficiary'}, HTTPStatus.BAD_REQUEST
+
+            existing_beneficiary = CaseBeneficiary.query.get_or_404(beneficiary_id)
+
+            # Update the beneficiary fields
+            existing_beneficiary.caseID = beneficiary_data['caseID']
+            existing_beneficiary.firstName = beneficiary_data['firstName']
+            existing_beneficiary.surName = beneficiary_data['surName']
+            existing_beneficiary.gender = beneficiary_data['gender']
+            existing_beneficiary.birthDate = beneficiary_data['birthDate']
+            existing_beneficiary.birthPlace = beneficiary_data['birthPlace']
+            existing_beneficiary.nationality = beneficiary_data['nationality']
+            existing_beneficiary.idType = beneficiary_data['idType']
+            existing_beneficiary.idNumber = beneficiary_data['idNumber']
+            existing_beneficiary.phoneNumber = beneficiary_data['phoneNumber']
+            existing_beneficiary.altPhoneNumber = beneficiary_data.get('altPhoneNumber')
+            existing_beneficiary.email = beneficiary_data['email']
+            existing_beneficiary.serviceRequired = beneficiary_data['serviceRequired']
+            existing_beneficiary.otherServiceRequired = beneficiary_data.get('otherServiceRequired')
+            existing_beneficiary.problemDescription = beneficiary_data.get('problemDescription')
+            existing_beneficiary.serviceDescription = beneficiary_data.get('serviceDescription')
+            existing_beneficiary.totalSupportCost = beneficiary_data.get('totalSupportCost')
+            existing_beneficiary.receiveFundDate = beneficiary_data.get('receiveFundDate')
+            existing_beneficiary.paymentMethod = beneficiary_data.get('paymentMethod')
+            existing_beneficiary.paymentsType = beneficiary_data.get('paymentsType')
+            existing_beneficiary.otherPaymentType = beneficiary_data.get('otherPaymentType')
+            existing_beneficiary.incomeType = beneficiary_data.get('incomeType')
+            existing_beneficiary.otherIncomeType = beneficiary_data.get('otherIncomeType')
+            existing_beneficiary.housing = beneficiary_data.get('housing')
+            existing_beneficiary.otherHousing = beneficiary_data.get('otherHousing')
+            existing_beneficiary.housingType = beneficiary_data.get('housingType')
+            existing_beneficiary.otherHousingType = beneficiary_data.get('otherHousingType')
+            existing_beneficiary.totalFamilyMembers = beneficiary_data.get('totalFamilyMembers')
+            existing_beneficiary.childrenUnder15 = beneficiary_data.get('childrenUnder15')
+            existing_beneficiary.isOldPeople = beneficiary_data.get('isOldPeople')
+            existing_beneficiary.isDisabledPeople = beneficiary_data.get('isDisabledPeople')
+            existing_beneficiary.isStudentsPeople = beneficiary_data.get('isStudentsPeople')
+
+            existing_beneficiary.save()
+
+            return {'message': 'CaseBeneficiary updated successfully'}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error updating beneficiary: {str(e)}")
+            return {'message': f'Error updating CaseBeneficiary: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_namespace.route('/get/beneficiaries/<int:case_id>')
+class CaseBeneficiaryByCaseIDResource(Resource):
+    def get(self, case_id):
+        try:
+            beneficiaries = CaseBeneficiary.query.filter_by(caseID=case_id).all()
+            if not beneficiaries:
+                return {'message': 'No beneficiaries found for the given case ID'}, HTTPStatus.NOT_FOUND
+            serialized_beneficiaries = []
+            for beneficiary in beneficiaries:
+                serialized_beneficiary = {
+                    'beneficiaryID': beneficiary.beneficiaryID,
+                    'firstName': beneficiary.firstName,
+                    'surName': beneficiary.surName,
+                    'gender': beneficiary.gender,
+                    'birthDate': beneficiary.birthDate,
+                    'birthPlace': beneficiary.birthPlace,
+                    'nationality': beneficiary.nationality,
+                    'idType': beneficiary.idType,
+                    'idNumber': beneficiary.idNumber,
+                    'phoneNumber': beneficiary.phoneNumber,
+                    'altPhoneNumber': beneficiary.altPhoneNumber,
+                    'email': beneficiary.email,
+                    'serviceRequired': beneficiary.serviceRequired,
+                    'otherServiceRequired': beneficiary.otherServiceRequired,
+                    'problemDescription': beneficiary.problemDescription,
+                    'serviceDescription': beneficiary.serviceDescription,
+                    'totalSupportCost': beneficiary.totalSupportCost,
+                    'receiveFundDate': beneficiary.receiveFundDate.isoformat(),
+                    'paymentMethod': beneficiary.paymentMethod,
+                    'paymentsType': beneficiary.paymentsType,
+                    'otherPaymentType': beneficiary.otherPaymentType,
+                    'incomeType': beneficiary.incomeType,
+                    'otherIncomeType': beneficiary.otherIncomeType,
+                    'housing': beneficiary.housing,
+                    'otherHousing': beneficiary.otherHousing,
+                    'housingType': beneficiary.housingType,
+                    'otherHousingType': beneficiary.otherHousingType,
+                    'totalFamilyMembers': beneficiary.totalFamilyMembers,
+                    'childrenUnder15': beneficiary.childrenUnder15,
+                    'isOldPeople': beneficiary.isOldPeople,
+                    'isDisabledPeople': beneficiary.isDisabledPeople,
+                    'isStudentsPeople': beneficiary.isStudentsPeople
+                }
+                serialized_beneficiaries.append(serialized_beneficiary)
+            return {'beneficiaries': serialized_beneficiaries}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error getting beneficiaries: {str(e)}")
+            return {'message': f'Error getting beneficiaries: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR 
 
 
 

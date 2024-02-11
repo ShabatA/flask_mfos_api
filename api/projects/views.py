@@ -1117,7 +1117,8 @@ class AddTaskForStageResource(Resource):
             db.session.add(new_task)
             db.session.commit()
 
-            return {'message': 'Task added for the linked stage successfully'}, HTTPStatus.OK
+            return {'message': 'Task added for the linked stage successfully',
+                    'task_id': new_task.taskID}, HTTPStatus.OK
 
         except Exception as e:
             current_app.logger.error(f"Error adding task for linked stage: {str(e)}")
@@ -1160,7 +1161,8 @@ class EditTaskForStageResource(Resource):
 
             db.session.commit()
 
-            return {'message': 'Task updated successfully'}, HTTPStatus.OK
+            return {'message': 'Task updated successfully',
+                    'task_id': task.taskID}, HTTPStatus.OK
 
         except Exception as e:
             current_app.logger.error(f"Error updating task: {str(e)}")
