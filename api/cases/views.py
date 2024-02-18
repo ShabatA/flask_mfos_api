@@ -2,6 +2,8 @@ from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.exceptions import NotFound
 from http import HTTPStatus
+from api.models.accountfields import AccountFields
+from api.models.finances import CaseFunds, RegionAccount
 from api.utils.case_category_calculator import CaseCategoryCalculator
 
 from api.utils.case_requirement_processor import CaseRequirementProcessor
@@ -229,7 +231,7 @@ class CasesAddResource(Resource):
             new_case = CasesData(
                 userID=current_user.userID,
                 regionID=case_data.get('regionID'),
-                caseName=case_data['caseName'],
+                caseName= f'New Case {datetime.utcnow().date()}',
                 sponsorAvailable=case_data['sponsorAvailable'],
                 question1=case_data['question1'],
                 question2=case_data['question2'],
@@ -279,7 +281,6 @@ class CasesAddResource(Resource):
             # Update the case fields
             existing_case.userID = current_user.userID
             existing_case.regionID = case_data.get('regionID')
-            existing_case.caseName = case_data['caseName']
             existing_case.sponsorAvailable = case_data['sponsorAvailable']
             existing_case.question1 = case_data['question1']
             existing_case.question2 = case_data['question2']
@@ -354,8 +355,12 @@ class CaseGetAllResource(Resource):
             cases_data = [] 
             for case in all_cases:
                 beneficiaries = CaseBeneficiary.query.filter_by(caseID=case.caseID).all()
+                users_assigned_to_case = (
+                    Users.query.join(CaseUser, Users.userID == CaseUser.userID)
+                    .filter(CaseUser.caseID == case.caseID)
+                    .all()
+                )
                 
-                    
                 serialized_beneficiaries = []
                 if beneficiaries:
                     for beneficiary in beneficiaries:
@@ -396,7 +401,8 @@ class CaseGetAllResource(Resource):
                         serialized_beneficiaries.append(serialized_beneficiary)
                 
                 region_details = {'regionID': case.regionID, 'regionName': Regions.query.get(case.regionID).regionName}
-                user_details = {'userID': current_user.userID, 'userFullName': current_user.firstName + current_user.lastName, 'username': current_user.username}
+                user = Users.query.get(case.userID)
+                user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
 
                 case_details = {
                     'caseID': case.caseID,
@@ -423,7 +429,8 @@ class CaseGetAllResource(Resource):
                     'dueDate': case.dueDate.isoformat() if case.dueDate else None,
                     'startDate': case.startDate.isoformat() if case.startDate else None,
                     'totalPoints': case.total_points,
-                    'beneficaries': serialized_beneficiaries
+                    'beneficaries': serialized_beneficiaries,
+                    'assignedUsers': [user.userID for user in users_assigned_to_case] if users_assigned_to_case else [],
                 }
 
                 cases_data.append(case_details)
@@ -488,6 +495,11 @@ class CaseBeneficiaryAddOrEditResource(Resource):
             form = BeneficiaryForm.query.filter_by(caseID=case_id).first()
             form.used = True
             form.save()
+            
+            existing_case.caseStatus = CaseStat.PENDING
+            existing_case.caseName = f'{new_beneficiary.firstName} {new_beneficiary.surName}'
+            existing_case.save()
+            
             return {'message': 'CaseBeneficiary added successfully',
                     'beneficiary_id': new_beneficiary.beneficiaryID}, HTTPStatus.OK
        
@@ -630,6 +642,33 @@ class CaseAddRequirementsResource(Resource):
                 function_name = f"requirement_{value}"
                 case_function = getattr(processor, function_name, processor.default_case)
                 case_function()
+            
+            approvedAmount = status_data.get('approvedAmount')
+            scope = case.question1['questionChoice']
+            region_account = RegionAccount.query.filter_by(regionID=case.regionID).first()
+            if approvedAmount and region_account:
+                case_fund = CaseFunds(
+                    accountID = region_account.accountID,
+                    fundsAllocated = approvedAmount,
+                    caseID = case.caseID  
+                )
+                
+                case_fund.save()
+                
+                
+                field = AccountFields.query.filter(AccountFields.fieldName.like(f'%{scope}%')).first()
+                if field:
+                    attr_name = f'{field.fieldName.lower()}_funds'
+                    if hasattr(region_account, attr_name):
+                        attr_value = getattr(region_account, attr_name)
+                        new_value = attr_value + float(approvedAmount)
+                        # Set the attribute value
+                        setattr(region_account, attr_name, new_value)
+                
+                region_account.totalFund -= float(approvedAmount)
+                region_account.usedFund += float(approvedAmount)
+                region_account.lastTransaction = datetime.utcnow.date()
+                db.session.commit()
 
             return {'message': 'Case requirements added successfully'}, HTTPStatus.CREATED
         except Exception as e:
@@ -1270,7 +1309,9 @@ class GetTasksForStageResource(Resource):
                     'deadline': str(task.deadline),
                     'description': task.description,
                     'assignedTo': [user.username for user in task.assignedTo],
+                    'assignedTo_ids': [user.userID for user in task.assignedTo],
                     'cc': [user.username for user in task.cc],
+                    'cc_ids': [user.userID for user in task.cc],
                     'createdBy': task.createdBy,
                     'attachedFiles': task.attachedFiles,
                     'status': task.status.value,
@@ -1551,7 +1592,9 @@ class GetTasksForCaseResource(Resource):
                     'deadline': str(task.deadline),
                     'description': task.description,
                     'assignedTo': [user.username for user in task.assignedTo],
+                    'assignedTo_ids': [user.userID for user in task.assignedTo],
                     'cc': [user.username for user in task.cc],
+                    'cc_ids': [user.userID for user in task.cc],
                     'createdBy': task.createdBy,
                     'attachedFiles': task.attachedFiles,
                     'status': task.status.value,
