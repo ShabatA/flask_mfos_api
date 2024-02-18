@@ -366,6 +366,7 @@ class CaseGetAllResource(Resource):
                     for beneficiary in beneficiaries:
                         serialized_beneficiary = {
                             'beneficiaryID': beneficiary.beneficiaryID,
+                            'caseID': case.caseID,
                             'firstName': beneficiary.firstName,
                             'surName': beneficiary.surName,
                             'gender': beneficiary.gender,
@@ -565,6 +566,9 @@ class CaseBeneficiaryAddOrEditResource(Resource):
 class CaseBeneficiaryByCaseIDResource(Resource):
     def get(self, case_id):
         try:
+            
+            case_data = CasesData.query.get_or_404(case_id)
+            
             beneficiaries = CaseBeneficiary.query.filter_by(caseID=case_id).all()
             if not beneficiaries:
                 return {'message': 'No beneficiaries found for the given case ID'}, HTTPStatus.NOT_FOUND
@@ -572,6 +576,7 @@ class CaseBeneficiaryByCaseIDResource(Resource):
             for beneficiary in beneficiaries:
                 serialized_beneficiary = {
                     'beneficiaryID': beneficiary.beneficiaryID,
+                    'caseID': beneficiary.caseID,
                     'firstName': beneficiary.firstName,
                     'surName': beneficiary.surName,
                     'gender': beneficiary.gender,
@@ -602,7 +607,8 @@ class CaseBeneficiaryByCaseIDResource(Resource):
                     'childrenUnder15': beneficiary.childrenUnder15,
                     'isOldPeople': beneficiary.isOldPeople,
                     'isDisabledPeople': beneficiary.isDisabledPeople,
-                    'isStudentsPeople': beneficiary.isStudentsPeople
+                    'isStudentsPeople': beneficiary.isStudentsPeople,
+                    
                 }
                 serialized_beneficiaries.append(serialized_beneficiary)
             return {'beneficiaries': serialized_beneficiaries}, HTTPStatus.OK
