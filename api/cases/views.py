@@ -259,8 +259,39 @@ class CasesAddResource(Resource):
             categoryCalculator = CaseCategoryCalculator(new_case)
             categoryCalculator.calculate_category()
             
+            region_details = {'regionID': new_case.regionID, 'regionName': Regions.query.get(new_case.regionID).regionName}
+            user = Users.query.get(new_case.userID)
+            user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
+            case_details = {
+                'caseID': new_case.caseID,
+                'caseName': new_case.caseName,
+                'region': region_details,
+                'user': user_details,
+                'budgetApproved': new_case.budgetApproved,
+                'sponsorAvailable': new_case.sponsorAvailable,
+                'question1': new_case.question1,
+                'question2': new_case.question2,
+                'question3': new_case.question3,
+                'question4': new_case.question4,
+                'question5': new_case.question5,
+                'question6': new_case.question6,
+                'question7': new_case.question7,
+                'question8': new_case.question8,
+                'question9': new_case.question9,
+                'question10': new_case.question10,
+                'question11': new_case.question11,
+                'question12': new_case.question12,
+                'caseStatus': 'Assessment' if new_case.caseStatus == CaseStat.ASSESSMENT else new_case.caseStatus.value,
+                'category': new_case.category.value if new_case.category else None,
+                'createdAt': new_case.createdAt.isoformat(),
+                'dueDate': new_case.dueDate.isoformat() if new_case.dueDate else None,
+                'startDate': new_case.startDate.isoformat() if new_case.startDate else None,
+                'totalPoints': new_case.total_points
+                    
+                }
+            
             return {'message': 'Case added successfully',
-                    'case_id': new_case.caseID}, HTTPStatus.CREATED
+                    'case_details': case_details}, HTTPStatus.CREATED
         except Exception as e:
             current_app.logger.error(f"Error adding case: {str(e)}")
             return {'message': f'Error adding case: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
