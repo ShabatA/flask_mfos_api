@@ -870,7 +870,7 @@ class GetAllRegionAccount(Resource):
                     'usedFund': account.usedFund,
                     'accountType': account.accountType,
                     'notes': account.notes,
-                    'lastTransaction': account.lastTransaction.isoformat() if account.lastTranction else None,
+                    'lastTransaction': account.lastTransaction.isoformat() if account.lastTransation else None,
                     'health_funds': account.health_funds,
                     'education_funds': account.education_funds,
                     'general_funds': account.general_funds,
@@ -896,8 +896,8 @@ class GetAllFinancialFunds(Resource):
             fund_accounts = FinancialFund.query.all()
             accounts_data = []
             
-            for account in fund_accounts:
-                donations = Donations.query.filter_by(fundID=account.fundID).order_by(desc(Donations.createdAt)).all()
+            for fund in fund_accounts:
+                donations = Donations.query.filter_by(fundID=fund.fundID).order_by(desc(Donations.createdAt)).all()
                 donations_data = []
                 for donation in donations:
                     account = RegionAccount.query.get(donation.accountID) 
@@ -913,7 +913,7 @@ class GetAllFinancialFunds(Resource):
                     }
                     donations_data.append(donations_details)
                     
-                payments = Payments.query.filter_by(from_fund=account.accountID).order_by(desc(Payments.createdAt)).all()
+                payments = Payments.query.filter_by(from_fund=fund.fundID).order_by(desc(Payments.createdAt)).all()
                 payments_data = []
                 for payment in payments:
                     payment_details = {
@@ -927,13 +927,13 @@ class GetAllFinancialFunds(Resource):
                     payments_data.append(payment_details)
                     
                 account_details = {
-                    'fundID': account.fundID,
-                    'fundName': account.fundName,
-                    'totalFund': account.totalFund,
-                    'usedFund': account.usedFund,
-                    'accountType': account.accountType,
-                    'notes': account.notes,
-                    'createdAt': account.createdAt.isoformat(),
+                    'fundID': fund.fundID,
+                    'fundName': fund.fundName,
+                    'totalFund': fund.totalFund,
+                    'usedFund': fund.usedFund,
+                    'accountType': fund.accountType,
+                    'notes': fund.notes,
+                    'createdAt': fund.createdAt.isoformat(),
                     'donations': donations_data,
                     'payments': payments_data
                 }
