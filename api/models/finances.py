@@ -102,6 +102,8 @@ class Donors(db.Model):
     name = db.Column(db.String, nullable=False)
     donorType = db.Column(db.String)
     country = db.Column(db.String)
+    email = db.Column(db.String)
+    phoneNumber = db.Column(db.String)
     
     donations = db.relationship('Donations', backref='donors', lazy=True)
     
@@ -125,6 +127,9 @@ class Donations(db.Model):
     details = db.Column(db.Text, nullable=True)
     currency = db.Column(db.String)
     field = db.Column(db.String)
+    donationType = db.Column(db.String)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=True)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=True)
     
     def save(self):
         db.session.add(self)

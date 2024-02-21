@@ -33,7 +33,9 @@ region_account_data = finance_namespace.model('RegionAccountData', {
 donor_data_model = finance_namespace.model('DonorData', {
     'name': fields.String(required=True, description='name of the donor'),
     'donorType': fields.String(required=True, description='could be organization or individual'),
-    'country': fields.String(required=True, description='country where donor is from')
+    'country': fields.String(required=True, description='country where donor is from'),
+    'email': fields.String(required=True),
+    'phoneNumber': fields.String(required=True)
 })
 
 donations_data_model = finance_namespace.model('DonationData', {
@@ -44,6 +46,9 @@ donations_data_model = finance_namespace.model('DonationData', {
     'details': fields.String(required=True, description='Supply any notes/details'),
     'amount': fields.Float(required=True, description='The donation amount'),
     'field':  fields.String(enum=[field.value for field in FieldName],required=True ,description="What account field the donations falls under"),
+    'donationType': fields.String(required=True, description='whether it is for a Case, Project, or General'),
+    'caseID': fields.Integer(description='Only provide if donation type is Case'),
+    'projectID': fields.Integer(description='Only provide if donation type is Project')
 })
 
 project_fund_release_request =finance_namespace.model('ProjectFundReleaseRequest', {
@@ -233,7 +238,9 @@ class AddEditDonorsResource(Resource):
             new_donor = Donors(
                 name = donor_data['name'],
                 donorType = donor_data['donorType'],
-                country = donor_data['country']  
+                country = donor_data['country'],
+                email = donor_data['email'],
+                phoneNumber = donor_data['phoneNumber'] 
             )
             
             new_donor.save()
@@ -262,6 +269,8 @@ class AddEditDonorsResource(Resource):
             existing_donor.fundName = donor_data['name']
             existing_donor.donorType = donor_data['donorType']
             existing_donor.country = donor_data['country']
+            existing_donor.email = donor_data['email']
+            existing_donor.phoneNumber = donor_data['phoneNumber']
             
             existing_donor.save()
             return {'message': 'Donor was updated successfully.'}, HTTPStatus.OK
@@ -297,7 +306,10 @@ class AddDonationResource(Resource):
                 details = donation_data.get('details', ''),
                 currency = donation_data['currency'],
                 amount = donation_data['amount'],
-                field = donation_data['field']
+                field = donation_data['field'],
+                donationType = donation_data['donationType'],
+                caseID = donation_data.get('caseID', None),
+                projectID = donation_data.get('projectID', None)
             )
             new_donation.save()
             

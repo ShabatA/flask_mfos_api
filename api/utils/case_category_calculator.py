@@ -33,22 +33,7 @@ class CaseCategoryCalculator:
         
         return points
     
-    # def sub_questions_no_points(self) -> int:
-    #     '''
-    #     Go through the sub questions (4 to 9) and check how many are "yes"
-    #     '''
-    #     points = 0
-    #     for i in range(4,10):
-    #         attr_name = f"question{i}"
-    #         if hasattr(self.case, attr_name):
-    #             attr_value = getattr(self.case, attr_name)
-    #             if(attr_value['questionChoice'].lower() == 'no'):
-    #                 points += 5
-    #             else:
-    #                 pass
-        
-    #     return points
-    
+
     def calculate_category(self) -> None:
         '''
         Calculates the final category as follows:
