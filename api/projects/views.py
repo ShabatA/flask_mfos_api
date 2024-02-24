@@ -359,7 +359,7 @@ class ProjectGetAllResource(Resource):
             projects_data = []
             for project in all_projects:
                 region_details = {'regionID': project.regionID, 'regionName': Regions.query.get(project.regionID).regionName}
-                user = Users.query.get(project.userID)
+                user = Users.query.get(project.createdBy)
                 user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
                 
                 users_assigned_to_project = (
