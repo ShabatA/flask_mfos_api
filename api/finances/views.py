@@ -18,16 +18,16 @@ finance_namespace = Namespace("Finances", description="Namespace for Finances su
 
 fund_data_model = finance_namespace.model('FinancialFundData',{
     'fundName': fields.String(required=True, description='Name of the actual account'),
-    'totalFund': fields.Float(required=True, description='Balance (could be 0)'),
     'accountType': fields.String(required=True, description='Type of Account (Bank/Cash/Other)'),
-    'notes': fields.String(required=False, description='Additional notes if applicable')
+    'notes': fields.String(required=False, description='Additional notes if applicable'),
+    'currency': fields.String(required=True, description='The currency the actual bank is using')
 })
 
 region_account_data = finance_namespace.model('RegionAccountData', {
     'regionID': fields.Integer(required=True, description='The region the account is for'),
-    'totalFund': fields.Float(required=True, description='Balance (could be 0)'),
     'accountType': fields.String(required=True, description='Type of Account (Bank/Cash/Other)'),
-    'notes': fields.String(required=False, description='Additional notes if applicable')
+    'notes': fields.String(required=False, description='Additional notes if applicable'),
+    'currency': fields.String(required=True, description='The currency the region is using.')
 })
 
 donor_data_model = finance_namespace.model('DonorData', {
@@ -48,7 +48,8 @@ donations_data_model = finance_namespace.model('DonationData', {
     'field':  fields.String(enum=[field.value for field in FieldName],required=True ,description="What account field the donations falls under"),
     'donationType': fields.String(required=True, description='whether it is for a Case, Project, or General'),
     'caseID': fields.Integer(description='Only provide if donation type is Case'),
-    'projectID': fields.Integer(description='Only provide if donation type is Project')
+    'projectID': fields.Integer(description='Only provide if donation type is Project'),
+    'currency': fields.String(required=True, description='The currency the amount originates from')
 })
 
 project_fund_release_request =finance_namespace.model('ProjectFundReleaseRequest', {
@@ -65,6 +66,9 @@ fund_transfer_model = finance_namespace.model('FundTransfer', {
     'from_fund': fields.Integer(required=True, description= 'the fund to take from'),
     'to_fund': fields.Integer(required=True, description= 'the fund to transfer to'),
     'transferAmount': fields.Float(required=True, description='The amount to be transfered'),
+    'currencyFrom': fields.String(required=False, description='Transfer from which currency'),
+    'currencyTo': fields.String(required=False, description='Transfer to which currency'),
+    'exchangeRate': fields.Float(required=False, description='The exchange rate'),
     'notes': fields.String(required=False, description='Supply any notes/details'),
     'attachedFiles': fields.String(required=False, description='attached files'),   
 })
@@ -75,6 +79,10 @@ payments_model = finance_namespace.model('Payments', {
     'paymentName': fields.String(required=True, description='the name of the case/project is for, or something else'),
     'paymentMethod': fields.String(required=True, description='Method of payment'),
     'amount': fields.Float(required=True, description='The amount to be paid'),
+    'currency': fields.String(required=True, description='The currency the payment is made in'),
+    'exchangeRate': fields.Float(required=True, description='The exchange rate'),
+    'transferExpenses': fields.Float(required=False, description='Transfer expenses if any.'),
+    'supportingFiles': fields.String(required=False, description='names of the uploaded files.'),
     'notes': fields.String(required=False, description='any notes if applicable.')
 })
 
@@ -109,9 +117,10 @@ class AddEditFinancialFundResource(Resource):
             
             new_fund = FinancialFund(
                 fundName = fund_data['fundName'],
-                totalFund = fund_data['totalFund'],
+                totalFund = 0,
                 accountType = fund_data['accountType'],
                 usedFund = 0,
+                currency = fund_data['currency'],
                 notes= fund_data.get('notes', '')
             )
             
@@ -174,9 +183,10 @@ class AddEditRegionAccountResource(Resource):
             
             new_account = RegionAccount(
                 acountName = region.regionName,
-                totalFund = account_data['totalFund'],
+                totalFund = 0,
                 accountType = account_data['accountType'],
                 usedFund = 0,
+                currency = account_data['currency'],
                 notes= account_data.get('notes', ''),
                 regionID=region_id
             )
@@ -397,7 +407,10 @@ class RequestFundTransferResource(Resource):
                 transferAmount = request_data['transferAmount'],
                 notes = request_data['notes'],
                 attachedFiles = request_data['attachedFiles'],
-                requestedBy = current_user.userID
+                requestedBy = current_user.userID,
+                currencyFrom = request_data['currencyFrom'],
+                currencyTo = request_data['currencyTo'],
+                exchangeRate = request_data['exchangeRate']
             )
             
             request.save()
@@ -433,7 +446,11 @@ class RecordPaymentsResource(Resource):
                 notes = request_data['notes'],
                 paymentName = request_data['paymentName'],
                 paymentMethod = request_data['paymentMethod'],
-                amount = request_data['amount']
+                amount = request_data['amount'],
+                currency = request_data['currency'],
+                transferExpenses = request_data.get('transferExpenses', 0),
+                exchangeRate = request_data.get('exchangeRate', 0),
+                supportingFiles = request_data.get('supportingFiles', None),
             )
             
             request.save()
@@ -642,9 +659,9 @@ class GetAllFundTransferRequests(Resource):
                 user = Users.query.get(request.requestedBy)
                 user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
                 from_fund = FinancialFund.query.get(request.from_fund)
-                from_fund_details = {'fundID': from_fund.fundID, 'fundName': from_fund.fundName, 'totalFund': from_fund.totalFund}
+                from_fund_details = {'fundID': from_fund.fundID, 'fundName': from_fund.fundName, 'totalFund': from_fund.totalFund, 'currency': from_fund.currency}
                 to_fund = FinancialFund.query.get(request.to_fund)
-                to_fund_details = {'fundID': to_fund.fundID, 'fundName': to_fund.fundName, 'totalFund': to_fund.totalFund}
+                to_fund_details = {'fundID': to_fund.fundID, 'fundName': to_fund.fundName, 'totalFund': to_fund.totalFund, 'currency': to_fund.currency}
                 
                 request_details = {
                     'requestID': request.requestID,
@@ -654,6 +671,9 @@ class GetAllFundTransferRequests(Resource):
                     'transferAmount': request.transferAmount,
                     'createdAt': request.createdAt.isoformat(),
                     'notes': request.notes,
+                    'currencyFrom': request.currencyFrom,
+                    'currencyTo': request.currencyTo,
+                    'exchangeRate': request.exchangeRate,
                     'attachedFiles': request.attachedFiles,
                     'stage': request.stage.value,
                     'approvedAt': request.approvedAt.isoformat() if request.approvedAt else None   
@@ -734,9 +754,9 @@ class GetAllDonationsResource(Resource):
                 donations_data = []
                 for donation in donations:
                     fund = FinancialFund.query.get(donation.fundID)
-                    fund_details = {'fundID': fund.fundID, 'fundName': fund.fundName, 'totalFund': fund.totalFund}
+                    fund_details = {'fundID': fund.fundID, 'fundName': fund.fundName, 'totalFund': fund.totalFund, 'currency': fund.currency}
                     account = RegionAccount.query.get(donation.accountID) 
-                    account_details = {'accountID': account.accountID, 'accountName': account.accountName, 'totalFund': account.totalFund}
+                    account_details = {'accountID': account.accountID, 'accountName': account.accountName, 'totalFund': account.totalFund, 'currency': account.currency}
                     donations_details = {
                         'donationID': donation.id,
                         'fund_account_details': fund_details,
@@ -754,6 +774,7 @@ class GetAllDonationsResource(Resource):
                     'donorType': donor.donorType,
                     'country': donor.country,
                     'donorID': donor.donorID,
+                    'email': donor.email,
                     'donations': donations_data
                 }
                 donors_data.append(donor_details)
@@ -783,6 +804,10 @@ class GetAllPaymentsResource(Resource):
                     'paymentMethod': payment.paymentMethod,
                     'notes': payment.notes,
                     'amount': payment.amount,
+                    'currency': payment.currency,
+                    'transferExpenses': payment.transferExpenses,
+                    'exchangeRate': payment.exchangeRate,
+                    'supportingFiles': payment.supportingFiles,
                     'createdAt': payment.createdAt.isoformat()
                 }
                 payments_data.append(payment_details)
@@ -810,6 +835,10 @@ class GetAllFundPaymentsResource(Resource):
                     'paymentMethod': payment.paymentMethod,
                     'notes': payment.notes,
                     'amount': payment.amount,
+                    'currency': payment.currency,
+                    'transferExpenses': payment.transferExpenses,
+                    'exchangeRate': payment.exchangeRate,
+                    'supportingFiles': payment.supportingFiles,
                     'createdAt': payment.createdAt.isoformat()
                 }
                 payments_data.append(payment_details)
@@ -880,6 +909,7 @@ class GetAllRegionAccount(Resource):
                     'accountName': account.accountName,
                     'totalFund': account.totalFund,
                     'usedFund': account.usedFund,
+                    'currency': account.currency,
                     'accountType': account.accountType,
                     'notes': account.notes,
                     'lastTransaction': account.lastTransaction.isoformat() if account.lastTransation else None,
@@ -934,6 +964,10 @@ class GetAllFinancialFunds(Resource):
                         'paymentMethod': payment.paymentMethod,
                         'notes': payment.notes,
                         'amount': payment.amount,
+                        'currency': payment.currency,
+                        'transferExpenses': payment.transferExpenses,
+                        'exchangeRate': payment.exchangeRate,
+                        'supportingFiles': payment.supportingFiles,
                         'createdAt': payment.createdAt.isoformat()
                     }
                     payments_data.append(payment_details)
@@ -943,6 +977,7 @@ class GetAllFinancialFunds(Resource):
                     'fundName': fund.fundName,
                     'totalFund': fund.totalFund,
                     'usedFund': fund.usedFund,
+                    'currency': fund.currency,
                     'accountType': fund.accountType,
                     'notes': fund.notes,
                     'createdAt': fund.createdAt.isoformat(),

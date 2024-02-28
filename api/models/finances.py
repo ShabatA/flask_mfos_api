@@ -21,6 +21,7 @@ class RegionAccount(db.Model):
     shelter_funds = db.Column(db.Float, nullable=True, default= 0)
     sponsorship_funds = db.Column(db.Float, nullable=True, default= 0)
     regionID = db.Column(db.Integer, db.ForeignKey('regions.regionID'))
+    currency = db.Column(db.String, default = 'USD')
     
     
     projectsFunds = db.relationship('ProjectFunds', backref='projects_data', lazy=True)
@@ -46,6 +47,7 @@ class FinancialFund(db.Model):
     accountType = db.Column(db.String)
     notes = db.Column(db.Text)
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    currency = db.Column(db.String, default = 'USD')
     
     donations = db.relationship('Donations', backref='financial_fund', lazy=True)
     payments = db.relationship('Payments', backref='financial_fund',lazy=True)
@@ -125,7 +127,7 @@ class Donations(db.Model):
     amount = db.Column(db.Float, nullable=False)
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     details = db.Column(db.Text, nullable=True)
-    currency = db.Column(db.String)
+    currency = db.Column(db.String, default = 'USD')
     field = db.Column(db.String)
     donationType = db.Column(db.String)
     caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=True)
@@ -196,6 +198,10 @@ class FundTransferRequests(db.Model):
     notes = db.Column(db.Text)
     attachedFiles = db.Column(db.String, nullable=True)
     approvedAt = db.Column(db.DateTime, nullable=True)
+    currencyFrom = db.Column(db.String)
+    currencyTo = db.Column(db.String)
+    exchangeRate = db.Column(db.Float)
+    
     
     def save(self):
         db.session.add(self)
@@ -221,6 +227,10 @@ class Payments(db.Model):
     amount = db.Column(db.Float)
     notes = db.Column(db.Text)
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    currency = db.Column(db.String)
+    transferExpenses = db.Column(db.Float)
+    exchangeRate = db.Column(db.Float)
+    supportingFiles = db.Column(db.String, nullable=True)
     
     def save(self):
         db.session.add(self)
