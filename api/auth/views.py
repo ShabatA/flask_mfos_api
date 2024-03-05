@@ -2,9 +2,9 @@ from api.config.config import Config
 from flask_restx import Resource, Namespace, fields
 from flask import request, current_app
 
-from api.models.cases import CaseTask, CaseUser, CasesData
+from api.models.cases import CaseTask, CaseTaskStatus, CaseUser, CasesData
 from ..models.users import Users, Role, UserPermissions, PermissionLevel
-from ..models.projects import ProjectUser, ProjectTask, ProjectsData
+from ..models.projects import ProjectUser, ProjectTask, ProjectsData, TaskStatus
 from werkzeug.security import generate_password_hash, check_password_hash
 from http import HTTPStatus
 from flask_jwt_extended import (create_access_token,
@@ -658,9 +658,41 @@ class AllUsers(Resource):
 
         # Fetch all ProjectTasks the user is assigned to
         project_tasks = ProjectTask.query.join(Users.assigned_tasks).filter(Users.userID == user.userID).all()
+        total_p_tasks = len(project_tasks)
+        completed_p_tasks = 0
+        inprogress_p_tasks = 0
+        overdue_p_tasks = 0
+        not_started_p_tasks = 0
+        if total_p_tasks > 0:
+
+            for task in project_tasks:
+                if task.status == TaskStatus.DONE:
+                    completed_p_tasks += 1
+                if task.status == TaskStatus.OVERDUE:
+                    overdue_p_tasks += 1
+                if task.status == TaskStatus.INPROGRESS:
+                    inprogress_p_tasks += 1
+                if task.status == TaskStatus.TODO:
+                    not_started_p_tasks += 1
 
         # Fetch all CaseTasks the user is assigned to
         case_tasks = CaseTask.query.join(Users.case_assigned_tasks).filter(Users.userID == user.userID).all()
+        total_c_tasks = len(case_tasks)
+        completed_c_tasks = 0
+        inprogress_c_tasks = 0
+        overdue_c_tasks = 0
+        not_started_c_tasks = 0
+        if total_c_tasks > 0:
+
+            for task in case_tasks:
+                if task.status == CaseTaskStatus.DONE:
+                    completed_c_tasks += 1
+                if task.status == CaseTaskStatus.OVERDUE:
+                    overdue_c_tasks += 1
+                if task.status == CaseTaskStatus.INPROGRESS:
+                    inprogress_c_tasks += 1
+                if task.status == CaseTaskStatus.TODO:
+                    not_started_c_tasks += 1
         
         user_data = {
             'userID': user.userID,
@@ -691,14 +723,22 @@ class AllUsers(Resource):
                                'title': task.title,
                                'description': task.description,
                                'status': task.status.value,
+                               'checklist': task.checklist,
                                'stageName': task.stage.name,
+                               'projectName': ProjectsData.query.get(task.projectID).projectName,
                                'completionDate': task.completionDate.isoformat() if task.completionDate else None} for task in project_tasks] if project_tasks else [],
+            'project_tasks_summary': {'total_p_tasks': total_p_tasks,'completed_p_tasks': completed_p_tasks, 'overdue_p_tasks': overdue_p_tasks,
+                                     'not_started_p_tasks': not_started_p_tasks, 'inprogress_p_tasks': inprogress_p_tasks},
             'case_tasks': [{'taskID': task.taskID,
                             'title': task.title,
                             'description': task.description,
                             'status': task.status.value,
+                            'checklist': task.checklist,
                             'stageName': task.stage.name,
+                            'caseName': CasesData.query.get(task.caseID).caseName,
                             'completionDate': task.completionDate.isoformat() if task.completionDate else None} for task in case_tasks] if case_tasks else [],
+            'case_task_summary': {'total_c_tasks': total_c_tasks,'completed_c_tasks': completed_c_tasks, 'overdue_c_tasks': overdue_c_tasks,
+                                     'not_started_c_tasks': not_started_c_tasks, 'inprogress_c_tasks': inprogress_c_tasks},
         }
         return user_data
 

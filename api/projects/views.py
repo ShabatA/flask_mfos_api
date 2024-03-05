@@ -326,7 +326,6 @@ class ProjectAddResource(Resource):
 @project_namespace.route('/get_all', methods=['GET'])
 class ProjectGetAllResource(Resource):
     @jwt_required()
-    # @project_namespace.marshal_list_with(projects_result_model)
     def get(self):
         try:
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
@@ -393,6 +392,115 @@ class ProjectGetAllResource(Resource):
                     'startDate': project.startDate.isoformat() if project.startDate else None,
                     'totalPoints': project.totalPoints,
                     'assignedUsers': [user.userID for user in users_assigned_to_project] if users_assigned_to_project else [],
+                }
+
+                projects_data.append(project_details)
+
+            return projects_data, HTTPStatus.OK
+        except Exception as e:
+            return {'message': f'Error fetching projects: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@project_namespace.route('/get_all_approved_only', methods=['GET'])
+class ProjectGetAllApprovedResource(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            if not current_user.is_admin():
+                # Fetch all projects the user has access to
+                projects = (
+                    ProjectsData.query.join(Users, Users.userID == ProjectsData.createdBy)
+                    .filter(Users.userID == current_user.userID, ProjectsData.projectStatus == Status.APPROVED)
+                    .all()
+                )
+
+                # Fetch all projects associated with the user through ProjectUser
+                project_user_projects = (
+                    ProjectsData.query.join(ProjectUser, ProjectsData.projectID == ProjectUser.projectID)
+                    .filter(ProjectUser.userID == current_user.userID, ProjectsData.projectStatus == Status.APPROVED)
+                    .all()
+                )
+            
+                # Combine the projects and remove duplicates
+                all_projects = list(set(projects + project_user_projects))
+            else:
+                all_projects = ProjectsData.query.all()
+                
+            # Check if all_cases is empty
+            if not all_projects:
+                return [], HTTPStatus.OK  # Return an empty list    
+            
+            # Prepare the list of projects with additional details
+            projects_data = []
+            for project in all_projects:
+                region_details = {'regionID': project.regionID, 'regionName': Regions.query.get(project.regionID).regionName}
+                user = Users.query.get(project.createdBy)
+                user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
+                
+                users_assigned_to_project = (
+                    Users.query.join(ProjectUser, Users.userID == ProjectUser.userID)
+                    .filter(ProjectUser.projectID == project.projectID)
+                    .all()
+                )
+                
+                stages = ProjectStage.query.filter_by(projectID=project.projectID).all()
+                stages_data = []
+                for stage in stages:
+                    # Fetch all tasks for the linked stage
+                    tasks = ProjectTask.query.filter_by(projectID=project.projectID, stageID=stage.stageID).all()
+                    total_tasks = len(tasks)
+                    completed_tasks = 0
+                    inprogress_tasks = 0
+                    overdue_tasks = 0
+                    not_started_tasks = 0
+                    completionPercent = 0
+                    if total_tasks > 0:
+
+                        total_tasks = len(tasks)
+                        for task in tasks:
+                            if task.status == TaskStatus.DONE:
+                                completed_tasks += 1
+                            if task.status == TaskStatus.OVERDUE:
+                                overdue_tasks += 1
+                            if task.status == TaskStatus.INPROGRESS:
+                                inprogress_tasks += 1
+                            if task.status == TaskStatus.TODO:
+                                not_started_tasks += 1
+                        completionPercent = (completed_tasks/total_tasks) * 100
+                    stage_details = {'stageID': stage.stage.stageID, 'name': stage.stage.name,
+                                   'started': stage.started, 'completed': stage.completed,
+                                   'completionDate': stage.completionDate.isoformat() if stage.completionDate else None,
+                                   'totalTasks': total_tasks, 'completedTasks': completed_tasks, 'completionPercent': completionPercent,
+                                   'notStartedTasks': not_started_tasks, 'overdueTasks': overdue_tasks, 'inprogressTasks': inprogress_tasks}
+                    stages_data.append(stage_details)
+
+                project_details = {
+                    'projectID': project.projectID,
+                    'projectName': project.projectName,
+                    'region': region_details,
+                    'user': user_details,
+                    'budgetRequired': project.budgetRequired,
+                    'budgetApproved': project.budgetApproved,
+                    'projectStatus': 'Assessment' if project.projectStatus == Status.ASSESSMENT else project.projectStatus.value,
+                    'category': project.category.value if project.category else None,
+                    'projectScope': project.projectScope,
+                    'projectIdea': project.projectIdea,
+                    'solution': project.solution,
+                    'addedValue': project.addedValue,
+                    'projectNature': project.projectNature,
+                    'beneficiaryCategory': project.beneficiaryCategory,
+                    'commitment': project.commitment,
+                    'commitmentType': project.commitmentType,
+                    'supportingOrg': project.supportingOrg,
+                    'documents': project.documents,
+                    'recommendationLetter': project.recommendationLetter,
+                    'createdAt': project.createdAt.isoformat(),
+                    'dueDate': project.dueDate.isoformat() if project.dueDate else None,
+                    'startDate': project.startDate.isoformat() if project.startDate else None,
+                    'totalPoints': project.totalPoints,
+                    'assignedUsers': [user.userID for user in users_assigned_to_project] if users_assigned_to_project else [],
+                    'stages_data': stages_data
                 }
 
                 projects_data.append(project_details)
@@ -907,7 +1015,10 @@ class EditTaskForStageResource(Resource):
             task.description = data.get('description', task.description)
             assigned_to_ids = data.get('assigned_to', [])
             cc_ids = data.get('cc', [])
-            task.attachedFiles = data.get('attached_files', task.attachedFiles)
+            if task.attachedFiles.endswith(","):
+                task.attachedFiles = task.attachedFiles + " " + data.get('attached_files', '')
+            else:
+                task.attachedFiles = task.attachedFiles + ", " + data.get('attached_files', task.attachedFiles)
             task.checklist = data.get('checklist', task.checklist)
 
             # Fetch user instances based on IDs

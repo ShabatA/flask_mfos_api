@@ -255,8 +255,8 @@ class ProjectRequirementProcessor:
     def requirement_17(self):
        task =  ProjectTask(
            projectID = self.project_id,
-           title= 'Implementation Requirement - Signed Statements',
-           description= 'Upload signed statement files for this project.',
+           title= 'Implementation Requirement - Signed Beneficiary Lists',
+           description= 'Upload specific excel sheet with specific beneficiary details for this project.',
            assignedTo = [],
            cc = [],
            createdBy= self.user_id,

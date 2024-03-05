@@ -472,6 +472,158 @@ class CaseGetAllResource(Resource):
             return {'message': f'Error fetching cases: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
+@case_namespace.route('/get_all_approved_only', methods=['GET'])
+class CaseGetAllApprovedResource(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            if not current_user.is_admin():
+                # Fetch all cases the user has access to
+                cases = (
+                    CasesData.query.join(Users, Users.userID == CasesData.userID)
+                    .filter(Users.userID == current_user.userID)
+                    .all()
+                )
+
+                # Fetch all cases associated with the user through CaseUser
+                case_user_cases = (
+                    CasesData.query.join(CaseUser, CasesData.caseID == CaseUser.caseID)
+                    .filter(CaseUser.userID == current_user.userID)
+                    .all()
+                )
+            
+                # Combine the cases and remove duplicates
+                all_cases = list(set(cases + case_user_cases))
+            else:
+                all_cases = CasesData.query.all()
+
+            # Check if all_cases is empty
+            if not all_cases:
+                return [], HTTPStatus.OK  # Return an empty list
+
+            # Prepare the list of cases with additional details
+            cases_data = [] 
+            for case in all_cases:
+                beneficiaries = CaseBeneficiary.query.filter_by(caseID=case.caseID).all()
+                users_assigned_to_case = (
+                    Users.query.join(CaseUser, Users.userID == CaseUser.userID)
+                    .filter(CaseUser.caseID == case.caseID)
+                    .all()
+                )
+                
+                serialized_beneficiaries = []
+                if beneficiaries:
+                    for beneficiary in beneficiaries:
+                        serialized_beneficiary = {
+                            'beneficiaryID': beneficiary.beneficiaryID,
+                            'caseID': case.caseID,
+                            'firstName': beneficiary.firstName,
+                            'surName': beneficiary.surName,
+                            'gender': beneficiary.gender,
+                            'birthDate': beneficiary.birthDate,
+                            'birthPlace': beneficiary.birthPlace,
+                            'nationality': beneficiary.nationality,
+                            'idType': beneficiary.idType,
+                            'idNumber': beneficiary.idNumber,
+                            'phoneNumber': beneficiary.phoneNumber,
+                            'altPhoneNumber': beneficiary.altPhoneNumber,
+                            'email': beneficiary.email,
+                            'serviceRequired': beneficiary.serviceRequired,
+                            'otherServiceRequired': beneficiary.otherServiceRequired,
+                            'problemDescription': beneficiary.problemDescription,
+                            'serviceDescription': beneficiary.serviceDescription,
+                            'totalSupportCost': beneficiary.totalSupportCost,
+                            'receiveFundDate': beneficiary.receiveFundDate.isoformat(),
+                            'paymentMethod': beneficiary.paymentMethod,
+                            'paymentsType': beneficiary.paymentsType,
+                            'otherPaymentType': beneficiary.otherPaymentType,
+                            'incomeType': beneficiary.incomeType,
+                            'otherIncomeType': beneficiary.otherIncomeType,
+                            'housing': beneficiary.housing,
+                            'otherHousing': beneficiary.otherHousing,
+                            'housingType': beneficiary.housingType,
+                            'otherHousingType': beneficiary.otherHousingType,
+                            'totalFamilyMembers': beneficiary.totalFamilyMembers,
+                            'childrenUnder15': beneficiary.childrenUnder15,
+                            'isOldPeople': beneficiary.isOldPeople,
+                            'isDisabledPeople': beneficiary.isDisabledPeople,
+                            'isStudentsPeople': beneficiary.isStudentsPeople
+                        }
+                        serialized_beneficiaries.append(serialized_beneficiary)
+                
+                region_details = {'regionID': case.regionID, 'regionName': Regions.query.get(case.regionID).regionName}
+                user = Users.query.get(case.userID)
+                user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
+                
+                stages = CaseToStage.query.filter_by(caseID=case.caseID).all()
+                stages_data = []
+                for stage in stages:
+                    # Fetch all tasks for the linked stage
+                    tasks = CaseTask.query.filter_by(caseID=case.caseID, stageID=stage.stageID).all()
+                    total_tasks = len(tasks)
+                    completed_tasks = 0
+                    inprogress_tasks = 0
+                    overdue_tasks = 0
+                    not_started_tasks = 0
+                    completionPercent = 0
+                    if total_tasks > 0:
+
+                        for task in tasks:
+                            if task.status == CaseTaskStatus.DONE:
+                                completed_tasks += 1
+                            if task.status == CaseTaskStatus.OVERDUE:
+                                overdue_tasks += 1
+                            if task.status == CaseTaskStatus.INPROGRESS:
+                                inprogress_tasks += 1
+                            if task.status == CaseTaskStatus.TODO:
+                                not_started_tasks += 1
+                        completionPercent = (completed_tasks/total_tasks) * 100
+                    stage_details = {'stageID': stage.stage.stageID, 'name': stage.stage.name,
+                                   'started': stage.started, 'completed': stage.completed,
+                                   'completionDate': stage.completionDate.isoformat() if stage.completionDate else None,
+                                   'totalTasks': total_tasks, 'completedTasks': completed_tasks, 'completionPercent': completionPercent,
+                                   'notStartedTasks': not_started_tasks, 'overdueTasks': overdue_tasks, 'inprogressTasks': inprogress_tasks}
+                    stages_data.append(stage_details)
+
+                case_details = {
+                    'caseID': case.caseID,
+                    'caseName': case.caseName,
+                    'region': region_details,
+                    'user': user_details,
+                    'budgetApproved': case.budgetApproved,
+                    'sponsorAvailable': case.sponsorAvailable,
+                    'question1': case.question1,
+                    'question2': case.question2,
+                    'question3': case.question3,
+                    'question4': case.question4,
+                    'question5': case.question5,
+                    'question6': case.question6,
+                    'question7': case.question7,
+                    'question8': case.question8,
+                    'question9': case.question9,
+                    'question10': case.question10,
+                    'question11': case.question11,
+                    'question12': case.question12,
+                    'caseStatus': 'Assessment' if case.caseStatus == CaseStat.ASSESSMENT else case.caseStatus.value,
+                    'category': case.category.value if case.category else None,
+                    'createdAt': case.createdAt.isoformat(),
+                    'dueDate': case.dueDate.isoformat() if case.dueDate else None,
+                    'startDate': case.startDate.isoformat() if case.startDate else None,
+                    'totalPoints': case.total_points,
+                    'beneficaries': serialized_beneficiaries,
+                    'assignedUsers': [user.userID for user in users_assigned_to_case] if users_assigned_to_case else [],
+                    'stages_data': stages_data
+                }
+
+                cases_data.append(case_details)
+
+            return cases_data, HTTPStatus.OK
+        except Exception as e:
+            return {'message': f'Error fetching cases: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
 @case_namespace.route('/beneficiary/add_or_edit', methods=['POST', 'PUT'])
 class CaseBeneficiaryAddOrEditResource(Resource):
     @jwt_required()
@@ -1388,7 +1540,10 @@ class EditTaskForStageResource(Resource):
             task.description = data.get('description', task.description)
             assigned_to_ids = data.get('assigned_to', [])
             cc_ids = data.get('cc', [])
-            task.attachedFiles = data.get('attached_files', task.attachedFiles)
+            if task.attachedFiles.endswith(","):
+                task.attachedFiles = task.attachedFiles + " " + data.get('attached_files', '')
+            else:
+                task.attachedFiles = task.attachedFiles + ", " + data.get('attached_files', task.attachedFiles)
             task.checklist = data.get('checklist', task.checklist)
 
             # Fetch user instances based on IDs
