@@ -8,13 +8,16 @@ class CaseCategoryCalculator:
     def main_questions_points(self) -> int:
         points = 0
         priority_nature = ['health(direct)', 'basic and university education', 'life support', 'shelter']
-        if (self.case.question1['questionChoice'].lower() in priority_nature):
+        
+        if self.case.question1['questionChoice'].lower() in priority_nature:
             points += 10
-        elif (self.case.question2['questionChoice'].lower() == 'yes'):
+        
+        if self.case.question2['questionChoice'].lower() == 'yes':
             points += 10
-        elif (self.case.question3['questionChoice'].lower() == 'yes'):
+
+        if self.case.question3['questionChoice'].lower() == 'yes':
             points += 10
-           
+
         return points
     
     def sub_questions_points(self) -> int:
