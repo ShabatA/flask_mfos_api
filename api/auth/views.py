@@ -4,7 +4,7 @@ from flask import request, current_app
 
 from api.models.cases import CaseTask, CaseTaskStatus, CaseUser, CasesData
 from ..models.users import Users, Role, UserPermissions, PermissionLevel
-from ..models.projects import ProjectUser, ProjectTask, ProjectsData, TaskStatus
+from ..models.projects import ProjectUser, ProjectTask, ProjectsData, TaskStatus, Activities, ActivityUsers
 from werkzeug.security import generate_password_hash, check_password_hash
 from http import HTTPStatus
 from flask_jwt_extended import (create_access_token,
@@ -622,6 +622,7 @@ class AllUsers(Resource):
         if user.is_admin():
             all_projects = ProjectsData.query.all()
             all_cases = CasesData.query.all()
+            all_activities = Activities.query.all()
         else:
             # Fetch all projects the user has access to
             projects = (
@@ -646,6 +647,18 @@ class AllUsers(Resource):
                 .filter(CaseUser.userID == user.userID)
                 .all()
             )
+            
+            created_activities = Activities.query.filter_by(createdBy=user.userID).all()
+
+            # Fetch all activities associated with the user through ActivityUsers
+            assigned_activities = (
+                Activities.query.join(ActivityUsers, Activities.activityID == ActivityUsers.activityID)
+                .filter(ActivityUsers.userID == user.userID)
+                .all()
+            )
+
+            # Combine the created and assigned activities and remove duplicates
+            all_activities = list(set(created_activities + assigned_activities))
 
             # Combine the projects and remove duplicates
             all_projects = list(set(projects + project_user_projects))
@@ -711,9 +724,14 @@ class AllUsers(Resource):
                 'roleName': user.role.RoleName
             },
             'permissions': [permission.permission_level.value for permission in user.permissions],
+            'activities': [{'activityID': activity.activityID,
+                            'activityName': activity.activityName,
+                            'deadline': activity.deadline.isoformat() if activity.deadline else None,
+                            'duration': activity.duration}for activity in all_activities] if all_activities else [],
             'projects': [{'projectID': project.projectID,
                           'projectName': project.projectName,
                           'status': project.projectStatus.value,
+                          'projectType': project.project_type.value,
                           'dueDate': project.dueDate.isoformat() if project.dueDate else None} for project in all_projects] if all_projects else [],
             'cases': [{'caseID': case.caseID,
                        'caseName': case.caseName,

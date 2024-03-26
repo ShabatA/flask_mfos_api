@@ -43,7 +43,9 @@ class Status(Enum):
     def to_dict(self):
         return {'status': self.value}
 
-
+class ProType(Enum):
+    PROJECT = 'PROJECT'
+    PROGRAM = 'PROGRAM'
 
 class ProjectsData(db.Model):
     __tablename__ = 'projects_data'
@@ -71,6 +73,7 @@ class ProjectsData(db.Model):
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     dueDate = db.Column(db.Date, nullable=True)
     totalPoints = db.Column(db.Integer, default=0, nullable=True)
+    project_type = db.Column(db.Enum(ProType), default= ProType.PROJECT)
 
 
     users = db.relationship('Users', secondary='project_user', backref='projects_data', lazy='dynamic')
@@ -121,6 +124,59 @@ class ProjectsData(db.Model):
 
         # Save the new status data
         new_status_data.save()
+
+class ActStatus(Enum):
+    PENDING = 'PENDING'
+    APPROVED = 'APPROVED'
+    REJECTED = 'REJECTED'
+
+    def to_dict(self):
+        return {'status': self.value}
+
+class Activities(db.Model):
+    __tablename__ = 'activities'
+    
+    activityID = db.Column(db.Integer, primary_key=True)
+    activityName = db.Column(db.String, nullable=False)
+    regionID = db.Column(db.Integer, db.ForeignKey('regions.regionID'), nullable=False)
+    programID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=True)
+    description = db.Column(db.Text, nullable=False)
+    costRequired = db.Column(db.Float, nullable=False)
+    duration = db.Column(db.String, nullable=False)
+    deadline = db.Column(db.Date, nullable=True)
+    activityStatus = db.Column(db.Enum(ActStatus), default=ActStatus.PENDING, nullable=False)
+    assignedTo = db.relationship('Users', secondary='activity_users', backref='assigned_activities', lazy='dynamic', single_parent=True)
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    createdBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
+    statusData = db.Column(JSONB, nullable=True)
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit() 
+    
+
+class ActivityUsers(db.Model):
+    __tablename__ = 'activity_users'
+    id = db.Column(db.Integer, primary_key=True)
+    activityID = db.Column(db.Integer, db.ForeignKey('activities.activityID'), nullable=False)
+    userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
+    
+    def __repr__(self):
+        return f"<ActivityUser {self.id} userID: {self.userID} activityID: {self.taskID}>"
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()  
+    
+    
 
 
 

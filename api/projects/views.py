@@ -2,19 +2,19 @@ from flask import request, current_app
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
+
+from sqlalchemy import desc
 from api.models.accountfields import AccountFields
 from api.models.finances import ProjectFunds, RegionAccount
 from api.models.regions import Regions
 from api.utils.project_category_calculator import ProjectCategoryCalculator
 
 from api.utils.project_requirement_processor import ProjectRequirementProcessor
-from ..models.projects import ProjectsData, Questions, QuestionChoices, ProjectUser, Stage, ProjectStage, ProjectTask, ProjectStatus, ProjectStatusData, Status, TaskComments, TaskStatus, ProjectTaskAssignedTo, ProjectTaskCC, AssessmentAnswers, AssessmentQuestions, Requirements, RequirementSection
+from ..models.projects import *
 from ..utils.db import db
 from ..models.users import Users
 from flask import jsonify
-import json
 from datetime import datetime, date
-from collections import OrderedDict
 
 
 
@@ -24,6 +24,8 @@ task_namespace = Namespace('Project Tasks', description="A namespace for Project
 assessment_namespace = Namespace('Project Assessment', description="A namespace for Project Assessment")
 
 requirements_namespace = Namespace('Requirements', description="A namespace for requirements. These will be universal for both Case and Project Approval")
+
+activity_namespace = Namespace('Activities', description='A namespace for stand-alone activities and activities linked to programs')
 
 stage_model = stage_namespace.model(
     'Stage', {
@@ -72,6 +74,22 @@ assessment_model = assessment_namespace.model('ProjectAssessment', {
 checklist_model = task_namespace.model('CheckListItem', {
     'item': fields.String(required=True, description='The checklist item name/description'),
     'checked': fields.Boolean(required=True, description='Whether this is checked out or not')
+})
+
+activity_model = activity_namespace.model('ActivityInput',{
+    'activityName': fields.String(required=True),
+    'regionID': fields.Integer(required=True),
+    'programID': fields.Integer(required=False),
+    'description': fields.String(required=True),
+    'costRequired': fields.Float(required=True),
+    'duration': fields.String(required=True),
+    'deadline': fields.Date(required=True),
+    'assignedTo': fields.List(fields.Integer, description='List of user IDs assigned to the activity'),
+})
+
+activity_stat = activity_namespace.model('ActivityStatusData',{
+    'data': fields.Raw(required=True),
+    'status': fields.String(enum=[stat.value for stat in ActStatus], required=True)
 })
 
 
@@ -128,7 +146,8 @@ projects_data_model = project_namespace.model('ProjectsDataInput', {
     'commitmentType': fields.Integer(description='Commitment type'),
     'supportingOrg': fields.String(description='Details of the supporting organization'),
     'documents': fields.List(fields.String, description='List the document types'),
-    'recommendationLetter': fields.Integer(description='Is there a recomemendation letter')
+    'recommendationLetter': fields.Integer(description='Is there a recomemendation letter'),
+    'projectType': fields.String(enum=[type.value for type in ProType],required=True,description='Project or Program')
 })
 
 project_update_status_model = project_namespace.model('ProjectUpdateStatus', {
@@ -267,7 +286,8 @@ class ProjectAddResource(Resource):
             supportingOrg=project_data.get('supportingOrg'),
             documents=project_data.get('documents', []),
             recommendationLetter=project_data.get('recommendationLetter'),
-            createdAt=datetime.utcnow()
+            createdAt=datetime.utcnow(),
+            project_type = project_data['projectType']
         )
 
         # Save the project to the database
@@ -314,6 +334,7 @@ class ProjectAddResource(Resource):
             existing_project.supportingOrg = project_data.get('supportingOrg')
             existing_project.documents = project_data.get('documents', [])
             existing_project.recommendationLetter = project_data.get('recommendationLetter')
+            existing_project.project_type = project_data.get('projectType', existing_project.project_type)
 
             existing_project.save()
 
@@ -391,6 +412,7 @@ class ProjectGetAllResource(Resource):
                     'dueDate': project.dueDate.isoformat() if project.dueDate else None,
                     'startDate': project.startDate.isoformat() if project.startDate else None,
                     'totalPoints': project.totalPoints,
+                    'projectType': project.project_type.value,
                     'assignedUsers': [user.userID for user in users_assigned_to_project] if users_assigned_to_project else [],
                 }
 
@@ -499,6 +521,7 @@ class ProjectGetAllApprovedResource(Resource):
                     'dueDate': project.dueDate.isoformat() if project.dueDate else None,
                     'startDate': project.startDate.isoformat() if project.startDate else None,
                     'totalPoints': project.totalPoints,
+                    'projectType': project.project_type.value,
                     'assignedUsers': [user.userID for user in users_assigned_to_project] if users_assigned_to_project else [],
                     'stages_data': stages_data
                 }
@@ -570,6 +593,71 @@ class ProjectAddRequirementsResource(Resource):
         except Exception as e:
             # Handle exceptions (e.g., database errors) appropriately
             return {'message': f'Error adding project requirements: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@project_namespace.route('/convert_to_program/<int:project_id>')
+class ProjectConverToProgramResource(Resource):
+    @jwt_required()
+    @project_namespace.expect(project_input_model2)
+    def post(self, project_id):
+        try:
+            
+            # Get the current user ID from the JWT token
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            
+            if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
+                return {'message': 'Unauthorized. Only admin users can convert projects.'}, HTTPStatus.FORBIDDEN
+            
+            project = ProjectsData.get_by_id(project_id)
+            if(project.project_type != ProType.PROJECT):
+                return {'message': 'Denied. The Project is already a program.'}, HTTPStatus.BAD_REQUEST
+            # Parse the input data
+            project_data = request.json
+            status_data = project_data.pop('status_data', {})  # Assuming status_data is part of the input
+            
+            project.project_type = ProType.PROGRAM
+            # Assign status data to the project
+            project.assign_status_data(status_data)
+            
+            # Instead of popping the 'predefined_req', just access it directly
+            requirementsList = status_data.get('predefined_req', [])
+    
+            processor = ProjectRequirementProcessor(project.projectID, current_user.userID)
+            #call the corresponding function to handle making a Task for that requirement
+            for value in requirementsList:
+                function_name = f"requirement_{value}"
+                case_function = getattr(processor, function_name, processor.default_case)
+                case_function()
+            
+            approvedAmount = status_data.get('approvedAmount')
+            scope = status_data.get('projectScope')
+
+            region_account = RegionAccount.query.filter_by(regionID=project.regionID).first()
+            if approvedAmount and region_account and scope:
+                project_fund = ProjectFunds(
+                    accountID = region_account.accountID,
+                    fundsAllocated = approvedAmount,
+                    projectID = project.projectID  
+                )
+                project_fund.save()
+                
+                field = AccountFields.query.filter(AccountFields.fieldName.like(f'%{scope}%')).first()
+                if field:
+                    attr_name = f'{field.fieldName.lower()}_funds'
+                    if hasattr(region_account, attr_name):
+                        attr_value = getattr(region_account, attr_name)
+                        new_value = attr_value + float(approvedAmount)
+                        # Set the attribute value
+                        setattr(region_account, attr_name, new_value)
+                
+                region_account.totalFund -= float(approvedAmount)
+                region_account.usedFund += float(approvedAmount)
+                region_account.lastTransaction = datetime.utcnow.date()
+                db.session.commit()
+
+            return {'message': 'Project converted successfully.'}, HTTPStatus.CREATED
+        except Exception as e:
+            # Handle exceptions (e.g., database errors) appropriately
+            return {'message': f'Error converting project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @project_namespace.route('/get/requirements/<int:project_id>')
 class ProjectRequirementResource(Resource):
@@ -1618,3 +1706,284 @@ class GetTasksForProjectResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error getting tasks for project: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@activity_namespace.route('/add_or_edit', methods=['POST','PUT'])
+class AddorEditActivityResource(Resource):
+    @jwt_required()
+    @activity_namespace.expect(activity_model)
+    def post(self):
+        try:
+            # Get the current user from the JWT token
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            activity_data = request.json
+            programID = activity_data.get('programID', 0)
+            
+            if programID != 0:
+                program = ProjectsData.get_by_id(programID)
+                if program is None:
+                    return {'message': 'Program not found'}, HTTPStatus.NOT_FOUND
+                
+                if program.project_type != ProType.PROGRAM:
+                    return {'message': 'The provided program ID is not a program, but a Project'}, HTTPStatus.BAD_REQUEST
+            
+            assigned_ids = activity_data.get('assignedTo', [])
+            assigned_to_users = Users.query.filter(Users.userID.in_(assigned_ids)).all()
+            
+            activity = Activities(
+                activityName = activity_data['activityName'],
+                regionID = activity_data['regionID'],
+                programID = programID if programID != 0 else None,
+                description = activity_data['description'],
+                costRequired = activity_data['costRequired'],
+                duration = activity_data['duration'],
+                deadline = activity_data.get('deadline'),
+                activityStatus = ActStatus.PENDING,
+                assignedTo = assigned_to_users,
+                createdBy = current_user.userID
+            )
+            activity.save()
+
+            return {'message': 'Activity recorded successfully.',
+                    'activity_data': {
+                        'activityID': activity.activityID,
+                        'status': activity.activityStatus.value,
+                        'activityName': activity.activityName,
+                        'createdAt': activity.createdAt.isoformat(),
+                        'program': ProjectsData.query.filter_by(programID).projectName if programID != 0 else 'None',
+                        'assignedUsers': assigned_ids,
+                        'createdBy': f'{current_user.firstName} {current_user.lastName}'
+                    }
+                    }, HTTPStatus.CREATED
+                    
+        
+        except Exception as e:
+            current_app.logger.error(f"Error adding activity: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+       
+    @jwt_required()
+    @activity_namespace.expect(activity_model) 
+    def put(self):
+        
+            try:
+                current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+                activity_data = request.json
+
+                act_id = activity_data.get('activityID')
+                if act_id is None:
+                    return {'message': 'Activty ID is required for updating an activity'}, HTTPStatus.BAD_REQUEST
+
+                activity = Activities.query.get_or_404(act_id)
+                
+                activity.activityName = activity_data['activityName']
+                activity.regionID = activity_data['regionID']
+                activity.programID = activity_data.get('programID', activity.programID)
+                activity.description = activity_data['description']
+                activity.costRequired = activity_data.get('costRequired', activity.costRequired)
+                activity.deadline = activity_data.get('deadline', activity.deadline)
+                activity.duration = activity_data['duration']
+                activity.activityStatus = activity_data.get('activityStauts', activity.activityStatus)
+                
+                assigned_users = activity_data.get('assignedTo',[])
+                if len(assigned_users) != 0:
+                    assigned_to_users = Users.query.filter(Users.userID.in_(assigned_users)).all()
+                    activity.assignedTo = assigned_to_users
+                activity.save()
+                
+                return {'message': 'Activity updated successfully.',
+                    'activity_data': {
+                        'activityID': activity.activityID,
+                        'status': activity.activityStatus.value,
+                        'activityName': activity.activityName,
+                        'createdAt': activity.createdAt.isoformat(),
+                        'program': ProjectsData.query.filter_by(activity.programID).projectName if activity.programID != None else 'None',
+                        'assignedUsers': assigned_users,
+                        'createdBy': f'{current_user.firstName} {current_user.lastName}'
+                    }
+                    }, HTTPStatus.OK
+                    
+            except Exception as e:
+                current_app.logger.error(f"Error adding activity: {str(e)}")
+                return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@activity_namespace.route('/get_all_activities', methods=['GET'])
+class GetAllActivitiesResource(Resource):
+    @jwt_required()
+    def get(self):
+        
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            if not current_user.is_admin():
+                # Fetch all activities the user has access to because they created it
+                created_activities = Activities.query.filter_by(createdBy=current_user.userID).all()
+
+                # Fetch all activities associated with the user through ActivityUsers
+                assigned_activities = (
+                    Activities.query.join(ActivityUsers, Activities.activityID == ActivityUsers.activityID)
+                    .filter(ActivityUsers.userID == current_user.userID)
+                    .all()
+                )
+
+                # Combine the created and assigned activities and remove duplicates
+                all_activities = list(set(created_activities + assigned_activities))
+            else:
+                all_activities = Activities.query.all()
+
+            # Check if all_activities is empty
+            if not all_activities:
+                return [], HTTPStatus.OK
+
+            # Convert SQLAlchemy objects to dictionaries with additional details
+            activities_dict = [{
+                "activityID": activity.activityID,
+                "activityName": activity.activityName,
+                "region": self.get_region(activity.regionID),
+                "program": self.get_program_details(activity.programID),
+                "description": activity.description,
+                "costRequired": activity.costRequired,
+                "duration": activity.duration,
+                "deadline": activity.deadline.strftime('%Y-%m-%d') if activity.deadline else None,
+                "activityStatus": activity.activityStatus.value,
+                "assignedTo": self.get_assigned_users(activity.assignedTo),
+                "createdAt": activity.createdAt.strftime('%Y-%m-%d %H:%M:%S'),
+                "createdBy": self.get_user_details(activity.createdBy),
+                "statusData": activity.statusData
+            } for activity in all_activities]
+
+            return activities_dict, HTTPStatus.OK
+        
+        except Exception as e:
+                current_app.logger.error(f"Error getting activities: {str(e)}")
+                return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+    
+    def get_program_details(self, programID):
+        if not programID:
+            return None
+        program = ProjectsData.query.get(programID)
+        if not program:
+            return None
+        return {
+            "projectName": program.projectName,
+            "createdAt": program.createdAt.strftime('%Y-%m-%d %H:%M:%S'),
+            "budgetRequired": program.budgetRequired,
+            "budgetApproved": program.budgetApproved,
+            "projectStatus": program.projectStatus.value,
+            "projectIdea": program.projectIdea,
+            "solution": program.solution,
+            "startDate": program.startDate.strftime('%Y-%m-%d') if program.startDate else None
+        }
+
+    def get_user_details(self, userID):
+        user = Users.query.get(userID)
+        if not user:
+            return None
+        return {
+            "fullName": f"{user.firstName} {user.lastName}",
+            "username": user.username,
+            "email": user.email
+        }
+    def get_region(self, regionID):
+        return {'regionID': regionID, 'regionName': Regions.query.get(regionID).regionName}
+
+    def get_assigned_users(self, assignedTo):
+        return [self.get_user_details(user.userID) for user in assignedTo]
+
+@activity_namespace.route('/get_activities/program/<int:programID>')
+class GetActivitiesPerProgram(Resource):
+    @jwt_required()
+    def get(self, programID):
+        
+        try:
+            program = ProjectsData.get_by_id(programID)
+            if program is None:
+                    return {'message': 'Program not found'}, HTTPStatus.NOT_FOUND
+                
+            if program.project_type != ProType.PROGRAM:
+                return {'message': 'The provided program ID is not a program, but a Project'}, HTTPStatus.BAD_REQUEST
+            
+            activities = Activities.query.filter_by(programID=programID).all()
+            
+            if len(activities) == 0:
+                return [], HTTPStatus.OK
+            
+            activities_dict = [{
+                "activityID": activity.activityID,
+                "activityName": activity.activityName,
+                "region": self.get_region(activity.regionID),
+                "description": activity.description,
+                "costRequired": activity.costRequired,
+                "duration": activity.duration,
+                "deadline": activity.deadline.strftime('%Y-%m-%d') if activity.deadline else None,
+                "activityStatus": activity.activityStatus.value,
+                "assignedTo": self.get_assigned_users(activity.assignedTo),
+                "createdAt": activity.createdAt.strftime('%Y-%m-%d %H:%M:%S'),
+                "createdBy": self.get_user_details(activity.createdBy),
+                "statusData": activity.statusData
+            } for activity in activities]
+
+            return activities_dict, HTTPStatus.OK
+            
+        
+        except Exception as e:
+                current_app.logger.error(f"Error getting activities: {str(e)}")
+                return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+    
+    def get_program_details(self, programID):
+        if not programID:
+            return None
+        program = ProjectsData.query.get(programID)
+        if not program:
+            return None
+        return {
+            "projectName": program.projectName,
+            "createdAt": program.createdAt.strftime('%Y-%m-%d %H:%M:%S'),
+            "budgetRequired": program.budgetRequired,
+            "budgetApproved": program.budgetApproved,
+            "projectStatus": program.projectStatus.value,
+            "projectIdea": program.projectIdea,
+            "solution": program.solution,
+            "startDate": program.startDate.strftime('%Y-%m-%d') if program.startDate else None
+        }
+
+    def get_user_details(self, userID):
+        user = Users.query.get(userID)
+        if not user:
+            return None
+        return {
+            "fullName": f"{user.firstName} {user.lastName}",
+            "username": user.username,
+            "email": user.email
+        }
+    def get_region(self, regionID):
+        return {'regionID': regionID, 'regionName': Regions.query.get(regionID).regionName}
+
+    def get_assigned_users(self, assignedTo):
+        return [self.get_user_details(user.userID) for user in assignedTo]
+
+@activity_namespace.route('/change_status/<int:activityID>')
+class ChangeActivityStatusResource(Resource):
+    @jwt_required()
+    @activity_namespace.expect(activity_stat)
+    def put(self, activityID):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            if not current_user.is_admin():
+                return {'message': 'Only admins can change activity status'}, HTTPStatus.FORBIDDEN
+            activity = Activities.query.get_or_404(activityID)
+            request_data = request.json
+            
+            activity.activityStatus = request_data['status']
+            activity.statusData = request_data['statusData']
+            activity.save()
+            return {'message': 'Activity status changed successfully.'}, HTTPStatus.OK
+        except Exception as e:
+                current_app.logger.error(f"Error changing status: {str(e)}")
+                return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
+            
+            
+
+            
+                
