@@ -335,6 +335,7 @@ class ProjectAddResource(Resource):
             existing_project.documents = project_data.get('documents', [])
             existing_project.recommendationLetter = project_data.get('recommendationLetter')
             existing_project.project_type = project_data.get('projectType', existing_project.project_type)
+            existing_project.active = project_data.get('active', existing_project.active)
 
             existing_project.save()
 
@@ -414,6 +415,7 @@ class ProjectGetAllResource(Resource):
                     'totalPoints': project.totalPoints,
                     'projectType': project.project_type.value,
                     'assignedUsers': [user.userID for user in users_assigned_to_project] if users_assigned_to_project else [],
+                    "active": project.active
                 }
 
                 projects_data.append(project_details)
@@ -523,7 +525,8 @@ class ProjectGetAllApprovedResource(Resource):
                     'totalPoints': project.totalPoints,
                     'projectType': project.project_type.value,
                     'assignedUsers': [user.userID for user in users_assigned_to_project] if users_assigned_to_project else [],
-                    'stages_data': stages_data
+                    'stages_data': stages_data,
+                    "active": project.active
                 }
 
                 projects_data.append(project_details)
@@ -593,6 +596,47 @@ class ProjectAddRequirementsResource(Resource):
         except Exception as e:
             # Handle exceptions (e.g., database errors) appropriately
             return {'message': f'Error adding project requirements: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@project_namespace.route('/deactivate_program/<int:program_id>')
+class DeactivateProgramResource(Resource):
+    @jwt_required()
+    def put(self, program_id):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
+                return {'message': 'Unauthorized. Only admin users can convert programs.'}, HTTPStatus.FORBIDDEN
+            
+            program = ProjectsData.get_by_id(program_id)
+            if(program.project_type != ProType.PROGRAM):
+                return {'message': 'Denied. This is not a program. projects cannot be deactivated.'}, HTTPStatus.BAD_REQUEST
+            
+            program.active = False
+            program.save()
+            return {'message': 'Program deactivated successfully.'}, HTTPStatus.OK
+        except Exception as e:
+            # Handle exceptions (e.g., database errors) appropriately
+            return {'message': f'Error converting project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@project_namespace.route('/activate_program/<int:program_id>')
+class ActivateProgramResource(Resource):
+    @jwt_required()
+    def put(self, program_id):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            if not current_user.is_admin():  # Assuming you have an 'is_admin()' property in the Users model
+                return {'message': 'Unauthorized. Only admin users can convert programs.'}, HTTPStatus.FORBIDDEN
+            
+            program = ProjectsData.get_by_id(program_id)
+            if(program.project_type != ProType.PROGRAM):
+                return {'message': 'Denied. This is not a program. projects cannot be reactivated.'}, HTTPStatus.BAD_REQUEST
+            
+            program.active = True
+            program.save()
+            return {'message': 'Program activated successfully.'}, HTTPStatus.OK
+        except Exception as e:
+            # Handle exceptions (e.g., database errors) appropriately
+            return {'message': f'Error converting project: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
 
 @project_namespace.route('/convert_to_program/<int:project_id>')
 class ProjectConverToProgramResource(Resource):
@@ -1750,9 +1794,10 @@ class AddorEditActivityResource(Resource):
                         'status': activity.activityStatus.value,
                         'activityName': activity.activityName,
                         'createdAt': activity.createdAt.isoformat(),
-                        'program': ProjectsData.query.filter_by(programID).projectName if programID != 0 else 'None',
+                        'program': ProjectsData.query.get(programID).projectName if programID != 0 else 'None',
                         'assignedUsers': assigned_ids,
-                        'createdBy': f'{current_user.firstName} {current_user.lastName}'
+                        'createdBy': f'{current_user.firstName} {current_user.lastName}',
+                        'created_id': current_user.userID
                     }
                     }, HTTPStatus.CREATED
                     
@@ -1796,9 +1841,10 @@ class AddorEditActivityResource(Resource):
                         'status': activity.activityStatus.value,
                         'activityName': activity.activityName,
                         'createdAt': activity.createdAt.isoformat(),
-                        'program': ProjectsData.query.filter_by(activity.programID).projectName if activity.programID != None else 'None',
+                        'program': ProjectsData.query.get(activity.programID).projectName if activity.programID != None else 'None',
                         'assignedUsers': assigned_users,
-                        'createdBy': f'{current_user.firstName} {current_user.lastName}'
+                        'createdBy': f'{current_user.firstName} {current_user.lastName}',
+                        'created_id': current_user.userID
                     }
                     }, HTTPStatus.OK
                     
@@ -1846,6 +1892,7 @@ class GetAllActivitiesResource(Resource):
                 "deadline": activity.deadline.strftime('%Y-%m-%d') if activity.deadline else None,
                 "activityStatus": activity.activityStatus.value,
                 "assignedTo": self.get_assigned_users(activity.assignedTo),
+                "assignedToIDs": [user.userID for user in activity.assignedTo],
                 "createdAt": activity.createdAt.strftime('%Y-%m-%d %H:%M:%S'),
                 "createdBy": self.get_user_details(activity.createdBy),
                 "statusData": activity.statusData
@@ -1864,6 +1911,7 @@ class GetAllActivitiesResource(Resource):
         if not program:
             return None
         return {
+            "projectID": programID,
             "projectName": program.projectName,
             "createdAt": program.createdAt.strftime('%Y-%m-%d %H:%M:%S'),
             "budgetRequired": program.budgetRequired,
@@ -1871,7 +1919,8 @@ class GetAllActivitiesResource(Resource):
             "projectStatus": program.projectStatus.value,
             "projectIdea": program.projectIdea,
             "solution": program.solution,
-            "startDate": program.startDate.strftime('%Y-%m-%d') if program.startDate else None
+            "startDate": program.startDate.strftime('%Y-%m-%d') if program.startDate else None,
+            "active": program.active
         }
 
     def get_user_details(self, userID):
@@ -1879,6 +1928,7 @@ class GetAllActivitiesResource(Resource):
         if not user:
             return None
         return {
+            "userID": user.userID,
             "fullName": f"{user.firstName} {user.lastName}",
             "username": user.username,
             "email": user.email
@@ -1917,6 +1967,7 @@ class GetActivitiesPerProgram(Resource):
                 "deadline": activity.deadline.strftime('%Y-%m-%d') if activity.deadline else None,
                 "activityStatus": activity.activityStatus.value,
                 "assignedTo": self.get_assigned_users(activity.assignedTo),
+                "assignedToIDs": [user.userID for user in activity.assignedTo],
                 "createdAt": activity.createdAt.strftime('%Y-%m-%d %H:%M:%S'),
                 "createdBy": self.get_user_details(activity.createdBy),
                 "statusData": activity.statusData
@@ -1936,6 +1987,7 @@ class GetActivitiesPerProgram(Resource):
         if not program:
             return None
         return {
+            "projectID": programID,
             "projectName": program.projectName,
             "createdAt": program.createdAt.strftime('%Y-%m-%d %H:%M:%S'),
             "budgetRequired": program.budgetRequired,
@@ -1943,7 +1995,8 @@ class GetActivitiesPerProgram(Resource):
             "projectStatus": program.projectStatus.value,
             "projectIdea": program.projectIdea,
             "solution": program.solution,
-            "startDate": program.startDate.strftime('%Y-%m-%d') if program.startDate else None
+            "startDate": program.startDate.strftime('%Y-%m-%d') if program.startDate else None,
+            "active": program.active
         }
 
     def get_user_details(self, userID):
@@ -1951,6 +2004,7 @@ class GetActivitiesPerProgram(Resource):
         if not user:
             return None
         return {
+            "userID": user.userID,
             "fullName": f"{user.firstName} {user.lastName}",
             "username": user.username,
             "email": user.email
