@@ -2029,7 +2029,7 @@ class ChangeActivityStatusResource(Resource):
             request_data = request.json
             
             activity.activityStatus = request_data['status']
-            activity.statusData = request_data['status']
+            activity.statusData = request_data['data']
             activity.save()
             return {'message': 'Activity status changed successfully.'}, HTTPStatus.OK
         except Exception as e:
