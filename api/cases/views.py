@@ -1521,9 +1521,7 @@ class EditTaskForStageResource(Resource):
     @jwt_required()
     def put(self, task_id):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-        # Check if the current user has permission to delete a stage
-        if not current_user.is_admin():  # Adjust the condition based on your specific requirements
-            return {'message': 'Unauthorized. Only admin users can edit Task details.'}, HTTPStatus.FORBIDDEN
+       
 
         try:
             # Get the task
