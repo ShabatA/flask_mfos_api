@@ -294,7 +294,7 @@ class CasesAddResource(Resource):
                     'case_details': case_details}, HTTPStatus.CREATED
         except Exception as e:
             current_app.logger.error(f"Error adding case: {str(e)}")
-            return {'message': f'Error adding case: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            return {'message': f'Error adding case, please review inputs and try again.'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
     @jwt_required()
     @case_namespace.expect(cases_data_model)
@@ -335,7 +335,7 @@ class CasesAddResource(Resource):
             return {'message': 'Case updated successfully'}, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error updating case: {str(e)}")
-            return {'message': f'Error updating case: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            return {'message': f'Error updating case, please review inputs and try again.'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @case_namespace.route('/calculate-case-category/<int:case_id>', methods=['PUT'])
 class CalculateCaseCategoryResource(Resource):
@@ -469,7 +469,8 @@ class CaseGetAllResource(Resource):
 
             return cases_data, HTTPStatus.OK
         except Exception as e:
-            return {'message': f'Error fetching cases: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            current_app.logger.error(f"Error calculating category: {str(e)}")
+            return {'message': f'Error fetching cases, please try again later.'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 @case_namespace.route('/get_all_approved_only', methods=['GET'])
@@ -621,7 +622,8 @@ class CaseGetAllApprovedResource(Resource):
 
             return cases_data, HTTPStatus.OK
         except Exception as e:
-            return {'message': f'Error fetching cases: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            current_app.logger.error(f"Error calculating category: {str(e)}")
+            return {'message': f'Error fetching cases, please try again later.'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 @case_namespace.route('/beneficiary/add_or_edit', methods=['POST', 'PUT'])
@@ -689,7 +691,7 @@ class CaseBeneficiaryAddOrEditResource(Resource):
        
         except Exception as e:
             current_app.logger.error(f"Error adding beneficiary: {str(e)}")
-            return {'message': f'Error adding CaseBeneficiary: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            return {'message': f'Error adding CaseBeneficiary, please review inputs and try again.'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
     @jwt_required()
     @case_namespace.expect(beneficiary_data_model)
@@ -743,7 +745,7 @@ class CaseBeneficiaryAddOrEditResource(Resource):
             return {'message': 'CaseBeneficiary updated successfully'}, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error updating beneficiary: {str(e)}")
-            return {'message': f'Error updating CaseBeneficiary: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            return {'message': f'Error updating CaseBeneficiary, please review inputs and try again.'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @case_namespace.route('/get/beneficiaries/<int:case_id>')
 class CaseBeneficiaryByCaseIDResource(Resource):
@@ -862,7 +864,7 @@ class CaseAddRequirementsResource(Resource):
             return {'message': 'Case requirements added successfully'}, HTTPStatus.CREATED
         except Exception as e:
             # Handle exceptions (e.g., database errors) appropriately
-            return {'message': f'Error adding case requirements: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            return {'message': f'Error adding case requirements, please review inputs and try again.'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @case_namespace.route('/get/requirements/<int:case_id>')
 class CaseRequirementResource(Resource):
