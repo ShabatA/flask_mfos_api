@@ -176,7 +176,8 @@ beneficiary_data_model = case_namespace.model('BeneficiaryData', {
     'childrenUnder15': fields.String(),
     'isOldPeople': fields.Boolean(),
     'isDisabledPeople': fields.Boolean(),
-    'isStudentsPeople': fields.Boolean()
+    'isStudentsPeople': fields.Boolean(),
+    'serviceDate': fields.String()
 })
 
 case_beneficiary_form = case_namespace.model('BeneficiaryForm',{
@@ -428,7 +429,8 @@ class CaseGetAllResource(Resource):
                             'childrenUnder15': beneficiary.childrenUnder15,
                             'isOldPeople': beneficiary.isOldPeople,
                             'isDisabledPeople': beneficiary.isDisabledPeople,
-                            'isStudentsPeople': beneficiary.isStudentsPeople
+                            'isStudentsPeople': beneficiary.isStudentsPeople,
+                            'serviceDate': beneficiary.serviceDate
                         }
                         serialized_beneficiaries.append(serialized_beneficiary)
                 
@@ -550,7 +552,8 @@ class CaseGetAllApprovedResource(Resource):
                             'childrenUnder15': beneficiary.childrenUnder15,
                             'isOldPeople': beneficiary.isOldPeople,
                             'isDisabledPeople': beneficiary.isDisabledPeople,
-                            'isStudentsPeople': beneficiary.isStudentsPeople
+                            'isStudentsPeople': beneficiary.isStudentsPeople,
+                            'serviceDate': beneficiary.serviceDate
                         }
                         serialized_beneficiaries.append(serialized_beneficiary)
                 
@@ -674,7 +677,8 @@ class CaseBeneficiaryAddOrEditResource(Resource):
                 childrenUnder15=beneficiary_data.get('childrenUnder15'),
                 isOldPeople=beneficiary_data.get('isOldPeople'),
                 isDisabledPeople=beneficiary_data.get('isDisabledPeople'),
-                isStudentsPeople=beneficiary_data.get('isStudentsPeople')
+                isStudentsPeople=beneficiary_data.get('isStudentsPeople'),
+                serviceDate=beneficiary_data.get('serviceDate')
             )
 
             new_beneficiary.save()
@@ -739,6 +743,7 @@ class CaseBeneficiaryAddOrEditResource(Resource):
             existing_beneficiary.isOldPeople = beneficiary_data.get('isOldPeople')
             existing_beneficiary.isDisabledPeople = beneficiary_data.get('isDisabledPeople')
             existing_beneficiary.isStudentsPeople = beneficiary_data.get('isStudentsPeople')
+            existing_beneficiary.serviceDate = beneficiary_data.get('serviceDate')
 
             existing_beneficiary.save()
 
@@ -793,7 +798,7 @@ class CaseBeneficiaryByCaseIDResource(Resource):
                     'isOldPeople': beneficiary.isOldPeople,
                     'isDisabledPeople': beneficiary.isDisabledPeople,
                     'isStudentsPeople': beneficiary.isStudentsPeople,
-                    
+                    'serviceDate': beneficiary.serviceDate
                 }
                 serialized_beneficiaries.append(serialized_beneficiary)
             return {'beneficiaries': serialized_beneficiaries}, HTTPStatus.OK
