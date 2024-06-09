@@ -16,24 +16,48 @@ from sqlalchemy import desc
 
 finance_namespace = Namespace("Finances", description="Namespace for Finances subsystem")
 
+currency_model = finance_namespace.model('Currency',{
+    'currencyName': fields.String(required=True, description='The name of the currency'),
+    'dollarRate': fields.Float(required=True, description='Exchange rate to 1 USD')
+})
+
+sub_fund_model = finance_namespace.model('SubFund',{
+    'fundName': fields.String(required=True, description='Name of the sub fund'),
+})
+
 fund_data_model = finance_namespace.model('FinancialFundData',{
     'fundName': fields.String(required=True, description='Name of the actual account'),
     'accountType': fields.String(required=True, description='Type of Account (Bank/Cash/Other)'),
     'notes': fields.String(required=False, description='Additional notes if applicable'),
-    'currency': fields.String(required=True, description='The currency the actual bank is using')
+    'currencies': fields.List(fields.Integer, description='Optional list of currencies excluding the default USD'),
+    'administrator': fields.Integer(required=True, description='The user ID of the employee responsible for this account'),
+    'subFunds': fields.List(fields.Nested(sub_fund_model),description='optional sub fund names')
+})
+
+sub_fund_data_model = finance_namespace.model('FinancialFundData',{
+    'fundName': fields.String(required=True, description='Name of the actual account'),
+    'fundID': fields.String(required=True, description='ID of the parent fund account'),
+    'accountType': fields.String(required=True, description='Type of Account (Bank/Cash/Other)'),
+    'currencies': fields.List(fields.Integer, description='Optional list of currencies excluding the default USD'),
+    'administrator': fields.Integer(required=True, description='The user ID of the employee responsible for this account')
 })
 
 region_account_data = finance_namespace.model('RegionAccountData', {
     'regionID': fields.Integer(required=True, description='The region the account is for'),
-    'accountType': fields.String(required=True, description='Type of Account (Bank/Cash/Other)'),
-    'notes': fields.String(required=False, description='Additional notes if applicable'),
-    'currency': fields.String(required=True, description='The currency the region is using.')
+    'currencies': fields.List(fields.Integer, description='Optional list of currencies excluding the default USD')
 })
 
 donor_data_model = finance_namespace.model('DonorData', {
     'name': fields.String(required=True, description='name of the donor'),
-    'donorType': fields.String(required=True, description='could be organization or individual'),
+    'donorType': fields.String(required=True, description='could be organization or individual', enum=[type.value for type in DonorTypes]),
     'country': fields.String(required=True, description='country where donor is from'),
+    'email': fields.String(required=True),
+    'phoneNumber': fields.String(required=True)
+})
+
+donor_rep_model = finance_namespace.model('DonorRepresentative',{
+    'name': fields.String(required=True, description='name of the donor'),
+    'jobPosition': fields.String(required=True),
     'email': fields.String(required=True),
     'phoneNumber': fields.String(required=True)
 })
@@ -42,63 +66,117 @@ donations_data_model = finance_namespace.model('DonationData', {
     'donorID': fields.Integer(required=True, description='The donor who is donating'),
     'accountID': fields.Integer(required=True, description='The region account to donate to'),
     'fundID': fields.Integer(required=True, description='The account bank account the money will be deposited to'),
-    'currency': fields.String(required=True, description='The currency of the donation'),
+    'subFundID': fields.Integer(required=False, description='Specify the sub fund the money will be deposited to if applicable.'),
     'details': fields.String(required=True, description='Supply any notes/details'),
     'amount': fields.Float(required=True, description='The donation amount'),
-    'field':  fields.String(enum=[field.value for field in FieldName],required=True ,description="What account field the donations falls under"),
-    'donationType': fields.String(required=True, description='whether it is for a Case, Project, or General'),
+    'donationType': fields.String(required=True, description='whether it is for a Case, Project, or General', enum=[type.value for type in DonationTypes]),
     'caseID': fields.Integer(description='Only provide if donation type is Case'),
     'projectID': fields.Integer(description='Only provide if donation type is Project'),
-    'currency': fields.String(required=True, description='The currency the amount originates from')
+    'currencyID': fields.Integer(required=True, description='The currency the amount originates from'),
+    'project_scope': fields.String(required=True, enum=[scope.value for scope in ProjectScopes], description='The project scope.'),
+    'allocationTags': fields.String(required=False, description='tags to use if the project/case is not in the system.')
 })
 
 project_fund_release_request =finance_namespace.model('ProjectFundReleaseRequest', {
     'projectID': fields.Integer(required=True, description='The project the request is for'),
-    'fundsRequested': fields.Float(required=True, description='The amount to be requested')
+    'fundsRequested': fields.Float(required=True, description='The amount to be requested'),
+    'paymentCount': fields.Integer(required=True, description='Specify which payment you are requesting out of the payment breakdown')
 })
 
 case_fund_release_request =finance_namespace.model('CaseFundReleaseRequest', {
     'caseID': fields.Integer(required=True, description='The case the request is for'),
-    'fundsRequested': fields.Float(required=True, description='The amount to be requested')
+    'fundsRequested': fields.Float(required=True, description='The amount to be requested'),
+    'paymentCount': fields.Integer(required=True, description='Specify which payment you are requesting out of the payment breakdown')
 })
 
 fund_transfer_model = finance_namespace.model('FundTransfer', {
     'from_fund': fields.Integer(required=True, description= 'the fund to take from'),
     'to_fund': fields.Integer(required=True, description= 'the fund to transfer to'),
     'transferAmount': fields.Float(required=True, description='The amount to be transfered'),
-    'currencyFrom': fields.String(required=False, description='Transfer from which currency'),
-    'currencyTo': fields.String(required=False, description='Transfer to which currency'),
-    'exchangeRate': fields.Float(required=False, description='The exchange rate'),
     'notes': fields.String(required=False, description='Supply any notes/details'),
-    'attachedFiles': fields.String(required=False, description='attached files'),   
+    'transfer_type': fields.String(required=True, enum=[type.value for type in TransferType] , description='EFT, Cash, or Check')
 })
 
 payments_model = finance_namespace.model('Payments', {
     'from_fund': fields.Integer(required=True, description= 'the actual bank account the money will come from'),
     'paymentFor': fields.String(enum=[payment.value for payment in PaymentFor], description="What the payment is for"),
     'paymentName': fields.String(required=True, description='the name of the case/project is for, or something else'),
-    'paymentMethod': fields.String(required=True, description='Method of payment'),
+    'paymentMethod': fields.String(required=True, enum=[type.value for type in TransferType] , description='EFT, Cash, or Check'),
     'amount': fields.Float(required=True, description='The amount to be paid'),
-    'currency': fields.String(required=True, description='The currency the payment is made in'),
-    'exchangeRate': fields.Float(required=True, description='The exchange rate'),
+    'currencyID': fields.Integer(required=True, description='The currency the payment is made in'),
     'transferExpenses': fields.Float(required=False, description='Transfer expenses if any.'),
-    'supportingFiles': fields.String(required=False, description='names of the uploaded files.'),
+    'projectScope': fields.String(required=False, enum=[scope.value for scope in ProjectScopes], description='In what scope or field will the money be spent on'),
     'notes': fields.String(required=False, description='any notes if applicable.')
 })
 
 project_funds_model = finance_namespace.model('ProjectFunds', {
     'projectID': fields.Integer(required=True),
     'fundsAllocated': fields.Float(required=True),
-    'field': fields.String(enum=[field.value for field in FieldName],required=True ,description="What field of the project")
+    'field': fields.String(enum=[scope.value for scope in ProjectScopes],required=True ,description="What field of the project")
 })
 
 case_funds_model = finance_namespace.model('CaseFunds', {
     'caseID': fields.Integer(required=True),
     'fundsAllocated': fields.Float(required=True),
-    'field': fields.String(enum=[field.value for field in FieldName],required=True ,description="What field of the case")
+    'field': fields.String(enum=[scope.value for scope in ProjectScopes],required=True ,description="What field of the case")
 })
 
-@finance_namespace.route('/finacial_fund/add_or_edit', methods=['POST', 'PUT'])
+reports_data_model = finance_namespace.model('Reports',{
+    'reportTag': fields.String(required=True),
+    'title': fields.String(required=True),
+    'createdBy': fields.String(required=True),
+    'pdfBytes': fields.String(required=True)
+})
+
+currencies_model = finance_namespace.model('CurrencyData',{
+    'currencyCode' : fields.String(required=True, description='The code of the currency e.g USD'),
+    'currencyName' : fields.String(required=True, description='The name of the currency e.g United States Dollar'),
+    'exchangeRateToUSD': fields.Float(required=True)
+})
+
+@finance_namespace.route('/currencies/create', methods=['POST','PUT'])
+class CreateCurrency(Resource):
+    @jwt_required()
+    @finance_namespace.expect(currencies_model)
+    def post(self):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            currency_data = request.json
+            if not current_user.is_admin():
+                return {'message': 'Forbidden, only admins can add currencies'}, HTTPStatus.FORBIDDEN
+            
+            currency = Currencies(
+                currencyCode = currency_data['currencyCode'],
+                currencyName = currency_data['currencyName'],
+                exchangeRateToUSD = currency_data['exchangeRateToUSD']
+            )
+            currency.save()
+            return {'message': 'Currency added successfully.'}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error adding currency: {str(e)}")
+            return {'message': f'Error adding currency: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+    
+    @jwt_required()
+    @finance_namespace.expect(currencies_model)
+    def put(self):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            currency_data = request.json
+            if not current_user.is_admin():
+                return {'message': 'Forbidden, only admins can add currencies'}, HTTPStatus.FORBIDDEN
+            
+            currency = Currencies.query.get_or_404(currency_data['currencyID'])
+            currency.currencyCode = currency_data['currencyCode']
+            currency.currencyName = currency_data['currencyName']
+            currency.exchangeRateToUSD = currency_data['exchangeRateToUSD']
+            currency.save()
+            return {'message': 'Currency updated successfully.'}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error updating currency: {str(e)}")
+            return {'message': f'Error updating currency: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+    
+
+@finance_namespace.route('/finacial_funds/create', methods=['POST', 'PUT'])
 class AddEditFinancialFundResource(Resource):
     @jwt_required()
     @finance_namespace.expect(fund_data_model)
@@ -117,24 +195,68 @@ class AddEditFinancialFundResource(Resource):
             
             new_fund = FinancialFund(
                 fundName = fund_data['fundName'],
-                totalFund = 0,
-                accountType = fund_data['accountType'],
                 usedFund = 0,
-                currency = fund_data['currency'],
-                notes= fund_data.get('notes', '')
+                notes= fund_data.get('notes', ''),
+                accountType = fund_data['accountType'],
+                administrator = fund_data['administrator'],
             )
             
             new_fund.save()
+             #add the USD default
+            new_currency = FinancialFundCurrencyBalance(
+                        fundID = new_fund.fundID,
+                        currencyID = 1
+                    )
+            new_currency.save()
             
-            return {'message': 'Financial Fund was added successfully.'}, HTTPStatus.OK
+            if len(fund_data['currencies'] > 0):
+                for currency in fund_data['currencies']:
+                    if currency != 1:
+                        new_currency = FinancialFundCurrencyBalance(
+                                            fundID = new_fund.fundID,
+                                            currencyID = currency
+                                        )
+                        new_currency.save()
+            
+            #now let's add the sub funds
+            sub_funds = fund_data.get('subFunds', {})
+            
+            for sub in sub_funds:
+                new_sub_fund = SubFunds(
+                    fundID = new_fund.fundID,
+                    subFundName = sub['fundName'],
+                    currencyID = fund_data['currencyID'],
+                    notes= fund_data.get('notes', ''),
+                    accountType = fund_data['accountType'],
+                    administrator = fund_data['administrator'],
+                )
+                new_sub_fund.save()
+                new_balance = SubFundCurrencyBalance(
+                    subFundID = new_sub_fund.subFundID,
+                    currencyID = 1
+                )
+                new_balance.save()
+                
+                if len(fund_data['currencies'] > 0):
+                    for currency in fund_data['currencies']:
+                        if currency != 1:
+                            balance = SubFundCurrencyBalance(
+                                subFundID = new_sub_fund.subFundID,
+                                currencyID = 1
+                            )
+                            balance.save()
+            
+            return {'message': 'Sub Fund was added successfully.'}, HTTPStatus.OK
         
         except Exception as e:
             current_app.logger.error(f"Error adding financial fund: {str(e)}")
-            return {'message': f'Error adding financial fund: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            return {'message': f'Error adding finacial fund: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
     
+@finance_namespace.route('/financial_funds/sub_fund_create')
+class SubFundCreateResource(Resource):
     @jwt_required()
-    @finance_namespace.expect(fund_data_model)
-    def put(self):
+    @finance_namespace.expect(sub_fund_data_model)
+    def post(self):
         try:
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
             fund_data = request.json
@@ -143,25 +265,40 @@ class AddEditFinancialFundResource(Resource):
                 return {'message': 'Forbidden, only admins can add Financial Funds'}, HTTPStatus.FORBIDDEN
 
             # Check if a fund with the given name already exists
-            fund_id = fund_data.get('fundID')
-            if not fund_id:
-                return {'message': 'Fund ID is required for updating a fund'}, HTTPStatus.BAD_REQUEST
-
-            existing_fund = FinancialFund.query.get_or_404(fund_id)
+            existing_fund = FinancialFund.query.get_or_404(fund_data['fundID'])
+            if not existing_fund:
+                return {'message': 'Parent fund does not exist'}, HTTPStatus.NOT_FOUND
             
-            existing_fund.fundName = fund_data['fundName']
-            existing_fund.totalFund = fund_data['totalFund']
-            existing_fund.accountType = fund_data['accountType']
-            existing_fund.notes = fund_data.get('notes', existing_fund.notes)
+            new_fund = SubFunds(
+                fundID = fund_data['fundID'],
+                subFundName = fund_data['fundName'],
+                notes= fund_data.get('notes', ''),
+                accountType = fund_data['accountType'],
+                administrator = fund_data['administrator'],
+            )
+            new_fund.save()
             
-            existing_fund.save()
-            return {'message': 'Financial Fund was updated successfully.'}, HTTPStatus.OK
-        
+            new_balance = SubFundCurrencyBalance(
+                    subFundID = new_fund.subFundID,
+                    currencyID = 1
+                )
+            new_balance.save()
+            
+            if len(fund_data['currencies'] > 0):
+                for currency in fund_data['currencies']:
+                    if currency != 1:
+                        balance = SubFundCurrencyBalance(
+                            subFundID = new_fund.subFundID,
+                            currencyID = 1
+                        )
+                        balance.save()
         except Exception as e:
-            current_app.logger.error(f"Error adding financial fund: {str(e)}")
-            return {'message': f'Error adding financial fund: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            current_app.logger.error(f"Error adding sub-fund Account: {str(e)}")
+            return {'message': f'Error adding sub-fund Account: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            
+                
 
-@finance_namespace.route('/region_account/add_or_edit', methods=['POST', 'PUT'])
+@finance_namespace.route('/region_accounts/create', methods=['POST', 'PUT'])
 class AddEditRegionAccountResource(Resource):
     @jwt_required()
     @finance_namespace.expect(region_account_data)
@@ -183,52 +320,34 @@ class AddEditRegionAccountResource(Resource):
             
             new_account = RegionAccount(
                 acountName = region.regionName,
-                totalFund = 0,
-                accountType = account_data['accountType'],
-                usedFund = 0,
-                currency = account_data['currency'],
-                notes= account_data.get('notes', ''),
                 regionID=region_id
             )
-            
             new_account.save()
+            
+            #add the USD default
+            new_currency = RegionAccountCurrencyBalance(
+                        accountID = new_account.accountID,
+                        currencyID = 1
+                    )
+            new_currency.save()
+            
+            if len(account_data['currencies'] > 0):
+                for currency in account_data['currencies']:
+                    if currency != 1:
+                        new_currency = RegionAccountCurrencyBalance(
+                                            accountID = new_account.accountID,
+                                            currencyID = currency
+                                        )
+                        new_currency.save()
+                    
             
             return {'message': 'Region Account was added successfully.'}, HTTPStatus.OK
         
         except Exception as e:
-            current_app.logger.error(f"Error adding region Account fund: {str(e)}")
+            current_app.logger.error(f"Error adding region Account: {str(e)}")
             return {'message': f'Error adding region Account: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
     
-    @jwt_required()
-    @finance_namespace.expect(region_account_data)
-    def put(self):
-        try:
-            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-            fund_data = request.json
-            
-            account_data = request.json
-            
-            if not current_user.is_admin():
-                return {'message': 'Forbidden, only admins can add Region Accounts'}, HTTPStatus.FORBIDDEN
-            
-            region_id = account_data.get('regionID')
-            
-            region = Regions.query.get_or_404(region_id)
-            # Check if a fund with the given name already exists
-            existing_account = RegionAccount.query.filter_by(regionID=region_id).first()
 
-            existing_account.accountName = region.regionName
-            existing_account.totalFund = fund_data['totalFund']
-            existing_account.accountType = fund_data['accountType']
-            existing_account.notes = fund_data.get('notes', existing_account.notes)
-            existing_account.regionID = region_id
-            
-            existing_account.save()
-            return {'message': 'Region account was updated successfully.'}, HTTPStatus.OK
-        
-        except Exception as e:
-            current_app.logger.error(f"Error adding region account: {str(e)}")
-            return {'message': f'Error adding region account: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @finance_namespace.route('/donors/add_or_edit', methods=['POST', 'PUT'])
 class AddEditDonorsResource(Resource):
@@ -241,11 +360,11 @@ class AddEditDonorsResource(Resource):
             
            
             # Check if a donor with the given name already exists
-            existing_donor = Donors.query.filter_by(name=donor_data['name']).first()
+            existing_donor = Donor.query.filter_by(name=donor_data['name']).first()
             if existing_donor:
                 return {'message': 'Donor with this name already exists'}, HTTPStatus.CONFLICT
             
-            new_donor = Donors(
+            new_donor = Donor(
                 name = donor_data['name'],
                 donorType = donor_data['donorType'],
                 country = donor_data['country'],
@@ -254,6 +373,17 @@ class AddEditDonorsResource(Resource):
             )
             
             new_donor.save()
+            
+            if(len(donor_data['representatives']) > 0):
+                for rep in donor_data['representatives']:
+                    new_rep = Representative(
+                        donorID = new_donor.donorID,
+                        name = rep['name'],
+                        jobPosition = rep['jobPosition'],
+                        email = rep['email'],
+                        phoneNumber = rep['phoneNumber']
+                    )
+                    new_rep.save()
             
             return {'message': 'Donor was added successfully.'}, HTTPStatus.OK
         
@@ -274,7 +404,7 @@ class AddEditDonorsResource(Resource):
             if not donor_id:
                 return {'message': 'Donor ID is required for updating a donor'}, HTTPStatus.BAD_REQUEST
 
-            existing_donor = Donors.query.get_or_404(donor_id)
+            existing_donor = Donor.query.get_or_404(donor_id)
             
             existing_donor.fundName = donor_data['name']
             existing_donor.donorType = donor_data['donorType']
@@ -289,7 +419,7 @@ class AddEditDonorsResource(Resource):
             current_app.logger.error(f"Error updating donor: {str(e)}")
             return {'message': f'Error updating donor: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@finance_namespace.route('/add_donation')
+@finance_namespace.route('/add_balance')
 class AddDonationResource(Resource):
     @jwt_required()
     @finance_namespace.expect(donations_data_model)
@@ -307,7 +437,7 @@ class AddDonationResource(Resource):
             
             account = RegionAccount.query.get_or_404(account_id)
             fund = FinancialFund.query.get_or_404(fund_id)
-            donor = Donors.query.get_or_404(donor_id)
+            donor = Donor.query.get_or_404(donor_id)
             
             new_donation = Donations(
                 donorID = donor_id,
@@ -322,16 +452,101 @@ class AddDonationResource(Resource):
                 projectID = donation_data.get('projectID', None)
             )
             new_donation.save()
-            
-            #update the total funds
-            account.totalFund += donation_data['amount']
-            fund.totalFund += donation_data['amount']
+            #call the add function to handle the logic
+            account.add_fund(donation_data['amount'],donation_data.get('currency',1), None,donation_data.get('projectID', None), donation_data.get('caseID', None), None)
+            fund.add_fund(donation_data['amount'],donation_data.get('currency',1))
             db.session.commit()
         
             return {'message': 'Donation added successfully.'}, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error adding donation: {str(e)}")
             return {'message': f'Error adding donation: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route('/region_accounts/all/summary/currency/<int:currency_conversion>')
+class RegionAccountSummaryResource(Resource):
+    @jwt_required()
+    def get(self, currency_conversion):
+        try:
+            accounts = RegionAccount.query.all()
+            accounts_data = []
+            for account in accounts:
+                account_data = {
+                    'accountID': account.accountID,
+                    'accountName': account.accountName,
+                    'lastUpdate': account.lastUpdate.isoformat()
+                }
+                #get balances based on the currency conversion
+                balances = account.get_fund_balance(currency_conversion)
+                accounts_data.append(account_data | balances)
+            return {'accounts': accounts_data}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error getting account summary: {str(e)}")
+            return {'message': f'Error getting account summary: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route('/region_accounts/single/<int:account_id>/details/<int:currency_conversion>')
+class SingleRegionAccountSummaryResource(Resource):
+    @jwt_required()
+    def get(self,account_id, currency_conversion):
+        try:
+            account = RegionAccount.query.get_or_404(account_id)
+            account_data = {
+                'accountID': account.accountID,
+                'accountName': account.accountName,
+                'lastUpdate': account.lastUpdate.isoformat(),
+                'availableCurrencies': account.get_available_currencies,
+                'transactions': account.get_account_transactions()
+            }
+            #get balances based on the currency conversion
+            balances = account.get_fund_balance(currency_conversion)
+            return {'account': account_data | balances}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error getting account summary: {str(e)}")
+            return {'message': f'Error getting account summary: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+
+@finance_namespace.route('/financial_funds/all/summary/currency/<int:currency_conversion>')
+class FinancialFundSummaryResource(Resource):
+    @jwt_required()
+    def get(self, currency_conversion):
+        try:
+            funds = FinancialFund.query.all()
+            funds_data = []
+            for fund in funds:
+                fund_data = {
+                    'fundID': fund.fundID,
+                    'fundName': fund.fundName,
+                    'lastUpdate': fund.lastUpdate.isoformat()
+                }
+                #get balances based on the currency conversion
+                balances = fund.get_fund_balance(currency_conversion)
+                funds_data.append(fund_data | balances)
+            return {'funds': funds_data}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error getting fund summary: {str(e)}")
+            return {'message': f'Error getting fund summary: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route('/financial_funds/single/<int:fund_id>/details/<int:currency_conversion>')
+class SingleFinancialFundSummaryResource(Resource):
+    @jwt_required()
+    def get(self,fund_id, currency_conversion):
+        try:
+            fund = FinancialFund.query.get_or_404(fund_id)
+            fund_data = {
+                'fundID': fund.fundID,
+                'fundName': fund.fundName,
+                'lastUpdate': fund.lastUpdate.isoformat(),
+                'availableCurrencies': fund.get_available_currencies,
+                'subFunds': fund.get_all_sub_funds(),
+                'transactions': fund.get_all_payments(),
+                'donations': fund.get_all_donations()
+            }
+            #get balances based on the currency conversion
+            balances = fund.get_fund_balance(currency_conversion)
+            return {'fund': fund_data | balances}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error getting fund summary: {str(e)}")
+            return {'message': f'Error getting fund summary: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
         
 @finance_namespace.route('/request_project_fund_release')
 class RequestProjectFundReleaseResource(Resource):
@@ -746,7 +961,7 @@ class GetAllDonationsResource(Resource):
     def get(self):
         try:
             
-            donors = Donors.query.all()
+            donors = Donor.query.all()
             
             donors_data = []
             for donor in donors:
@@ -806,8 +1021,6 @@ class GetAllPaymentsResource(Resource):
                     'amount': payment.amount,
                     'currency': payment.currency,
                     'transferExpenses': payment.transferExpenses,
-                    'exchangeRate': payment.exchangeRate,
-                    'supportingFiles': payment.supportingFiles,
                     'createdAt': payment.createdAt.isoformat()
                 }
                 payments_data.append(payment_details)
@@ -819,178 +1032,217 @@ class GetAllPaymentsResource(Resource):
             current_app.logger.error(f"Error getting all payments: {str(e)}")
             return {'message': f'Error getting all payments: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@finance_namespace.route('/get_all_payments_for_fund/<int:fund_id>')
-class GetAllFundPaymentsResource(Resource):
+@finance_namespace.route('reports/create')
+class AddReportResource(Resource):
     @jwt_required()
-    def get(self, fund_id):
+    @finance_namespace.expect(reports_data_model)
+    def post(self):
         try:
-            fund = FinancialFund.query.get_or_404(fund_id)
-            payments = Payments.query.filter_by(from_fund=fund_id).order_by(desc(Payments.createdAt)).all()
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            report_data = request.json
             
-            payments_data = []
-            for payment in payments:
-                payment_details = {
-                    'paymentID': payment.paymentID,
-                    'paymentName': payment.paymentName,
-                    'paymentMethod': payment.paymentMethod,
-                    'notes': payment.notes,
-                    'amount': payment.amount,
-                    'currency': payment.currency,
-                    'transferExpenses': payment.transferExpenses,
-                    'exchangeRate': payment.exchangeRate,
-                    'supportingFiles': payment.supportingFiles,
-                    'createdAt': payment.createdAt.isoformat()
-                }
-                payments_data.append(payment_details)
+            new_report = Reports(
+                title = report_data['title'],
+                reportTag = report_data['reportTag'],
+                pdfBytes = report_data['pdfBytes'],
+                createdBy = report_data.get('createdBy',f'{current_user.firstName} {current_user.lastName}')
+            )
             
-            return {'all_payments': payments_data}, HTTPStatus.OK 
-        
+            new_report.save()
+            
+            return {'message': 'Report added successfully.'}, HTTPStatus.OK
         
         except Exception as e:
-            current_app.logger.error(f"Error getting all payments: {str(e)}")
-            return {'message': f'Error getting all payments: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
-
-@finance_namespace.route('/get_all_region_accounts')
-class GetAllRegionAccount(Resource):
+            current_app.logger.error(f"Error adding report: {str(e)}")
+            return {'message': f'Error adding report: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
+@finance_namespace.route('reports/all')
+class GetAllReports(Resource):
     @jwt_required()
     def get(self):
         try:
+            reports = Reports.query.order_by(desc(Reports.createdAt)).all()
             
-            region_accounts = RegionAccount.query.all()
-            accounts_data = []
-            
-            for account in region_accounts:
-                project_funds = ProjectFunds.query.filter_by(accountID= account.accountID).all()
-                case_funds = CaseFunds.query.filter_by(accountID= account.accountID).all()
-                donations = Donations.query.filter_by(accountID=account.accountID).order_by(desc(Donations.createdAt)).all()
-                project_funds_data = []
-                case_funds_data = []
-                donations_data = []
-                for fund in project_funds:
-                    project = ProjectsData.query.get(fund.projectID)
-                    project_data = {'projectID': project.projectID, 'projectName': project.projectName, 'budgetApproved': project.budgetApproved,
-                                    'category': project.category.value, 'status': project.projectStatus.value, 'startDate': project.startDate.isoformat() if project.startDate else None,
-                                    'solution': project.solution, 'dueDate': project.dueDate.isoformat() if project.dueDate else None}
-                    fund_details = {
-                        'fundID': fund.fundID,
-                        'project_details': project_data,
-                        'fundsAllocated': fund.fundsAllocated
-                    }
-                    project_funds_data.append(fund_details)
-                    
-                for fund in case_funds:
-                    case = CasesData.query.get(fund.caseID)
-                    case_data = {'caseID': case.caseID, 'caseName': case.caseName, 'budgetApproved': case.budgetApproved,
-                                    'category': case.category.value, 'status': case.caseStatus.value, 'startDate': case.startDate.isoformat() if case.startDate else None,
-                                    'dueDate': case.dueDate.isoformat() if case.dueDate else None}
-                    fund_details = {
-                        'fundID': fund.fundID,
-                        'case_details': case_data,
-                        'fundsAllocated': fund.fundsAllocated
-                    }
-                    case_funds_data.append(fund_details)
-                
-                for donation in donations:
-                    fund = FinancialFund.query.get(donation.fundID)
-                    fund_details = {'fundID': fund.fundID, 'fundName': fund.fundName, 'totalFund': fund.totalFund}
-                    donations_details = {
-                        'donationID': donation.id,
-                        'fund_account_details': fund_details,
-                        'details': donation.details,
-                        'currency': donation.currency,
-                        'field': donation.field,
-                        'amount': donation.amount,
-                        'createdAt': donation.createdAt.isoformat()
-                    }
-                    donations_data.append(donations_details)
-                
-                account_details = {
-                    'accountID': account.accountID,
-                    'accountName': account.accountName,
-                    'totalFund': account.totalFund,
-                    'usedFund': account.usedFund,
-                    'currency': account.currency,
-                    'accountType': account.accountType,
-                    'notes': account.notes,
-                    'lastTransaction': account.lastTransaction.isoformat() if account.lastTransation else None,
-                    'health_funds': account.health_funds,
-                    'education_funds': account.education_funds,
-                    'general_funds': account.general_funds,
-                    'shelter_funds': account.shelter_funds,
-                    'sponsorship_funds': account.sponsorship_funds,
-                    'donations': donations_data,
-                    'funded_projects': project_funds_data,
-                    'funded_cases': case_funds_data
+            reports_data = []
+            for report in reports:
+                report_details = {
+                    'reportID': report.reportID,
+                    'title': report.title,
+                    'reportTag': report.reportTag,
+                    'createdAt': report.createdAt.isoformat(),
+                    'createdBy': report.createdBy
                 }
-                accounts_data.append(account_details)
+                reports_data.append(report_details)
             
-            return {'all_accounts': accounts_data}, HTTPStatus.OK
-                
+            return {'all_reports': reports_data}, HTTPStatus.OK
         except Exception as e:
-            current_app.logger.error(f"Error getting all region accounts: {str(e)}")
-            return {'message': f'Error getting all region accounts: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            current_app.logger.error(f"Error getting all reports: {str(e)}")
+            return {'message': f'Error getting all reports: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@finance_namespace.route('/get_all_financial_funds')
-class GetAllFinancialFunds(Resource):
+@finance_namespace.route('reports/single/<string:reportTag>')
+class GetReportByTag(Resource):
     @jwt_required()
-    def get(self):
+    def get(self, reportTag):
         try:
-            fund_accounts = FinancialFund.query.all()
-            accounts_data = []
+            reports = Reports.query.filter_by(reportTag=reportTag).order_by(desc(Reports.createdAt)).all()
             
-            for fund in fund_accounts:
-                donations = Donations.query.filter_by(fundID=fund.fundID).order_by(desc(Donations.createdAt)).all()
-                donations_data = []
-                for donation in donations:
-                    account = RegionAccount.query.get(donation.accountID) 
-                    account_details = {'accountID': account.accountID, 'accountName': account.accountName, 'totalFund': account.totalFund}
-                    donations_details = {
-                        'donationID': donation.id,
-                        'region_account_details': account_details,
-                        'details': donation.details,
-                        'currency': donation.currency,
-                        'field': donation.field,
-                        'amount': donation.amount,
-                        'createdAt': donation.createdAt.isoformat()
-                    }
-                    donations_data.append(donations_details)
-                    
-                payments = Payments.query.filter_by(from_fund=fund.fundID).order_by(desc(Payments.createdAt)).all()
-                payments_data = []
-                for payment in payments:
-                    payment_details = {
-                        'paymentID': payment.paymentID,
-                        'paymentName': payment.paymentName,
-                        'paymentMethod': payment.paymentMethod,
-                        'notes': payment.notes,
-                        'amount': payment.amount,
-                        'currency': payment.currency,
-                        'transferExpenses': payment.transferExpenses,
-                        'exchangeRate': payment.exchangeRate,
-                        'supportingFiles': payment.supportingFiles,
-                        'createdAt': payment.createdAt.isoformat()
-                    }
-                    payments_data.append(payment_details)
-                    
-                account_details = {
-                    'fundID': fund.fundID,
-                    'fundName': fund.fundName,
-                    'totalFund': fund.totalFund,
-                    'usedFund': fund.usedFund,
-                    'currency': fund.currency,
-                    'accountType': fund.accountType,
-                    'notes': fund.notes,
-                    'createdAt': fund.createdAt.isoformat(),
-                    'donations': donations_data,
-                    'payments': payments_data
+            reports_data = []
+            for report in reports:
+                report_details = {
+                    'reportID': report.reportID,
+                    'title': report.title,
+                    'reportTag': report.reportTag,
+                    'createdAt': report.createdAt.isoformat(),
+                    'createdBy': report.createdBy
                 }
-                accounts_data.append(account_details)
+                reports_data.append(report_details)
             
-            return {'fund_accounts': accounts_data}
-                
+            return {'all_reports': reports_data}, HTTPStatus.OK
         except Exception as e:
-            current_app.logger.error(f"Error getting all financial fund accounts: {str(e)}")
-            return {'message': f'Error getting all financial fund accounts: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            current_app.logger.error(f"Error getting all reports: {str(e)}")
+            return {'message': f'Error getting all reports: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+# @finance_namespace.route('/get_all_region_accounts')
+# class GetAllRegionAccount(Resource):
+#     @jwt_required()
+#     def get(self):
+#         try:
+            
+#             region_accounts = RegionAccount.query.all()
+#             accounts_data = []
+            
+#             for account in region_accounts:
+#                 project_funds = ProjectFunds.query.filter_by(accountID= account.accountID).all()
+#                 case_funds = CaseFunds.query.filter_by(accountID= account.accountID).all()
+#                 donations = Donations.query.filter_by(accountID=account.accountID).order_by(desc(Donations.createdAt)).all()
+#                 project_funds_data = []
+#                 case_funds_data = []
+#                 donations_data = []
+#                 for fund in project_funds:
+#                     project = ProjectsData.query.get(fund.projectID)
+#                     project_data = {'projectID': project.projectID, 'projectName': project.projectName, 'budgetApproved': project.budgetApproved,
+#                                     'category': project.category.value, 'status': project.projectStatus.value, 'startDate': project.startDate.isoformat() if project.startDate else None,
+#                                     'solution': project.solution, 'dueDate': project.dueDate.isoformat() if project.dueDate else None}
+#                     fund_details = {
+#                         'fundID': fund.fundID,
+#                         'project_details': project_data,
+#                         'fundsAllocated': fund.fundsAllocated
+#                     }
+#                     project_funds_data.append(fund_details)
+                    
+#                 for fund in case_funds:
+#                     case = CasesData.query.get(fund.caseID)
+#                     case_data = {'caseID': case.caseID, 'caseName': case.caseName, 'budgetApproved': case.budgetApproved,
+#                                     'category': case.category.value, 'status': case.caseStatus.value, 'startDate': case.startDate.isoformat() if case.startDate else None,
+#                                     'dueDate': case.dueDate.isoformat() if case.dueDate else None}
+#                     fund_details = {
+#                         'fundID': fund.fundID,
+#                         'case_details': case_data,
+#                         'fundsAllocated': fund.fundsAllocated
+#                     }
+#                     case_funds_data.append(fund_details)
+                
+#                 for donation in donations:
+#                     fund = FinancialFund.query.get(donation.fundID)
+#                     fund_details = {'fundID': fund.fundID, 'fundName': fund.fundName, 'totalFund': fund.totalFund}
+#                     donations_details = {
+#                         'donationID': donation.id,
+#                         'fund_account_details': fund_details,
+#                         'details': donation.details,
+#                         'currency': donation.currency,
+#                         'field': donation.field,
+#                         'amount': donation.amount,
+#                         'createdAt': donation.createdAt.isoformat()
+#                     }
+#                     donations_data.append(donations_details)
+                
+#                 account_details = {
+#                     'accountID': account.accountID,
+#                     'accountName': account.accountName,
+#                     'totalFund': account.totalFund,
+#                     'usedFund': account.usedFund,
+#                     'currency': account.currency,
+#                     'accountType': account.accountType,
+#                     'notes': account.notes,
+#                     'lastTransaction': account.lastTransaction.isoformat() if account.lastTransation else None,
+#                     'health_funds': account.health_funds,
+#                     'education_funds': account.education_funds,
+#                     'general_funds': account.general_funds,
+#                     'shelter_funds': account.shelter_funds,
+#                     'sponsorship_funds': account.sponsorship_funds,
+#                     'donations': donations_data,
+#                     'funded_projects': project_funds_data,
+#                     'funded_cases': case_funds_data
+#                 }
+#                 accounts_data.append(account_details)
+            
+#             return {'all_accounts': accounts_data}, HTTPStatus.OK
+                
+#         except Exception as e:
+#             current_app.logger.error(f"Error getting all region accounts: {str(e)}")
+#             return {'message': f'Error getting all region accounts: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+# @finance_namespace.route('/get_all_financial_funds')
+# class GetAllFinancialFunds(Resource):
+#     @jwt_required()
+#     def get(self):
+#         try:
+#             fund_accounts = FinancialFund.query.all()
+#             accounts_data = []
+            
+#             for fund in fund_accounts:
+#                 donations = Donations.query.filter_by(fundID=fund.fundID).order_by(desc(Donations.createdAt)).all()
+#                 donations_data = []
+#                 for donation in donations:
+#                     account = RegionAccount.query.get(donation.accountID) 
+#                     account_details = {'accountID': account.accountID, 'accountName': account.accountName, 'totalFund': account.totalFund}
+#                     donations_details = {
+#                         'donationID': donation.id,
+#                         'region_account_details': account_details,
+#                         'details': donation.details,
+#                         'currency': donation.currency,
+#                         'field': donation.field,
+#                         'amount': donation.amount,
+#                         'createdAt': donation.createdAt.isoformat()
+#                     }
+#                     donations_data.append(donations_details)
+                    
+#                 payments = Payments.query.filter_by(from_fund=fund.fundID).order_by(desc(Payments.createdAt)).all()
+#                 payments_data = []
+#                 for payment in payments:
+#                     payment_details = {
+#                         'paymentID': payment.paymentID,
+#                         'paymentName': payment.paymentName,
+#                         'paymentMethod': payment.paymentMethod,
+#                         'notes': payment.notes,
+#                         'amount': payment.amount,
+#                         'currency': payment.currency,
+#                         'transferExpenses': payment.transferExpenses,
+#                         'exchangeRate': payment.exchangeRate,
+#                         'supportingFiles': payment.supportingFiles,
+#                         'createdAt': payment.createdAt.isoformat()
+#                     }
+#                     payments_data.append(payment_details)
+                    
+#                 account_details = {
+#                     'fundID': fund.fundID,
+#                     'fundName': fund.fundName,
+#                     'totalFund': fund.totalFund,
+#                     'usedFund': fund.usedFund,
+#                     'currency': fund.currency,
+#                     'accountType': fund.accountType,
+#                     'notes': fund.notes,
+#                     'createdAt': fund.createdAt.isoformat(),
+#                     'donations': donations_data,
+#                     'payments': payments_data
+#                 }
+#                 accounts_data.append(account_details)
+            
+#             return {'fund_accounts': accounts_data}
+                
+#         except Exception as e:
+#             current_app.logger.error(f"Error getting all financial fund accounts: {str(e)}")
+#             return {'message': f'Error getting all financial fund accounts: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
         
         
 
