@@ -861,9 +861,8 @@ class CaseAddRequirementsResource(Resource):
                         # Set the attribute value
                         setattr(region_account, attr_name, new_value)
                 
-                region_account.totalFund -= float(approvedAmount)
+                region_account.availableFund -= float(approvedAmount)
                 region_account.usedFund += float(approvedAmount)
-                region_account.lastTransaction = datetime.utcnow.date()
                 db.session.commit()
 
             return {'message': 'Case requirements added successfully'}, HTTPStatus.CREATED
