@@ -328,15 +328,15 @@ class RegionAccountTransaction(db.Model):
     
     @declared_attr
     def region_account(cls):
-        return db.relationship('RegionAccount', backref='transactions')
+        return db.relationship('RegionAccount', backref='account_transactions')
     
     @declared_attr
     def project(cls):
-        return db.relationship('Project', backref='transactions')
+        return db.relationship('ProjectsData', backref='account_transactions')
     
     @declared_attr
     def case(cls):
-        return db.relationship('Case', backref='transactions')
+        return db.relationship('CasesData', backref='account_transactions')
     
     def save(self):
         try:
