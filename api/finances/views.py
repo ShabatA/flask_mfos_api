@@ -99,6 +99,7 @@ fund_transfer_model = finance_namespace.model('FundTransfer', {
 
 payments_model = finance_namespace.model('Payments', {
     'from_fund': fields.Integer(required=True, description= 'the actual bank account the money will come from'),
+    'subFundID': fields.Integer(required=False, description='the sub fund of the main if applicable'),
     'paymentFor': fields.String(enum=[payment.value for payment in PaymentFor], description="What the payment is for"),
     'paymentName': fields.String(required=True, description='the name of the case/project is for, or something else'),
     'paymentMethod': fields.String(required=True, enum=[type.value for type in TransferType] , description='EFT, Cash, or Check'),
@@ -567,7 +568,8 @@ class RequestProjectFundReleaseResource(Resource):
             request = ProjectFundReleaseRequests(
                 projectID = project_id,
                 fundsRequested = request_data['fundsRequested'],
-                requestedBy = current_user.userID
+                requestedBy = current_user.userID,
+                paymentCount = request_data['paymentCount']
             )
             
             request.save()
@@ -596,7 +598,8 @@ class RequestCaseFundReleaseResource(Resource):
             request = CaseFundReleaseRequests(
                 caseID = case_id,
                 fundsRequested = request_data['fundsRequested'],
-                requestedBy = current_user.userID
+                requestedBy = current_user.userID,
+                paymentCount = request_data['paymentCount']
             )
             
             request.save()
@@ -621,11 +624,8 @@ class RequestFundTransferResource(Resource):
                 to_fund = request_data['to_fund'],
                 transferAmount = request_data['transferAmount'],
                 notes = request_data['notes'],
-                attachedFiles = request_data['attachedFiles'],
                 requestedBy = current_user.userID,
-                currencyFrom = request_data['currencyFrom'],
-                currencyTo = request_data['currencyTo'],
-                exchangeRate = request_data['exchangeRate']
+                transferType = request_data['transferType']
             )
             
             request.save()
@@ -662,15 +662,18 @@ class RecordPaymentsResource(Resource):
                 paymentName = request_data['paymentName'],
                 paymentMethod = request_data['paymentMethod'],
                 amount = request_data['amount'],
-                currency = request_data['currency'],
+                currencyID = request_data['currencyID'],
                 transferExpenses = request_data.get('transferExpenses', 0),
-                exchangeRate = request_data.get('exchangeRate', 0),
-                supportingFiles = request_data.get('supportingFiles', None),
+                projectScope = request_data.get('projectScope', None),
+                subFundID = request_data.get('subFundID',None)
             )
             
             request.save()
-            fund.totalFund -= request_data['amount']
-            db.session.commit()
+            if request_data.get('subFundID',None) is not None:
+                sub_fund = SubFunds.query.get_or_404(request_data['subFundID'])
+                sub_fund.use_fund(request_data['amount'], request_data['currencyID'])
+            
+            fund.use_fund(request_data['amount'], request_data['currencyID'])
             
             return {'message': 'Payment recorded successfully.'}, HTTPStatus.OK
         
@@ -708,15 +711,7 @@ class AddProjectFundsResource(Resource):
                 accountID=region_account.accountID,
                 fundsAllocated= request_data['fundsAllocated']
             )
-            scope = request_data['field']
-            field = AccountFields.query.filter(AccountFields.fieldName.like(f'%{scope}%')).first()
-            if field:
-                attr_name = f'{field.fieldName.lower()}_funds'
-                if hasattr(region_account, attr_name):
-                    attr_value = getattr(region_account, attr_name)
-                    new_value = attr_value + float(request_data['fundsAllocated'])
-                    # Set the attribute value
-                    setattr(region_account, attr_name, new_value)
+            
             
             new_fund.save()
             return {'message': 'project has been allocated funds successfully.'}, HTTPStatus.OK
@@ -755,15 +750,7 @@ class AddCaseFundsResource(Resource):
                 fundsAllocated= request_data['fundsAllocated']
             )
             
-            scope = request_data['field']
-            field = AccountFields.query.filter(AccountFields.fieldName.like(f'%{scope}%')).first()
-            if field:
-                attr_name = f'{field.fieldName.lower()}_funds'
-                if hasattr(region_account, attr_name):
-                    attr_value = getattr(region_account, attr_name)
-                    new_value = attr_value + float(request_data['fundsAllocated'])
-                    # Set the attribute value
-                    setattr(region_account, attr_name, new_value)
+            
             
             new_fund.save()
             return {'message': 'project has been allocated funds successfully.'}, HTTPStatus.OK
@@ -850,9 +837,9 @@ class ChangeTransferRequestStage(Resource):
                 transfer.approvedAt = datetime.utcnow()
                 from_fund = FinancialFund.query.get_or_404(transfer.from_fund)
                 to_fund = FinancialFund.query.get_or_404(transfer.to_fund)
-                from_fund.totalFund -= transfer.transferAmount
-                from_fund.usedFund += transfer.transferAmount
-                to_fund.totalFund += transfer.transferAmount
+                # make the transfer
+                from_fund.use_fund(transfer.transferAmount, 1)
+                to_fund.add_fund(transfer.transferAmount, 1)
                 
             db.session.commit()
             
@@ -872,24 +859,32 @@ class GetAllFundTransferRequests(Resource):
             requests_data = []
             for request in requests:
                 user = Users.query.get(request.requestedBy)
-                user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
                 from_fund = FinancialFund.query.get(request.from_fund)
-                from_fund_details = {'fundID': from_fund.fundID, 'fundName': from_fund.fundName, 'totalFund': from_fund.totalFund, 'currency': from_fund.currency}
                 to_fund = FinancialFund.query.get(request.to_fund)
-                to_fund_details = {'fundID': to_fund.fundID, 'fundName': to_fund.fundName, 'totalFund': to_fund.totalFund, 'currency': to_fund.currency}
+                
                 
                 request_details = {
                     'requestID': request.requestID,
-                    'from_fund': from_fund_details,
-                    'to_fund': to_fund_details,
-                    'requestedBy': user_details,
+                    'from_fund': {
+                        'fundID': from_fund.fundID,
+                        'fundName': from_fund.fundName,
+                        'totalFund': from_fund.totalFund,
+                        'currency': from_fund.currency.currencyCode
+                    },
+                    'to_fund': {
+                        'fundID': to_fund.fundID,
+                        'fundName': to_fund.fundName,
+                        'totalFund': to_fund.totalFund,
+                        'currency': to_fund.currency.currencyCode
+                    },
+                    'requestedBy': {
+                        'userID': user.userID,
+                        'userFullName': f'{user.firstName} {user.lastName}',
+                        'username': user.username
+                    },
                     'transferAmount': request.transferAmount,
                     'createdAt': request.createdAt.isoformat(),
                     'notes': request.notes,
-                    'currencyFrom': request.currencyFrom,
-                    'currencyTo': request.currencyTo,
-                    'exchangeRate': request.exchangeRate,
-                    'attachedFiles': request.attachedFiles,
                     'stage': request.stage.value,
                     'approvedAt': request.approvedAt.isoformat() if request.approvedAt else None   
                 }
@@ -969,30 +964,25 @@ class GetAllDonationsResource(Resource):
                 donations_data = []
                 for donation in donations:
                     fund = FinancialFund.query.get(donation.fundID)
-                    fund_details = {'fundID': fund.fundID, 'fundName': fund.fundName, 'totalFund': fund.totalFund, 'currency': fund.currency}
+                    fund_details = {'fundID': fund.fundID, 'fundName': fund.fundName, 'totalFund': fund.totalFund, 'currency': Currencies.query.get(fund.currencyID).currencyCode}
                     account = RegionAccount.query.get(donation.accountID) 
-                    account_details = {'accountID': account.accountID, 'accountName': account.accountName, 'totalFund': account.totalFund, 'currency': account.currency}
+                    account_details = {'accountID': account.accountID, 'accountName': account.accountName, 'totalFund': account.totalFund, 'currency': Currencies.query.get(account.currencyID).currencyCode}
                     donations_details = {
                         'donationID': donation.id,
                         'fund_account_details': fund_details,
                         'region_account_details': account_details,
                         'details': donation.details,
-                        'currency': donation.currency,
-                        'field': donation.field,
+                        'currency': Currencies.query.get(donation.currencyID).currencyCode,
+                        'projectScope': donation.projectScope.value,
+                        'donationType': donation.donationType.value,
                         'amount': donation.amount,
+                        'allocationTags': donation.allocationTags,
                         'createdAt': donation.createdAt.isoformat()
                     }
                     donations_data.append(donations_details)
                 
-                donor_details = {
-                    'name': donor.name,
-                    'donorType': donor.donorType,
-                    'country': donor.country,
-                    'donorID': donor.donorID,
-                    'email': donor.email,
-                    'donations': donations_data
-                }
-                donors_data.append(donor_details)
+                
+                donors_data.append(donor.get_donor_info)
             
             return {'donors': donors_data}, HTTPStatus.OK
                 
@@ -1016,10 +1006,12 @@ class GetAllPaymentsResource(Resource):
                     'paymentID': payment.paymentID,
                     'from_fund': from_fund_details,
                     'paymentName': payment.paymentName,
-                    'paymentMethod': payment.paymentMethod,
+                    'paymentMethod': payment.paymentMethod.value,
+                    'paymentFor': payment.paymentFor.value,
+                    'projectScope': payment.projectScope.value,
                     'notes': payment.notes,
                     'amount': payment.amount,
-                    'currency': payment.currency,
+                    'currency': Currencies.query.get(payment.currencyID).currencyCode,
                     'transferExpenses': payment.transferExpenses,
                     'createdAt': payment.createdAt.isoformat()
                 }

@@ -807,8 +807,6 @@ class CaseBeneficiaryByCaseIDResource(Resource):
             return {'message': f'Error getting beneficiaries: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR 
 
 
-
-
 @case_namespace.route('/add/requirements/<int:case_id>')
 class CaseAddRequirementsResource(Resource):
     @jwt_required()
@@ -851,20 +849,6 @@ class CaseAddRequirementsResource(Resource):
                 
                 case_fund.save()
                 
-                
-                field = AccountFields.query.filter(AccountFields.fieldName.like(f'%{scope}%')).first()
-                if field:
-                    attr_name = f'{field.fieldName.lower()}_funds'
-                    if hasattr(region_account, attr_name):
-                        attr_value = getattr(region_account, attr_name)
-                        new_value = attr_value + float(approvedAmount)
-                        # Set the attribute value
-                        setattr(region_account, attr_name, new_value)
-                
-                region_account.availableFund -= float(approvedAmount)
-                region_account.usedFund += float(approvedAmount)
-                db.session.commit()
-
             return {'message': 'Case requirements added successfully'}, HTTPStatus.CREATED
         except Exception as e:
             # Handle exceptions (e.g., database errors) appropriately

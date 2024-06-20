@@ -115,7 +115,7 @@ class RegionAccount(db.Model):
             db.session.rollback()
             raise e
 
-    def add_fund(self, amount, currencyID=None, transaction_subtype=None, projectID=None, caseID=None, payment_number=None):
+    def add_fund(self, amount, currencyID=None, transaction_subtype=None, projectID=None, caseID=None, payment_number=None, category=None):
         if currencyID is None:
             currencyID = self.defaultCurrencyID
         
@@ -133,12 +133,18 @@ class RegionAccount(db.Model):
         balance.availableFund += amount
         balance.save()
         
-        # Update totalFund across all currencies in default currency
         self.totalFund += amount_in_default_currency
         self.availableFund += amount_in_default_currency
+        
+        if category:
+            category_fund = CategoryFund.query.filter_by(accountID=self.accountID, category=category).first()
+            if not category_fund:
+                category_fund = CategoryFund(accountID=self.accountID, category=category, amount=0)
+            category_fund.amount += amount_in_default_currency
+            category_fund.save()
+        
         self.save()
         
-        # Record the transaction
         transaction = RegionAccountTransaction(
             accountID=self.accountID,
             currencyID=currencyID,
@@ -148,11 +154,12 @@ class RegionAccount(db.Model):
             projectID=projectID,
             caseID=caseID,
             paymentNumber=payment_number,
-            timestamp=func.now()
+            timestamp=func.now(),
+            category=category
         )
         transaction.save()
 
-    def use_fund(self, amount, currencyID=None, transaction_subtype=None, projectID=None, caseID=None, payment_number=None):
+    def use_fund(self, amount, currencyID=None, transaction_subtype=None, projectID=None, caseID=None, payment_number=None, category=None):
         if currencyID is None:
             currencyID = self.defaultCurrencyID
         
@@ -170,12 +177,18 @@ class RegionAccount(db.Model):
         balance.availableFund -= amount
         balance.save()
         
-        # Update usedFund across all currencies in default currency
         self.usedFund += amount_in_default_currency
         self.availableFund -= amount_in_default_currency
+        
+        if category:
+            category_fund = CategoryFund.query.filter_by(accountID=self.accountID, category=category).first()
+            if not category_fund or category_fund.amount < amount_in_default_currency:
+                raise ValueError("Insufficient funds in the specified category")
+            category_fund.amount -= amount_in_default_currency
+            category_fund.save()
+        
         self.save()
         
-        # Record the transaction
         transaction = RegionAccountTransaction(
             accountID=self.accountID,
             currencyID=currencyID,
@@ -185,7 +198,8 @@ class RegionAccount(db.Model):
             projectID=projectID,
             caseID=caseID,
             paymentNumber=payment_number,
-            timestamp=func.now()
+            timestamp=func.now(),
+            category=category
         )
         transaction.save()
 
@@ -222,6 +236,7 @@ class RegionAccount(db.Model):
             }
         
         balance = RegionAccountCurrencyBalance.query.filter_by(accountID=self.accountID, currencyID=currencyID).first()
+        
         if balance:
             return {
                 "health_funds": self.health_funds,
@@ -309,18 +324,19 @@ class RegionAccountTransaction(db.Model):
     caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=True)
     paymentNumber = db.Column(db.Integer, nullable=True)  # e.g., 1, 2, 3, etc.
     timestamp = db.Column(db.DateTime, nullable=False, default=func.now())
+    category = db.Column(db.String(50), nullable=True)  # 'health', 'education', etc.
     
     @declared_attr
     def region_account(cls):
-        return db.relationship('RegionAccount', backref='account_transactions')
+        return db.relationship('RegionAccount', backref='transactions')
     
     @declared_attr
     def project(cls):
-        return db.relationship('ProjectsData', backref='account_transactions')
+        return db.relationship('Project', backref='transactions')
     
     @declared_attr
     def case(cls):
-        return db.relationship('CasesData', backref='account_transactions')
+        return db.relationship('Case', backref='transactions')
     
     def save(self):
         try:
@@ -338,6 +354,35 @@ class RegionAccountTransaction(db.Model):
             db.session.rollback()
             raise e
 
+class CategoryFund(db.Model):
+    __tablename__ = 'category_funds'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID'), nullable=False)
+    category = db.Column(db.String(50), nullable=False)
+    amount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    
+    @declared_attr
+    def region_account(cls):
+        return db.relationship('RegionAccount', backref='category_funds')
+    
+    def save(self):
+        try:
+            db.session.add(self)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise e
+    
+    def delete(self):
+        try:
+            db.session.delete(self)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise e
+        
+        
 class SubFundCurrencyBalance(db.Model):
     __tablename__ = 'sub_fund_currency_balances'
     
@@ -700,6 +745,27 @@ class Donor(db.Model):
     def delete(self):
         db.session.delete(self)
         db.session.commit()
+    
+    def get_donor_info(self):
+        
+        representatives = [{
+            'name': rep.name,
+            'jobPosition': rep.jobPosition,
+            'email': rep.email,
+            'phoneNumber': rep.phoneNumber
+        } for rep in self.representatives]
+        return {
+            'donorID': self.donorID,
+            'donorName': self.donorName,
+            'donorType': self.donorType,
+            'placeOfResidence': self.placeOfResidence,
+            'phoneNumber': self.phoneNumber,
+            'email': self.email,
+            'startOfRelationship': self.startOfRelationship,
+            'notes': self.notes,
+            'representatives': representatives
+        }
+       
 
 class Representative(db.Model):
     __tablename__ = 'representatives'
@@ -858,6 +924,7 @@ class Payments(db.Model):
     transferExpenses = db.Column(db.Float)
     projectScope = db.Column(db.Enum(ProjectScopes), default=ProjectScopes.GENERAL)
     paymentMethod = db.Column(db.Enum(TransferType), default=TransferType.EFT)
+    subFundID = db.Column(db.Integer, db.ForeignKey('sub_funds.subFundID'), nullable=True)
     
     def save(self):
         db.session.add(self)
