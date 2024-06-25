@@ -52,7 +52,8 @@ donor_data_model = finance_namespace.model('DonorData', {
     'donorType': fields.String(required=True, description='could be organization or individual', enum=[type.value for type in DonorTypes]),
     'country': fields.String(required=True, description='country where donor is from'),
     'email': fields.String(required=True),
-    'phoneNumber': fields.String(required=True)
+    'phoneNumber': fields.String(required=True),
+    'notes': fields.String(required=False)
 })
 
 donor_rep_model = finance_namespace.model('DonorRepresentative',{
@@ -366,11 +367,12 @@ class AddEditDonorsResource(Resource):
                 return {'message': 'Donor with this name already exists'}, HTTPStatus.CONFLICT
             
             new_donor = Donor(
-                name = donor_data['name'],
+                donorName = donor_data['name'],
                 donorType = donor_data['donorType'],
-                country = donor_data['country'],
+                placeOfResidence = donor_data['country'],
                 email = donor_data['email'],
-                phoneNumber = donor_data['phoneNumber'] 
+                phoneNumber = donor_data['phoneNumber'],
+                notes = donor_data.get('notes', None)
             )
             
             new_donor.save()
@@ -407,11 +409,12 @@ class AddEditDonorsResource(Resource):
 
             existing_donor = Donor.query.get_or_404(donor_id)
             
-            existing_donor.fundName = donor_data['name']
+            existing_donor.donorName = donor_data['name']
             existing_donor.donorType = donor_data['donorType']
-            existing_donor.country = donor_data['country']
+            existing_donor.placeOfResidence = donor_data['country']
             existing_donor.email = donor_data['email']
             existing_donor.phoneNumber = donor_data['phoneNumber']
+            existing_donor.notes = donor_data['notes']
             
             existing_donor.save()
             return {'message': 'Donor was updated successfully.'}, HTTPStatus.OK
