@@ -761,7 +761,7 @@ class Donor(db.Model):
             'placeOfResidence': self.placeOfResidence,
             'phoneNumber': self.phoneNumber,
             'email': self.email,
-            'startOfRelationship': self.startOfRelationship,
+            'startOfRelationship': self.startOfRelationship.isoformat(),
             'notes': self.notes,
             'representatives': representatives
         }
