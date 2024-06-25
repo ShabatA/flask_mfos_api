@@ -47,20 +47,21 @@ region_account_data = finance_namespace.model('RegionAccountData', {
     'currencies': fields.List(fields.Integer, description='Optional list of currencies excluding the default USD')
 })
 
+donor_rep_model = finance_namespace.model('DonorRepresentative',{
+    'name': fields.String(required=True, description='name of the donor'),
+    'jobPosition': fields.String(required=True),
+    'email': fields.String(required=True),
+    'phoneNumber': fields.String(required=True)
+})
+
 donor_data_model = finance_namespace.model('DonorData', {
     'name': fields.String(required=True, description='name of the donor'),
     'donorType': fields.String(required=True, description='could be organization or individual', enum=[type.value for type in DonorTypes]),
     'country': fields.String(required=True, description='country where donor is from'),
     'email': fields.String(required=True),
     'phoneNumber': fields.String(required=True),
-    'notes': fields.String(required=False)
-})
-
-donor_rep_model = finance_namespace.model('DonorRepresentative',{
-    'name': fields.String(required=True, description='name of the donor'),
-    'jobPosition': fields.String(required=True),
-    'email': fields.String(required=True),
-    'phoneNumber': fields.String(required=True)
+    'notes': fields.String(required=False),
+    'representatives': fields.List(fields.Nested(donor_rep_model), description='list of representatives')
 })
 
 donations_data_model = finance_namespace.model('DonationData', {
@@ -362,7 +363,7 @@ class AddEditDonorsResource(Resource):
             
            
             # Check if a donor with the given name already exists
-            existing_donor = Donor.query.filter_by(name=donor_data['name']).first()
+            existing_donor = Donor.query.filter_by(donorName=donor_data['name']).first()
             if existing_donor:
                 return {'message': 'Donor with this name already exists'}, HTTPStatus.CONFLICT
             
@@ -965,6 +966,7 @@ class GetAllDonationsResource(Resource):
             for donor in donors:
                 donations = Donations.query.filter_by(donorID=donor.donorID).order_by(desc(Donations.createdAt)).all()
                 donations_data = []
+                total_donation_amount = 0
                 for donation in donations:
                     fund = FinancialFund.query.get(donation.fundID)
                     fund_details = {'fundID': fund.fundID, 'fundName': fund.fundName, 'totalFund': fund.totalFund, 'currency': Currencies.query.get(fund.currencyID).currencyCode}
@@ -983,9 +985,12 @@ class GetAllDonationsResource(Resource):
                         'createdAt': donation.createdAt.isoformat()
                     }
                     donations_data.append(donations_details)
+                    total_donation_amount += donation.amount
                 
-                
-                donors_data.append(donor.get_donor_info)
+                donor_info = donor.get_donor_info()
+                donor_info['totalDonationAmount'] = total_donation_amount
+                donor_info['donations'] = donations_data
+                donors_data.append(donor_info)
             
             return {'donors': donors_data}, HTTPStatus.OK
                 
