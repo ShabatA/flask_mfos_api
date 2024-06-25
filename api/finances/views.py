@@ -967,6 +967,7 @@ class GetAllDonationsResource(Resource):
                 donations = Donations.query.filter_by(donorID=donor.donorID).order_by(desc(Donations.createdAt)).all()
                 donations_data = []
                 total_donation_amount = 0
+                latest_donation = None  # Initialize latest_donation variable
                 for donation in donations:
                     fund = FinancialFund.query.get(donation.fundID)
                     fund_details = {'fundID': fund.fundID, 'fundName': fund.fundName, 'totalFund': fund.totalFund, 'currency': Currencies.query.get(fund.currencyID).currencyCode}
@@ -986,10 +987,13 @@ class GetAllDonationsResource(Resource):
                     }
                     donations_data.append(donations_details)
                     total_donation_amount += donation.amount
+                    if latest_donation is None or donation.createdAt > latest_donation:
+                        latest_donation = donation.createdAt
                 
                 donor_info = donor.get_donor_info()
                 donor_info['totalDonationAmount'] = total_donation_amount
                 donor_info['donations'] = donations_data
+                donor_info['latestDonation'] = latest_donation.strftime("%d %b %Y") if latest_donation else None  # Format latest_donation as "20 Sept 2023"
                 donors_data.append(donor_info)
             
             return {'donors': donors_data}, HTTPStatus.OK
