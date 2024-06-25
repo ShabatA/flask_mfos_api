@@ -177,6 +177,18 @@ class CreateCurrency(Resource):
         except Exception as e:
             current_app.logger.error(f"Error updating currency: {str(e)}")
             return {'message': f'Error updating currency: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route('/get_all_currencies')
+class GetAllCurrenciesResource(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            currencies = Currencies.query.all()
+            currencies_data = [{'currencyID': currency.currencyID, 'currencyCode': currency.currencyCode, 'currencyName': currency.currencyName, 'lastUpdated': currency.lastUpdated.isoformat()} for currency in currencies]
+            return {'currencies': currencies_data}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error getting all currencies: {str(e)}")
+            return {'message': f'Error getting all currencies: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
     
 
 @finance_namespace.route('/finacial_funds/create', methods=['POST', 'PUT'])
