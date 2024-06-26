@@ -201,6 +201,7 @@ class GetAllCurrenciesWithBalancesResource(Resource):
                 Currencies.currencyID,
                 Currencies.currencyCode,
                 Currencies.currencyName,
+                Currencies.lastUpdated,
                 db.func.coalesce(db.func.sum(FinancialFundCurrencyBalance.availableFund), 0).label('available_amount')
             ).outerjoin(FinancialFundCurrencyBalance, FinancialFundCurrencyBalance.currencyID == Currencies.currencyID) \
              .group_by(Currencies.currencyID, Currencies.currencyCode, Currencies.currencyName) \
@@ -211,7 +212,8 @@ class GetAllCurrenciesWithBalancesResource(Resource):
                     'currencyID': currency.currencyID,
                     'currencyCode': currency.currencyCode,
                     'currencyName': currency.currencyName,
-                    'available_amount': float(currency.available_amount)  # Ensure available_amount is a float
+                    'available_amount': float(currency.available_amount),  # Ensure available_amount is a float
+                    'lastUpdated': currency.lastUpdated.strftime('%d %b %Y')
                 } for currency in currencies_with_balances
             ]
 
