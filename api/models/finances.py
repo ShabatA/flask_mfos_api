@@ -225,34 +225,39 @@ class RegionAccount(db.Model):
             "availableFund": 0
         }
     
-    def get_scope_balances(self, currencyID=None):
-        if currencyID is None:
+    def get_scope_percentages(self):
+        if self.usedFund == 0:
+            # Avoid division by zero
             return {
-                "health_funds": self.health_funds,
-                "education_funds": self.education_funds,
-                "general_funds": self.general_funds,
-                "shelter_funds": self.shelter_funds,
-                "sponsorship_funds": self.sponsorship_funds
+                "Healthcare": 0,
+                "Education Support": 0,
+                "Relief Aid": 0,
+                "Housing": 0,
+                "Sponsorship": 0
             }
-        
-        balance = RegionAccountCurrencyBalance.query.filter_by(accountID=self.accountID, currencyID=currencyID).first()
-        
-        if balance:
-            return {
-                "health_funds": self.health_funds,
-                "education_funds": self.education_funds,
-                "general_funds": self.general_funds,
-                "shelter_funds": self.shelter_funds,
-                "sponsorship_funds": self.sponsorship_funds
-            }
-        
-        return {
-            "health_funds": 0,
-            "education_funds": 0,
-            "general_funds": 0,
-            "shelter_funds": 0,
-            "sponsorship_funds": 0
+
+        # Mapping from category code name to official name
+        category_names = {
+            "health": "Healthcare",
+            "education": "Education Support",
+            "relief": "Relief Aid",
+            "shelter": "Housing",
+            "sponsorship": "Sponsorship"
         }
+
+        categories = ["health", "education", "relief", "shelter", "sponsorship"]
+        percentages = {}
+
+        for category in categories:
+            # Sum all transactions for this category and account
+            total_for_category = sum(transaction.amount for transaction in self.transactions if transaction.category == category and transaction.transactionType == 'use')
+            # Calculate percentage
+            percentage = (total_for_category / self.usedFund) * 100
+            # Use the official name for the category
+            official_name = category_names[category]
+            percentages[official_name] = round(percentage, 2)  # rounding to 2 decimal places for better readability
+
+        return percentages
         
     def get_available_currencies(self):
         return [{"currencyID": balance.currencyID, "currencyCode": balance.currency.currencyCode, "currencyName": balance.currency.currencyName} for balance in self.currency_balances]
@@ -275,6 +280,52 @@ class RegionAccount(db.Model):
             }
             transaction_list.append(transaction_dict)
         return transaction_list
+    
+    def get_category_balances(self):
+        categories = CategoryFund.query.filter_by(accountID=self.accountID).all()
+        category_balances = {}
+
+        # Mapping from category code name to official name
+        category_names = {
+            "health": "Healthcare",
+            "education": "Education Support",
+            "relief": "Relief Aid",
+            "shelter": "Housing",
+            "sponsorship": "Sponsorship"
+        }
+
+        for category_fund in categories:
+            category_code = category_fund.category
+            # Convert category code to official name
+            official_name = category_names.get(category_code, "Unknown Category")
+
+            # Initialize default values
+            category_balances[official_name] = {
+                "availableFund": category_fund.amount,
+                "totalFund": 0,
+                "usedFund": 0,
+                "latestDonation": 'None'
+            }
+
+            # Transactions of type 'add' for this category
+            add_transactions = RegionAccountTransaction.query.filter_by(
+                accountID=self.accountID,
+                category=category_code,
+                transactionType='add'
+            ).all()
+
+            if add_transactions:
+                total_fund = sum(transaction.amount for transaction in add_transactions)
+                latest_donation = max(transaction.timestamp for transaction in add_transactions)
+                latest_donation_formatted = latest_donation.strftime('%d %b %Y')
+
+                category_balances[official_name].update({
+                    "totalFund": total_fund,
+                    "usedFund": total_fund,  # Assuming usedFund is the same as totalFund for 'add' transactions
+                    "latestDonation": latest_donation_formatted
+                })
+
+        return category_balances
         
 
 

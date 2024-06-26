@@ -154,7 +154,7 @@ class CreateCurrency(Resource):
                 exchangeRateToUSD = currency_data['exchangeRateToUSD']
             )
             currency.save()
-            return {'message': 'Currency added successfully.'}, HTTPStatus.OK
+            return {'message': 'Currency added successfully.', 'currencyID': currency.currencyID}, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error adding currency: {str(e)}")
             return {'message': f'Error adding currency: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
@@ -189,6 +189,36 @@ class GetAllCurrenciesResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error getting all currencies: {str(e)}")
             return {'message': f'Error getting all currencies: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route('/get_all_currencies_with_balances')
+class GetAllCurrenciesWithBalancesResource(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            # Perform a left join to include all currencies, even those without a balance record
+            # Use coalesce to default to 0 when there are no balances
+            currencies_with_balances = db.session.query(
+                Currencies.currencyID,
+                Currencies.currencyCode,
+                Currencies.currencyName,
+                db.func.coalesce(db.func.sum(FinancialFundCurrencyBalance.availableFund), 0).label('available_amount')
+            ).outerjoin(FinancialFundCurrencyBalance, FinancialFundCurrencyBalance.currencyID == Currencies.currencyID) \
+             .group_by(Currencies.currencyID, Currencies.currencyCode, Currencies.currencyName) \
+             .all()
+
+            currencies_data = [
+                {
+                    'currencyID': currency.currencyID,
+                    'currencyCode': currency.currencyCode,
+                    'currencyName': currency.currencyName,
+                    'available_amount': float(currency.available_amount)  # Ensure available_amount is a float
+                } for currency in currencies_with_balances
+            ]
+
+            return {'currencies': currencies_data}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error getting all currencies with balances: {str(e)}")
+            return {'message': f'Error getting all currencies with balances: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
     
 
 @finance_namespace.route('/finacial_funds/create', methods=['POST', 'PUT'])
@@ -334,7 +364,7 @@ class AddEditRegionAccountResource(Resource):
                 return {'message': f'An account in {region.regionName} already exists.'}, HTTPStatus.CONFLICT
             
             new_account = RegionAccount(
-                acountName = region.regionName,
+                accountName = region.regionName,
                 regionID=region_id
             )
             new_account.save()
@@ -356,7 +386,7 @@ class AddEditRegionAccountResource(Resource):
                         new_currency.save()
                     
             
-            return {'message': 'Region Account was added successfully.'}, HTTPStatus.OK
+            return {'message': 'Region Account was added successfully.', 'accountID': new_account.accountID}, HTTPStatus.OK
         
         except Exception as e:
             current_app.logger.error(f"Error adding region Account: {str(e)}")
@@ -401,7 +431,7 @@ class AddEditDonorsResource(Resource):
                     )
                     new_rep.save()
             
-            return {'message': 'Donor was added successfully.'}, HTTPStatus.OK
+            return {'message': 'Donor was added successfully.', 'donorID': new_donor.donorID}, HTTPStatus.OK
         
         except Exception as e:
             current_app.logger.error(f"Error adding Donor: {str(e)}")
@@ -511,7 +541,9 @@ class SingleRegionAccountSummaryResource(Resource):
                 'accountName': account.accountName,
                 'lastUpdate': account.lastUpdate.isoformat(),
                 'availableCurrencies': account.get_available_currencies,
-                'transactions': account.get_account_transactions()
+                'transactions': account.get_account_transactions(),
+                'scope_percentages': account.get_scope_percentages(),
+                'scope_balances': account.get_scope_balances()  
             }
             #get balances based on the currency conversion
             balances = account.get_fund_balance(currency_conversion)
