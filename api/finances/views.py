@@ -378,7 +378,7 @@ class AddEditRegionAccountResource(Resource):
                     )
             new_currency.save()
             
-            if len(account_data['currencies'] > 0):
+            if len(account_data['currencies']) > 0:
                 for currency in account_data['currencies']:
                     if currency != 1:
                         new_currency = RegionAccountCurrencyBalance(
