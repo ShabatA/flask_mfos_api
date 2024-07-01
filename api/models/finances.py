@@ -206,11 +206,11 @@ class RegionAccount(db.Model):
     def get_fund_balance(self, currencyID=None):
         if currencyID is None:
             return {
-                "totalFund": self.totalFund,
+                "totalFund":self.totalFund,
                 "usedFund": self.usedFund,
                 "availableFund": self.availableFund
             }
-        
+    
         balance = RegionAccountCurrencyBalance.query.filter_by(accountID=self.accountID, currencyID=currencyID).first()
         if balance:
             return {
@@ -301,7 +301,7 @@ class RegionAccount(db.Model):
 
             # Initialize default values
             category_balances[official_name] = {
-                "availableFund": category_fund.amount,
+                "availableFund": float(category_fund.amount),
                 "totalFund": 0,
                 "usedFund": 0,
                 "latestDonation": 'None'
@@ -320,8 +320,8 @@ class RegionAccount(db.Model):
                 latest_donation_formatted = latest_donation.strftime('%d %b %Y')
 
                 category_balances[official_name].update({
-                    "totalFund": total_fund,
-                    "usedFund": total_fund,  # Assuming usedFund is the same as totalFund for 'add' transactions
+                    "totalFund": float(total_fund),
+                    "usedFund": float(total_fund),  # Assuming usedFund is the same as totalFund for 'add' transactions
                     "latestDonation": latest_donation_formatted
                 })
 

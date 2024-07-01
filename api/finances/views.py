@@ -1,3 +1,4 @@
+from decimal import Decimal
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
@@ -34,7 +35,7 @@ fund_data_model = finance_namespace.model('FinancialFundData',{
     'subFunds': fields.List(fields.Nested(sub_fund_model),description='optional sub fund names')
 })
 
-sub_fund_data_model = finance_namespace.model('FinancialFundData',{
+sub_fund_data_model = finance_namespace.model('SubFinancialFundData',{
     'fundName': fields.String(required=True, description='Name of the actual account'),
     'fundID': fields.String(required=True, description='ID of the parent fund account'),
     'accountType': fields.String(required=True, description='Type of Account (Bank/Cash/Other)'),
@@ -526,7 +527,9 @@ class RegionAccountSummaryResource(Resource):
                 }
                 #get balances based on the currency conversion
                 balances = account.get_fund_balance(currency_conversion)
-                accounts_data.append(account_data | balances)
+                converted_balances = {key: float(value) if isinstance(value, Decimal) else value for key, value in balances.items()}
+                accounts_data.append(account_data | converted_balances)
+            
             return {'accounts': accounts_data}, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error getting account summary: {str(e)}")

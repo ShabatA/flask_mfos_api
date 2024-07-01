@@ -1,5 +1,7 @@
 from flask import Flask
 from flask_restx import Api
+
+from api.utils.json_encoder import CustomJSONEncoder
 from .cases.views import case_namespace, case_stage_namespace, case_task_namespace, case_assessment_namespace
 from .auth.views import auth_namespace, user_management_namespace
 from .regions.views import region_namespace
@@ -23,6 +25,7 @@ from flask_migrate import Migrate
 
 def create_app(config=config_dict['development']):
     app = Flask(__name__)
+    app.json_encoder = CustomJSONEncoder
     CORS(app)
     app.config.from_object(config)
 
