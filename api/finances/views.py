@@ -202,6 +202,7 @@ class GetAllCurrenciesWithBalancesResource(Resource):
                 Currencies.currencyID,
                 Currencies.currencyCode,
                 Currencies.currencyName,
+                Currencies.exchangeRateToUSD,
                 Currencies.lastUpdated,
                 db.func.coalesce(db.func.sum(FinancialFundCurrencyBalance.availableFund), 0).label('available_amount')
             ).outerjoin(FinancialFundCurrencyBalance, FinancialFundCurrencyBalance.currencyID == Currencies.currencyID) \
@@ -212,6 +213,7 @@ class GetAllCurrenciesWithBalancesResource(Resource):
                 {
                     'currencyID': currency.currencyID,
                     'currencyCode': currency.currencyCode,
+                    'exchangeRateToUSD': currency.exchangeRateToUSD,
                     'currencyName': currency.currencyName,
                     'available_amount': float(currency.available_amount),  # Ensure available_amount is a float
                     'lastUpdated': currency.lastUpdated.strftime('%d %b %Y')
@@ -494,6 +496,25 @@ class AddDonationResource(Resource):
             else:
                 sub_fund = None
             
+            project_scope_mapping = {
+                "Healthcare": "HEALTH",
+                "Education Support": "EDUCATION",
+                "Relief Aid": "RELIEF",
+                "Sponsership": "SPONSERSHIP",
+                "General": "GENERAL",
+                "Housing": "SHELTER"
+            }
+            
+            # Assuming donation_info is a dictionary that includes 'projectScope'
+            human_readable_scope = donation_data.get('project_scope')
+            
+            # Step 3: Translate the human-readable project scope to the enum value
+            enum_project_scope = project_scope_mapping.get(human_readable_scope)
+            
+            if not enum_project_scope:
+                # Handle invalid project scope
+                return {'message': f'Invalid project scope: {human_readable_scope}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            
             new_donation = Donations(
                 donorID = donor_id,
                 accountID = account_id,
@@ -502,16 +523,15 @@ class AddDonationResource(Resource):
                 details = donation_data.get('notes', ''),
                 currencyID = donation_data['currencyID'],
                 amount = donation_data['amount'],
-                field = donation_data['field'],
-                donationType = donation_data['donationType'],
+                donationType = donation_data['donationType'].upper(),
                 caseID = donation_data.get('caseID', None),
                 projectID = donation_data.get('projectID', None),
-                projectScope = donation_data['project_scope'],
+                projectScope = enum_project_scope.upper(),
                 allocationTags = donation_data.get('allocationTags', '')
             )
             new_donation.save()
             #call the add function to handle the logic
-            account.add_fund(donation_data['amount'],donation_data.get('currency',1), None,donation_data.get('projectID', None), donation_data.get('caseID', None), donation_data['project_scope'])
+            account.add_fund(donation_data['amount'],donation_data.get('currency',1), None,donation_data.get('projectID', None), donation_data.get('caseID', None), None,donation_data.get('project_scope', 'General'))
             fund.add_fund(donation_data['amount'],donation_data.get('currency',1))
             if sub_fund:
                 sub_fund.add_fund(donation_data['amount'],donation_data.get('currency',1))
@@ -555,14 +575,15 @@ class SingleRegionAccountSummaryResource(Resource):
                 'accountID': account.accountID,
                 'accountName': account.accountName,
                 'lastUpdate': account.lastUpdate.isoformat(),
-                'availableCurrencies': account.get_available_currencies,
+                'availableCurrencies': account.get_available_currencies(),
                 'transactions': account.get_account_transactions(),
                 'scope_percentages': account.get_scope_percentages(),
-                'scope_balances': account.get_scope_balances()  
+                'scope_balances': {key: float(value) if isinstance(value, Decimal) else value for key, value in account.get_category_balances().items()}  
             }
             #get balances based on the currency conversion
             balances = account.get_fund_balance(currency_conversion)
-            return {'account': account_data | balances}, HTTPStatus.OK
+            converted_balances = {key: float(value) if isinstance(value, Decimal) else value for key, value in balances.items()}
+            return {'account': account_data | converted_balances}, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error getting account summary: {str(e)}")
             return {'message': f'Error getting account summary: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
@@ -600,7 +621,7 @@ class SingleFinancialFundSummaryResource(Resource):
                 'fundID': fund.fundID,
                 'fundName': fund.fundName,
                 'lastUpdate': fund.lastUpdate.isoformat(),
-                'availableCurrencies': fund.get_available_currencies,
+                'availableCurrencies': fund.get_available_currencies(),
                 'subFunds': fund.get_all_sub_funds(),
                 'transactions': fund.get_all_payments(),
                 'donations': fund.get_all_donations()

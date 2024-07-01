@@ -289,13 +289,13 @@ class RegionAccount(db.Model):
                 'transactionID': transaction.transactionID,
                 'accountID': transaction.accountID,
                 'currencyID': transaction.currencyID,
-                'amount': transaction.amount,
+                'amount': float(transaction.amount),
                 'transactionType': transaction.transactionType,
                 'transactionSubtype': transaction.transactionSubtype,
                 'projectID': transaction.projectID,
                 'caseID': transaction.caseID,
                 'paymentNumber': transaction.paymentNumber,
-                'timestamp': transaction.timestamp
+                'timestamp': transaction.timestamp.isoformat()
             }
             transaction_list.append(transaction_dict)
         return transaction_list
@@ -599,7 +599,7 @@ class FinancialFund(db.Model):
                 'usedFund': sub_fund.usedFund,
                 'availableFund': sub_fund.availableFund,
                 'notes': sub_fund.notes,
-                'createdAt': sub_fund.createdAt,
+                'createdAt': sub_fund.createdAt.isoformat(),
                 'currencyID': sub_fund.currencyID
             }
             sub_funds_info.append(sub_fund_info)
@@ -610,11 +610,11 @@ class FinancialFund(db.Model):
         donation_list = []
         for donation in donations:
             donation_dict = {
-                'donationID': donation.donationID,
+                'donationID': donation.id,
                 'donor': {
                     'donorID': donation.donor.donorID,
                     'donorName': donation.donor.donorName,
-                    'donorEmail': donation.donor.donorEmail,
+                    'donorEmail': donation.donor.email,
                     # Add other donor information as needed
                 },
                 'amount': donation.amount,
@@ -913,6 +913,8 @@ class Donations(db.Model):
     allocationTags = db.Column(db.String) # used to tag a donation made to a case/project that is not yet added to the database
     donationType = db.Column(db.Enum(DonationTypes),default=DonationTypes.GENERAL)
     
+    donor = db.relationship("Donor", backref="donations_donor")
+    currency = db.relationship("Currencies", backref="donations_currency")
     def save(self):
         db.session.add(self)
         db.session.commit()
@@ -1019,6 +1021,8 @@ class Payments(db.Model):
     projectScope = db.Column(db.Enum(ProjectScopes), default=ProjectScopes.GENERAL)
     paymentMethod = db.Column(db.Enum(TransferType), default=TransferType.EFT)
     subFundID = db.Column(db.Integer, db.ForeignKey('sub_funds.subFundID'), nullable=True)
+    
+    currency = db.relationship("Currencies", backref="payment_currency")
     
     def save(self):
         db.session.add(self)
