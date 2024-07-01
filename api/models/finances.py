@@ -74,7 +74,14 @@ def update_currency_exchange_rate(currencyCode, newExchangeRateToUSD):
     else:
         raise ValueError(f"Currency with code {currencyCode} does not exist.")
 
-
+# The category_names mapping
+category_names = {
+    "health": "Healthcare",
+    "education": "Education Support",
+    "relief": "Relief Aid",
+    "shelter": "Housing",
+    "sponsorship": "Sponsorship"
+}
 
 class RegionAccount(db.Model):
     __tablename__ = 'region_account'
@@ -136,10 +143,16 @@ class RegionAccount(db.Model):
         self.totalFund += amount_in_default_currency
         self.availableFund += amount_in_default_currency
         
-        if category:
-            category_fund = CategoryFund.query.filter_by(accountID=self.accountID, category=category).first()
+        # Reverse the category_names dictionary to map from human-readable names to short names
+        category_short_names = {v.lower(): k for k, v in category_names.items()}
+
+        # Convert the human-readable category name to its corresponding short name
+        category_key = category_short_names.get(category.lower(), None)
+
+        if category_key:
+            category_fund = CategoryFund.query.filter_by(accountID=self.accountID, category=category_key).first()
             if not category_fund:
-                category_fund = CategoryFund(accountID=self.accountID, category=category, amount=0)
+                category_fund = CategoryFund(accountID=self.accountID, category=category_key, amount=0)
             category_fund.amount += amount_in_default_currency
             category_fund.save()
         
@@ -155,7 +168,7 @@ class RegionAccount(db.Model):
             caseID=caseID,
             paymentNumber=payment_number,
             timestamp=func.now(),
-            category=category
+            category=category_key
         )
         transaction.save()
 
@@ -180,8 +193,14 @@ class RegionAccount(db.Model):
         self.usedFund += amount_in_default_currency
         self.availableFund -= amount_in_default_currency
         
-        if category:
-            category_fund = CategoryFund.query.filter_by(accountID=self.accountID, category=category).first()
+        # Reverse the category_names dictionary to map from human-readable names to short names
+        category_short_names = {v.lower(): k for k, v in category_names.items()}
+
+        # Convert the human-readable category name to its corresponding short name
+        category_key = category_short_names.get(category.lower(), None)
+        
+        if category_key:
+            category_fund = CategoryFund.query.filter_by(accountID=self.accountID, category=category_key).first()
             if not category_fund or category_fund.amount < amount_in_default_currency:
                 raise ValueError("Insufficient funds in the specified category")
             category_fund.amount -= amount_in_default_currency
@@ -199,7 +218,7 @@ class RegionAccount(db.Model):
             caseID=caseID,
             paymentNumber=payment_number,
             timestamp=func.now(),
-            category=category
+            category=category_key
         )
         transaction.save()
 

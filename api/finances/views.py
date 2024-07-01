@@ -70,7 +70,7 @@ donations_data_model = finance_namespace.model('DonationData', {
     'accountID': fields.Integer(required=True, description='The region account to donate to'),
     'fundID': fields.Integer(required=True, description='The account bank account the money will be deposited to'),
     'subFundID': fields.Integer(required=False, description='Specify the sub fund the money will be deposited to if applicable.'),
-    'details': fields.String(required=True, description='Supply any notes/details'),
+    'notes': fields.String(required=True, description='Supply any notes/details'),
     'amount': fields.Float(required=True, description='The donation amount'),
     'donationType': fields.String(required=True, description='whether it is for a Case, Project, or General', enum=[type.value for type in DonationTypes]),
     'caseID': fields.Integer(description='Only provide if donation type is Case'),
@@ -481,6 +481,7 @@ class AddDonationResource(Resource):
             account_id = donation_data.get('accountID')
             fund_id = donation_data.get('fundID')
             donor_id = donation_data.get('donorID')
+            sub_fund_id = donation_data.get('subFundID')
             
             if not account_id or not fund_id or not donor_id:
                 return {'message': 'Either no account ID fund ID, or donor ID provided'},HTTPStatus.BAD_REQUEST
@@ -488,23 +489,32 @@ class AddDonationResource(Resource):
             account = RegionAccount.query.get_or_404(account_id)
             fund = FinancialFund.query.get_or_404(fund_id)
             donor = Donor.query.get_or_404(donor_id)
+            if sub_fund_id:
+                sub_fund = SubFunds.query.get_or_404(sub_fund_id)
+            else:
+                sub_fund = None
             
             new_donation = Donations(
                 donorID = donor_id,
                 accountID = account_id,
                 fundID = fund_id,
-                details = donation_data.get('details', ''),
-                currency = donation_data['currency'],
+                subFundID = sub_fund_id,
+                details = donation_data.get('notes', ''),
+                currencyID = donation_data['currencyID'],
                 amount = donation_data['amount'],
                 field = donation_data['field'],
                 donationType = donation_data['donationType'],
                 caseID = donation_data.get('caseID', None),
-                projectID = donation_data.get('projectID', None)
+                projectID = donation_data.get('projectID', None),
+                projectScope = donation_data['project_scope'],
+                allocationTags = donation_data.get('allocationTags', '')
             )
             new_donation.save()
             #call the add function to handle the logic
-            account.add_fund(donation_data['amount'],donation_data.get('currency',1), None,donation_data.get('projectID', None), donation_data.get('caseID', None), None)
+            account.add_fund(donation_data['amount'],donation_data.get('currency',1), None,donation_data.get('projectID', None), donation_data.get('caseID', None), donation_data['project_scope'])
             fund.add_fund(donation_data['amount'],donation_data.get('currency',1))
+            if sub_fund:
+                sub_fund.add_fund(donation_data['amount'],donation_data.get('currency',1))
             db.session.commit()
         
             return {'message': 'Donation added successfully.'}, HTTPStatus.OK
