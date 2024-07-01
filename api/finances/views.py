@@ -257,7 +257,7 @@ class AddEditFinancialFundResource(Resource):
                     )
             new_currency.save()
             
-            if len(fund_data['currencies'] > 0):
+            if len(fund_data['currencies']) > 0:
                 for currency in fund_data['currencies']:
                     if currency != 1:
                         new_currency = FinancialFundCurrencyBalance(
@@ -285,7 +285,7 @@ class AddEditFinancialFundResource(Resource):
                 )
                 new_balance.save()
                 
-                if len(fund_data['currencies'] > 0):
+                if len(fund_data['currencies']) > 0:
                     for currency in fund_data['currencies']:
                         if currency != 1:
                             balance = SubFundCurrencyBalance(
@@ -332,7 +332,7 @@ class SubFundCreateResource(Resource):
                 )
             new_balance.save()
             
-            if len(fund_data['currencies'] > 0):
+            if len(fund_data['currencies']) > 0:
                 for currency in fund_data['currencies']:
                     if currency != 1:
                         balance = SubFundCurrencyBalance(
