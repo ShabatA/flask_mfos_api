@@ -487,6 +487,14 @@ class FinancialFund(db.Model):
     payments = db.relationship('Payments', backref='financial_fund', lazy=True)
     subFunds = db.relationship('SubFunds', back_populates='financial_fund', lazy=True)
     
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+    
 
     def add_fund(self, amount, currencyID):
         try:
@@ -632,6 +640,14 @@ class FinancialFundCurrencyBalance(db.Model):
     financial_fund = db.relationship('FinancialFund', back_populates='currency_balances')
 
     __table_args__ = (db.UniqueConstraint('fundID', 'currencyID', name='unique_fund_currency'),)
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
 
 
 class SubFunds(db.Model):
@@ -718,6 +734,14 @@ class SubFunds(db.Model):
             "usedFund": 0,
             "availableFund": 0
         }
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
 
     def _convert_to_default_currency(self, amount, currencyID):
         # Implement the logic to convert amount to default currency using exchange rates
