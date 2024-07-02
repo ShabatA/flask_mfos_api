@@ -275,7 +275,6 @@ class AddEditFinancialFundResource(Resource):
                 new_sub_fund = SubFunds(
                     fundID = new_fund.fundID,
                     subFundName = sub['fundName'],
-                    currencyID = fund_data['currencyID'],
                     notes= fund_data.get('notes', ''),
                     accountType = fund_data['accountType'],
                     administrator = fund_data['administrator'],
@@ -623,7 +622,7 @@ class SingleFinancialFundSummaryResource(Resource):
                 'lastUpdate': fund.lastUpdate.isoformat(),
                 'availableCurrencies': fund.get_available_currencies(),
                 'subFunds': fund.get_all_sub_funds(),
-                'transactions': fund.get_all_payments(),
+                'payments': fund.get_all_payments(),
                 'donations': fund.get_all_donations()
             }
             #get balances based on the currency conversion
