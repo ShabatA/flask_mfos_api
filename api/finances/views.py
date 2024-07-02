@@ -276,8 +276,7 @@ class AddEditFinancialFundResource(Resource):
                     fundID = new_fund.fundID,
                     subFundName = sub['fundName'],
                     notes= fund_data.get('notes', ''),
-                    accountType = fund_data['accountType'],
-                    administrator = fund_data['administrator'],
+                    accountType = fund_data['accountType']
                 )
                 new_sub_fund.save()
                 new_balance = SubFundCurrencyBalance(
@@ -322,8 +321,7 @@ class SubFundCreateResource(Resource):
                 fundID = fund_data['fundID'],
                 subFundName = fund_data['fundName'],
                 notes= fund_data.get('notes', ''),
-                accountType = fund_data['accountType'],
-                administrator = fund_data['administrator'],
+                accountType = fund_data['accountType']
             )
             new_fund.save()
             
@@ -470,7 +468,7 @@ class AddEditDonorsResource(Resource):
             current_app.logger.error(f"Error updating donor: {str(e)}")
             return {'message': f'Error updating donor: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@finance_namespace.route('/add_balance')
+@finance_namespace.route('/add_balance', methods=['POST'])
 class AddDonationResource(Resource):
     @jwt_required()
     @finance_namespace.expect(donations_data_model)
@@ -484,8 +482,19 @@ class AddDonationResource(Resource):
             donor_id = donation_data.get('donorID')
             sub_fund_id = donation_data.get('subFundID')
             
-            if not account_id or not fund_id or not donor_id:
-                return {'message': 'Either no account ID fund ID, or donor ID provided'},HTTPStatus.BAD_REQUEST
+            project_id = donation_data.get('projectID')
+            case_id = donation_data.get('caseID')
+            
+            if project_id == 0:
+                project_id = None
+            if case_id == 0:
+                case_id = None
+            
+            # Corrected validation logic
+            if account_id is None or fund_id is None or donor_id is None:
+                return {'message': 'Either no account ID, fund ID, or donor ID provided'}, HTTPStatus.BAD_REQUEST
+            
+           
             
             account = RegionAccount.query.get_or_404(account_id)
             fund = FinancialFund.query.get_or_404(fund_id)
@@ -523,14 +532,14 @@ class AddDonationResource(Resource):
                 currencyID = donation_data['currencyID'],
                 amount = donation_data['amount'],
                 donationType = donation_data['donationType'].upper(),
-                caseID = donation_data.get('caseID', None),
-                projectID = donation_data.get('projectID', None),
+                caseID = case_id,
+                projectID = project_id,
                 projectScope = enum_project_scope.upper(),
                 allocationTags = donation_data.get('allocationTags', '')
             )
             new_donation.save()
             #call the add function to handle the logic
-            account.add_fund(donation_data['amount'],donation_data.get('currency',1), None,donation_data.get('projectID', None), donation_data.get('caseID', None), None,donation_data.get('project_scope', 'General'))
+            account.add_fund(donation_data['amount'],donation_data.get('currency',1), None,project_id, case_id, None,donation_data.get('project_scope', 'General'))
             fund.add_fund(donation_data['amount'],donation_data.get('currency',1))
             if sub_fund:
                 sub_fund.add_fund(donation_data['amount'],donation_data.get('currency',1))
@@ -1049,9 +1058,9 @@ class GetAllDonationsResource(Resource):
                 latest_donation = None  # Initialize latest_donation variable
                 for donation in donations:
                     fund = FinancialFund.query.get(donation.fundID)
-                    fund_details = {'fundID': fund.fundID, 'fundName': fund.fundName, 'totalFund': fund.totalFund, 'currency': Currencies.query.get(fund.currencyID).currencyCode}
+                    fund_details = {'fundID': fund.fundID, 'fundName': fund.fundName, 'totalFund': fund.totalFund}
                     account = RegionAccount.query.get(donation.accountID) 
-                    account_details = {'accountID': account.accountID, 'accountName': account.accountName, 'totalFund': account.totalFund, 'currency': Currencies.query.get(account.currencyID).currencyCode}
+                    account_details = {'accountID': account.accountID, 'accountName': account.accountName, 'totalFund': float(account.totalFund)}
                     donations_details = {
                         'donationID': donation.id,
                         'fund_account_details': fund_details,
@@ -1115,7 +1124,7 @@ class GetAllPaymentsResource(Resource):
             current_app.logger.error(f"Error getting all payments: {str(e)}")
             return {'message': f'Error getting all payments: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@finance_namespace.route('reports/create')
+@finance_namespace.route('/reports/create')
 class AddReportResource(Resource):
     @jwt_required()
     @finance_namespace.expect(reports_data_model)
@@ -1139,12 +1148,12 @@ class AddReportResource(Resource):
             current_app.logger.error(f"Error adding report: {str(e)}")
             return {'message': f'Error adding report: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
         
-@finance_namespace.route('reports/all')
+@finance_namespace.route('/reports/all')
 class GetAllReports(Resource):
     @jwt_required()
     def get(self):
         try:
-            reports = Reports.query.order_by(desc(Reports.createdAt)).all()
+            reports = Reports.query.order_by(desc(Reports.dateCreated)).all()
             
             reports_data = []
             for report in reports:
@@ -1152,7 +1161,7 @@ class GetAllReports(Resource):
                     'reportID': report.reportID,
                     'title': report.title,
                     'reportTag': report.reportTag,
-                    'createdAt': report.createdAt.isoformat(),
+                    'createdAt': report.dateCreated.isoformat(),
                     'createdBy': report.createdBy
                 }
                 reports_data.append(report_details)
@@ -1162,7 +1171,7 @@ class GetAllReports(Resource):
             current_app.logger.error(f"Error getting all reports: {str(e)}")
             return {'message': f'Error getting all reports: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@finance_namespace.route('reports/single/<string:reportTag>')
+@finance_namespace.route('/reports/single/<string:reportTag>')
 class GetReportByTag(Resource):
     @jwt_required()
     def get(self, reportTag):
