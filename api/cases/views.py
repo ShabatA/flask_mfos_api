@@ -830,7 +830,7 @@ class CaseAddRequirementsResource(Resource):
             
             # Instead of popping the 'predefined_req', just access it directly
             requirementsList = status_data.get('predefined_req', [])
-            processor = CaseRequirementProcessor(case.caseID, current_user.userID)
+            processor = CaseRequirementProcessor(case, current_user.userID)
             #call the corresponding function to handle making a Task for that requirement
             for value in requirementsList:
                 function_name = f"requirement_{value}"
