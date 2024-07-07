@@ -5,6 +5,7 @@ from http import HTTPStatus
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import func
 
 
 class ProjectStatus(Enum):
@@ -320,6 +321,8 @@ class ProjectTask(db.Model):
     status = db.Column(db.Enum(TaskStatus), nullable=False)
     completionDate = db.Column(db.Date, nullable=True)
     checklist = db.Column(JSONB, nullable=True)
+    creationDate = db.Column(db.DateTime, default=func.now(), nullable=False)
+    startDate = db.Column(db.Date, default=datetime.now().date())
 
     stage = db.relationship('Stage', backref='tasks', lazy=True)
 

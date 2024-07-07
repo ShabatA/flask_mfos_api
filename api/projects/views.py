@@ -101,7 +101,8 @@ new_task_model = task_namespace.model('NewTaskModel', {
     'assigned_to': fields.List(fields.Integer, description='List of user IDs assigned to the task'),
     'cc': fields.List(fields.Integer, description='List of user IDs to be CCed on the task'),
     'attached_files': fields.String(description='File attachments for the task'),
-    'checklist': fields.List(fields.Nested(checklist_model),description='optional checklist')
+    'checklist': fields.List(fields.Nested(checklist_model),description='optional checklist'),
+    'startDate': fields.Date(required=True, description='start date of the task (YYYY-MM-DD)')
 })
 
 
@@ -117,7 +118,8 @@ edit_task_model = task_namespace.model('EditTaskModel', {
     'assigned_to': fields.List(fields.Integer, description='List of user IDs assigned to the task'),
     'cc': fields.List(fields.Integer, description='List of user IDs to be CCed on the task'),
     'attached_files': fields.String(description='File attachments for the task'),
-    'checklist': fields.List(fields.Nested(checklist_model),description='optional checklist')
+    'checklist': fields.List(fields.Nested(checklist_model),description='optional checklist'),
+    'startDate': fields.Date(required=True, description='start date of the task (YYYY-MM-DD)')
 })
 
 # Define the expected input model using Flask-RESTx fields
@@ -1080,7 +1082,8 @@ class AddTaskForStageResource(Resource):
                 attachedFiles=attached_files,
                 stageID=stage_id,
                 status = TaskStatus.TODO,
-                checklist = checklist
+                checklist = checklist,
+                startDate = data.get('startDate',func.now().date())
             )
 
             # Save the new task to the database
@@ -1115,6 +1118,7 @@ class EditTaskForStageResource(Resource):
             task.title = data.get('title', task.title)
             task.deadline = data.get('deadline', task.deadline)
             task.description = data.get('description', task.description)
+            task.startDate = data.get('startDate', func.now().date())
             assigned_to_ids = data.get('assigned_to', [])
             cc_ids = data.get('cc', [])
             if task.attachedFiles.endswith(","):
@@ -1653,7 +1657,9 @@ class GetTasksForStageResource(Resource):
                     'status': task.status.value,
                     'completionDate': str(task.completionDate) if task.completionDate else None,
                     'comments': comments_list,
-                    'checklist': task.checklist
+                    'checklist': task.checklist,
+                    'creationDate': task.creationDate.isoformat(),
+                    'startDate': task.date.strftime('%Y-%m-%d') if task.date else None
                 })
 
             return {'tasks': tasks_list}, HTTPStatus.OK
@@ -1712,7 +1718,9 @@ class GetTasksForProjectResource(Resource):
                     'status': task.status.value,
                     'completionDate': str(task.completionDate) if task.completionDate else None,
                     'comments': comments_list,
-                    'checklist': task.checklist
+                    'checklist': task.checklist,
+                    'creationDate': task.creationDate.isoformat(),
+                    'startDate': task.startDate.strftime('%Y-%m-%d') if task.startDate else None
                 })
 
             return {'tasks': tasks_list}, HTTPStatus.OK
@@ -1720,6 +1728,53 @@ class GetTasksForProjectResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error getting tasks for project: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@task_namespace.route('/get_all_project_tasks/current_user', methods=['GET'])
+class GetAllAssignedTasksResource(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            # Get the current user from the JWT token
+            user = Users.query.filter_by(username=get_jwt_identity()).first()
+            # Fetch all ProjectTasks the user is assigned to
+            project_tasks = ProjectTask.query.join(Users.assigned_tasks).filter(Users.userID == user.userID).all()
+            total_p_tasks = len(project_tasks)
+            completed_p_tasks = 0
+            inprogress_p_tasks = 0
+            overdue_p_tasks = 0
+            not_started_p_tasks = 0
+            if total_p_tasks > 0:
+
+                for task in project_tasks:
+                    if task.status == TaskStatus.DONE:
+                        completed_p_tasks += 1
+                    if task.status == TaskStatus.OVERDUE:
+                        overdue_p_tasks += 1
+                    if task.status == TaskStatus.INPROGRESS:
+                        inprogress_p_tasks += 1
+                    if task.status == TaskStatus.TODO:
+                        not_started_p_tasks += 1
+            
+            all_assigned_tasks = {
+                'project_tasks': [{'taskID': task.taskID,
+                               'title': task.title,
+                               'description': task.description,
+                               'status': task.status.value,
+                               'checklist': task.checklist,
+                               'stageName': task.stage.name,
+                               'projectName': ProjectsData.query.get(task.projectID).projectName,
+                               'startDate': task.startDate.strftime('%Y-%m-%d') if task.startDate else None,
+                               'deadline': task.deadline.strftime('%Y-%m-%d') if task.deadline else None,
+                               'completionDate': task.completionDate.isoformat() if task.completionDate else None} for task in project_tasks] if project_tasks else [],
+                'project_tasks_summary': {'total_p_tasks': total_p_tasks,'completed_p_tasks': completed_p_tasks, 'overdue_p_tasks': overdue_p_tasks,
+                                     'not_started_p_tasks': not_started_p_tasks, 'inprogress_p_tasks': inprogress_p_tasks},
+            }
+            
+            return all_assigned_tasks, HTTPStatus.OK
+               
+        except Exception as e:
+            current_app.logger.error(f"Error getting all assigned project tasks: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR    
 
 @activity_namespace.route('/add_or_edit', methods=['POST','PUT'])
 class AddorEditActivityResource(Resource):

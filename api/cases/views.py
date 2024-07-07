@@ -2,7 +2,6 @@ from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.exceptions import NotFound
 from http import HTTPStatus
-from api.models.accountfields import AccountFields
 from api.models.finances import CaseFunds, RegionAccount
 from api.utils.case_category_calculator import CaseCategoryCalculator
 
@@ -14,8 +13,7 @@ from ..utils.db import db
 from datetime import datetime, date
 from flask import jsonify, current_app
 from flask import request
-import json
-from collections import OrderedDict
+from sqlalchemy import func
 
 
 def get_region_id_by_name(region_name):
@@ -101,7 +99,8 @@ new_task_model = case_task_namespace.model('NewTaskModel', {
     'assigned_to': fields.List(fields.Integer, description='List of user IDs assigned to the task'),
     'cc': fields.List(fields.Integer, description='List of user IDs to be CCed on the task'),
     'attached_files': fields.String(description='File attachments for the task'),
-    'checklist': fields.List(fields.Nested(checklist_model),description='optional checklist')
+    'checklist': fields.List(fields.Nested(checklist_model),description='optional checklist'),
+    'startDate': fields.Date(required=True, description='start date of the task (YYYY-MM-DD)')
 })
 
 edit_task_model = case_task_namespace.model('EditTaskModel', {
@@ -111,7 +110,8 @@ edit_task_model = case_task_namespace.model('EditTaskModel', {
     'assigned_to': fields.List(fields.Integer, description='List of user IDs assigned to the task'),
     'cc': fields.List(fields.Integer, description='List of user IDs to be CCed on the task'),
     'attached_files': fields.String(description='File attachments for the task'),
-    'checklist': fields.List(fields.Nested(checklist_model),description='optional checklist')
+    'checklist': fields.List(fields.Nested(checklist_model),description='optional checklist'),
+    'startDate': fields.Date(required=True, description='start date of the task (YYYY-MM-DD)')
 })
 
 case_model = case_namespace.model(
@@ -1173,6 +1173,35 @@ class CompleteStageForCaseResource(Resource):
             current_app.logger.error(f"Error marking linked stage as completed: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@case_namespace.route('/case_users/<int:case_id>')
+class CaseUsersResource(Resource):
+    @jwt_required()
+    def get(self, case_id):
+        # Get the current user ID from the JWT token
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Get the case by ID
+        case = CasesData.query.get(case_id)
+        if not case:
+            return {'message': 'Case not found'}, HTTPStatus.NOT_FOUND
+
+        # Check if the current user has access to the case
+        if current_user.is_admin() or current_user in case.users:
+            # Retrieve all users who have access to the case
+            case_users = (
+                db.session.query(Users)
+                .join(CaseUser, Users.userID == CaseUser.userID)
+                .filter(CaseUser.caseID == case_id)
+                .all()
+            )
+
+            # Extract user information
+            users_data = [{'userID': user.userID, 'username': user.username} for user in case_users]
+
+            return {'case_users': users_data}, HTTPStatus.OK
+        else:
+            return {'message': 'Unauthorized. You do not have permission to view users for this case.'}, HTTPStatus.FORBIDDEN
+
 @case_stage_namespace.route('/remove_stage/<int:case_id>/<int:stage_id>', methods=['DELETE'])
 class RemoveStageResource(Resource):
     @jwt_required()
@@ -1236,7 +1265,8 @@ class AddTaskForStageResource(Resource):
                 attachedFiles=attached_files,
                 stageID=stage_id,
                 status = CaseTaskStatus.TODO,
-                checklist = checklist
+                checklist = checklist,
+                startDate = data.get('startDate',func.now().date())
             )
 
             # Save the new task to the database
@@ -1496,7 +1526,9 @@ class GetTasksForStageResource(Resource):
                     'status': task.status.value,
                     'completionDate': str(task.completionDate) if task.completionDate else None,
                     'comments': comments_list,
-                    'checklist': task.checklist
+                    'checklist': task.checklist,
+                    'creationDate': task.creationDate.isoformat(),
+                    'startDate': task.startDate.strftime('%Y-%m-%d') if task.startDate else None
                 })
 
             return {'tasks': tasks_list}, HTTPStatus.OK
@@ -1526,6 +1558,7 @@ class EditTaskForStageResource(Resource):
             task.title = data.get('title', task.title)
             task.deadline = data.get('deadline', task.deadline)
             task.description = data.get('description', task.description)
+            task.startDate = data.get('startDate', func.now().date())
             assigned_to_ids = data.get('assigned_to', [])
             cc_ids = data.get('cc', [])
             if task.attachedFiles.endswith(","):
@@ -1780,7 +1813,9 @@ class GetTasksForCaseResource(Resource):
                     'status': task.status.value,
                     'completionDate': str(task.completionDate) if task.completionDate else None,
                     'comments': comments_list,
-                    'checklist': task.checklist
+                    'checklist': task.checklist,
+                    'creationDate': task.creationDate.isoformat(),
+                    'startDate': task.startDate.strftime('%Y-%m-%d') if task.startDate else None
                 })
 
             return {'tasks': tasks_list}, HTTPStatus.OK
@@ -1788,6 +1823,51 @@ class GetTasksForCaseResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error getting tasks for project: {str(e)}")
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_task_namespace.route('/get_all_case_tasks/current_user', methods=['GET'])
+class GetAllAssignedTasksResource(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            # Get the current user from the JWT token
+            user = Users.query.filter_by(username=get_jwt_identity()).first()
+            # Fetch all ProjectTasks the user is assigned to
+            case_tasks = CaseTask.query.join(Users.case_assigned_tasks).filter(Users.userID == user.userID).all()
+            total_c_tasks = len(case_tasks)
+            completed_c_tasks = 0
+            inprogress_c_tasks = 0
+            overdue_c_tasks = 0
+            not_started_c_tasks = 0
+            if total_c_tasks > 0:
+
+                for task in case_tasks:
+                    if task.status == CaseTaskStatus.DONE:
+                        completed_c_tasks += 1
+                    if task.status == CaseTaskStatus.OVERDUE:
+                        overdue_c_tasks += 1
+                    if task.status == CaseTaskStatus.INPROGRESS:
+                        inprogress_c_tasks += 1
+                    if task.status == CaseTaskStatus.TODO:
+                        not_started_c_tasks += 1
+            
+            all_assigned_tasks = {
+                'case_tasks': [{'taskID': task.taskID,
+                            'title': task.title,
+                            'description': task.description,
+                            'status': task.status.value,
+                            'checklist': task.checklist,
+                            'stageName': task.stage.name,
+                            'caseName': CasesData.query.get(task.caseID).caseName,
+                            'completionDate': task.completionDate.isoformat() if task.completionDate else None} for task in case_tasks] if case_tasks else [],
+                'case_task_summary': {'total_c_tasks': total_c_tasks,'completed_c_tasks': completed_c_tasks, 'overdue_c_tasks': overdue_c_tasks,
+                                     'not_started_c_tasks': not_started_c_tasks, 'inprogress_c_tasks': inprogress_c_tasks},
+            }
+            
+            return all_assigned_tasks, HTTPStatus.OK
+               
+        except Exception as e:
+            current_app.logger.error(f"Error getting all assigned project tasks: {str(e)}")
+            return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR 
 
 
 

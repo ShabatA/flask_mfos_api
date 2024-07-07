@@ -5,6 +5,7 @@ from datetime import datetime
 from flask import jsonify
 from http import HTTPStatus
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import func
 
 class CaseStat(Enum):
     PENDING = "pending"
@@ -274,6 +275,8 @@ class CaseTask(db.Model):
     status = db.Column(db.Enum(CaseTaskStatus), nullable=False)
     completionDate = db.Column(db.Date, nullable=True)
     checklist = db.Column(JSONB, nullable=True)
+    creationDate = db.Column(db.DateTime, default=func.now(), nullable=False)
+    startDate = db.Column(db.Date, default=datetime.now().date())
 
     stage = db.relationship('CaseStage', backref='tasks', lazy=True)
 
