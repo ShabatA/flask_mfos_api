@@ -44,6 +44,7 @@ signup_model = auth_namespace.model(
         'regionName': fields.String(required=True, description="Region Name"),  # Changed to regionName
         'RoleName': fields.String(required=True, description="Role Name"),  # Added roleName
         'permissionNames': fields.List(fields.String, required=True, description="List of permission names"),
+        'imageLink': fields.String(required=True, description='Image link.')
     }
 )
 
@@ -58,6 +59,7 @@ user_model = auth_namespace.model(
         'regionName': fields.String(description="Region Name"),  # Added regionName field
         'RoleName': fields.String(required=True, description="Role Name"),  # Added roleName
         'permissionNames': fields.List(fields.String, required=True, description="List of permission names"),
+        'imageLink': fields.String(required=True, description='Image link.')
 
     }
 )
@@ -69,6 +71,7 @@ user2_model = auth_namespace.model(
         'username': fields.String(required=True, description="A username"),
         'email': fields.String(required=True, description="An email"),
         'password': fields.String(required=True, description="A password"),
+        'imageLink': fields.String(required=True, description='Image link.')
     }
 )
 
@@ -154,7 +157,8 @@ class SignUp(Resource):
                 mobile = data.get('mobile'),
                 password=generate_password_hash(data.get('password')),
                 regionID=region.regionID,
-                role=role  # Set the user's role
+                role=role,  # Set the user's role
+                imageLink= data.get('imageLink')
             )
             # new_user.save()
 
@@ -710,6 +714,7 @@ class AllUsers(Resource):
         user_data = {
             'userID': user.userID,
             'username': user.username,
+            'imageLink': user.imageLink,
             'email': user.email,
             'firstName': user.firstName,
             'lastName': user.lastName,

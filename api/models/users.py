@@ -48,6 +48,7 @@ class Users(db.Model):
     UserStatus = db.Column(db.Enum(UserStatus), default=UserStatus.PENDING)
     date_created = db.Column(db.DateTime, default=datetime.utcnow)
     regionID = db.Column(db.Integer, db.ForeignKey('regions.regionID'))
+    imageLink = db.Column(db.String(255))
 
     # Relationship with Role
     role_id = db.Column(db.Integer, db.ForeignKey('roles.RoleID'))
