@@ -1266,7 +1266,7 @@ class AddTaskForStageResource(Resource):
                 stageID=stage_id,
                 status = CaseTaskStatus.TODO,
                 checklist = checklist,
-                startDate = data.get('startDate',func.now().date())
+                startDate = data.get('startDate',datetime.now().date())
             )
 
             # Save the new task to the database
