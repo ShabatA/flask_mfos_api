@@ -139,7 +139,7 @@ class CaseBeneficiary(db.Model):
     __tablename__ = 'case_beneficiary'
     
     beneficiaryID = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'))
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID', ondelete='CASCADE'))
     firstName = db.Column(db.String, nullable=False)
     surName = db.Column(db.String, nullable=False)
     gender = db.Column(db.String, nullable=False)
@@ -185,7 +185,7 @@ class BeneficiaryForm(db.Model):
     __tablename__ = 'beneficiary_form'
     
     formID = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID', ondelete='CASCADE'), nullable=False)
     url = db.Column(db.String, nullable=False)
     used = db.Column(db.Boolean, nullable=False, default=False)
     
@@ -221,8 +221,8 @@ class CaseStage(db.Model):
 class CaseToStage(db.Model):
     __tablename__ = 'case_to_stage'
 
-    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), primary_key=True)
-    stageID = db.Column(db.Integer, db.ForeignKey('case_stage.stageID'), primary_key=True)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID', ondelete='CASCADE'), primary_key=True)
+    stageID = db.Column(db.Integer, db.ForeignKey('case_stage.stageID', ondelete='CASCADE'), primary_key=True)
     started = db.Column(db.Boolean, default=False)
     completed = db.Column(db.Boolean, default=False)
     completionDate = db.Column(db.Date, nullable=True)
@@ -243,7 +243,7 @@ class CaseUser(db.Model):
     __tablename__ = 'case_users'
 
     id = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID', ondelete='CASCADE'), nullable=False)
     userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
 
     def __repr__(self):
@@ -263,7 +263,7 @@ class CaseTask(db.Model):
     __tablename__ = 'case_task'
 
     taskID = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID', ondelete='CASCADE'), nullable=False)
     title = db.Column(db.String, nullable=False)
     deadline = db.Column(db.Date, nullable=False)
     assignedTo = db.relationship('Users', secondary='case_task_assigned_to', backref='case_assigned_tasks', lazy='dynamic', single_parent=True)
@@ -314,7 +314,7 @@ class CaseTaskComments(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
-    taskID = db.Column(db.Integer, db.ForeignKey('case_task.taskID'), nullable=False)
+    taskID = db.Column(db.Integer, db.ForeignKey('case_task.taskID', ondelete='CASCADE'), nullable=False)
     comment = db.Column(db.String, nullable=False)
     date = db.Column(db.Date, nullable=False)
     
@@ -336,7 +336,7 @@ class CaseTaskComments(db.Model):
 class CaseTaskAssignedTo(db.Model):
     __tablename__ = 'case_task_assigned_to'
     id = db.Column(db.Integer, primary_key=True)
-    task_id = db.Column(db.Integer, db.ForeignKey('case_task.taskID'), nullable=False)
+    task_id = db.Column(db.Integer, db.ForeignKey('case_task.taskID', ondelete='CASCADE'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
     
     def __repr__(self):
@@ -354,7 +354,7 @@ class CaseTaskAssignedTo(db.Model):
 class CaseTaskCC(db.Model):
     __tablename__ = 'case_task_cc'
     id = db.Column(db.Integer, primary_key=True)
-    task_id = db.Column(db.Integer, db.ForeignKey('case_task.taskID'), nullable=False)
+    task_id = db.Column(db.Integer, db.ForeignKey('case_task.taskID', ondelete='CASCADE'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
     
     def __repr__(self):
@@ -372,11 +372,11 @@ class CaseStatusData(db.Model):
     __tablename__ = 'case_status_data'
 
     id = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID', ondelete='CASCADE'), nullable=False)
     status = db.Column(db.String, nullable=False)
     data = db.Column(JSONB, nullable=True)  # You can adjust the type based on the data you want to store
 
-    project = db.relationship('CasesData', backref='case_status_data', lazy=True)
+    status = db.relationship('CasesData', backref='case_status_data', lazy=True)
 
     def _repr_(self):
         return f"<CaseStatusData {self.id} caseID: {self.caseID}, Status: {self.status}>"
@@ -430,7 +430,7 @@ class CaseAssessmentAnswers(db.Model):
     __tablename__ = 'case_assessment_answers'
 
     answerID = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID', ondelete='CASCADE'), nullable=False)
     questionID = db.Column(db.Integer, db.ForeignKey('case_assessment_questions.questionID'), nullable=False)
     answerText = db.Column(db.String, nullable=True)
     extras = db.Column(JSONB, nullable=True)

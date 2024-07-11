@@ -1659,7 +1659,7 @@ class GetTasksForStageResource(Resource):
                     'comments': comments_list,
                     'checklist': task.checklist,
                     'creationDate': task.creationDate.isoformat(),
-                    'startDate': task.date.strftime('%Y-%m-%d') if task.date else None
+                    'startDate': task.startDate.strftime('%Y-%m-%d') if task.startDate else None
                 })
 
             return {'tasks': tasks_list}, HTTPStatus.OK
@@ -1819,7 +1819,7 @@ class AddorEditActivityResource(Resource):
                         'status': activity.activityStatus.value,
                         'activityName': activity.activityName,
                         'createdAt': activity.createdAt.isoformat(),
-                        'program': ProjectsData.query.get(programID).projectName if programID != 0 else 'None',
+                        'program': ProjectsData.query.get(programID).projectName if programID != 0 else 'Out Of Program',
                         'assignedUsers': assigned_ids,
                         'createdBy': f'{current_user.firstName} {current_user.lastName}',
                         'created_id': current_user.userID

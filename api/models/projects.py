@@ -141,7 +141,7 @@ class Activities(db.Model):
     activityID = db.Column(db.Integer, primary_key=True)
     activityName = db.Column(db.String, nullable=False)
     regionID = db.Column(db.Integer, db.ForeignKey('regions.regionID'), nullable=False)
-    programID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=True)
+    programID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), nullable=True)
     description = db.Column(db.Text, nullable=False)
     costRequired = db.Column(db.Float, nullable=False)
     duration = db.Column(db.String, nullable=False)
@@ -164,7 +164,7 @@ class Activities(db.Model):
 class ActivityUsers(db.Model):
     __tablename__ = 'activity_users'
     id = db.Column(db.Integer, primary_key=True)
-    activityID = db.Column(db.Integer, db.ForeignKey('activities.activityID'), nullable=False)
+    activityID = db.Column(db.Integer, db.ForeignKey('activities.activityID', ondelete='CASCADE'), nullable=False)
     userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
     
     def __repr__(self):
@@ -228,7 +228,7 @@ class QuestionChoices(db.Model):
     _tablename_ = 'question_choices'
 
     choiceID = db.Column(db.Integer, primary_key=True)
-    questionID = db.Column(db.Integer, db.ForeignKey('questions.questionID'), nullable=False)
+    questionID = db.Column(db.Integer, db.ForeignKey('questions.questionID', ondelete='CASCADE'), nullable=False)
     choiceText = db.Column(db.String, nullable=False)
     points = db.Column(db.Integer, nullable=False)
 
@@ -253,7 +253,7 @@ class ProjectUser(db.Model):
     __tablename__ = 'project_user'
 
     id = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=False)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), nullable=False)
     userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
 
     def _repr_(self):
@@ -291,7 +291,7 @@ class Stage(db.Model):
 class ProjectStage(db.Model):
     _tablename_ = 'project_stages'
 
-    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), primary_key=True)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), primary_key=True)
     stageID = db.Column(db.Integer, db.ForeignKey('stage.stageID'), primary_key=True)
     started = db.Column(db.Boolean, default=False)
     completed = db.Column(db.Boolean, default=False)
@@ -309,7 +309,7 @@ class ProjectTask(db.Model):
     __tablename__ = 'project_task'
 
     taskID = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=False)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), nullable=False)
     title = db.Column(db.String, nullable=False)
     deadline = db.Column(db.Date, nullable=False)
     assignedTo = db.relationship('Users', secondary='project_task_assigned_to', backref='assigned_tasks', lazy='dynamic', single_parent=True)
@@ -317,7 +317,7 @@ class ProjectTask(db.Model):
     description = db.Column(db.String, nullable=True)
     createdBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
     attachedFiles = db.Column(db.String, nullable=True)
-    stageID = db.Column(db.Integer, db.ForeignKey('stage.stageID'), nullable=False)
+    stageID = db.Column(db.Integer, db.ForeignKey('stage.stageID', ondelete='CASCADE'), nullable=False)
     status = db.Column(db.Enum(TaskStatus), nullable=False)
     completionDate = db.Column(db.Date, nullable=True)
     checklist = db.Column(JSONB, nullable=True)
@@ -360,7 +360,7 @@ class TaskComments(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
-    taskID = db.Column(db.Integer, db.ForeignKey('project_task.taskID'), nullable=False)
+    taskID = db.Column(db.Integer, db.ForeignKey('project_task.taskID', ondelete='CASCADE'), nullable=False)
     comment = db.Column(db.String, nullable=False)
     date = db.Column(db.Date, nullable=False)
     
@@ -382,7 +382,7 @@ class TaskComments(db.Model):
 class ProjectTaskAssignedTo(db.Model):
     __tablename__ = 'project_task_assigned_to'
     id = db.Column(db.Integer, primary_key=True)
-    task_id = db.Column(db.Integer, db.ForeignKey('project_task.taskID'), nullable=False)
+    task_id = db.Column(db.Integer, db.ForeignKey('project_task.taskID', ondelete='CASCADE'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
     
     def __repr__(self):
@@ -399,7 +399,7 @@ class ProjectTaskAssignedTo(db.Model):
 class ProjectTaskCC(db.Model):
     __tablename__ = 'project_task_cc'
     id = db.Column(db.Integer, primary_key=True)
-    task_id = db.Column(db.Integer, db.ForeignKey('project_task.taskID'), nullable=False)
+    task_id = db.Column(db.Integer, db.ForeignKey('project_task.taskID', ondelete='CASCADE'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
     
     def __repr__(self):
@@ -439,8 +439,8 @@ class AssessmentAnswers(db.Model):
     __tablename__ = 'assessment_answers'
 
     answerID = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=False)
-    questionID = db.Column(db.Integer, db.ForeignKey('assessment_questions.questionID'), nullable=False)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), nullable=False)
+    questionID = db.Column(db.Integer, db.ForeignKey('assessment_questions.questionID', ondelete='CASCADE'), nullable=False)
     answerText = db.Column(db.String, nullable=True)  # Adjust based on the answer format
     notes = db.Column(db.String, nullable=True)
 
@@ -496,7 +496,7 @@ class ProjectStatusData(db.Model):
     _tablename_ = 'project_status_data'
 
     id = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=False)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), nullable=False)
     status = db.Column(db.String, nullable=False)
     data = db.Column(JSONB, nullable=True)  # You can adjust the type based on the data you want to store
 
