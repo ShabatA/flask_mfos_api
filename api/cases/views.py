@@ -670,6 +670,11 @@ class CaseBeneficiaryAddOrEditResource(Resource):
             if not existing_case:
                 return {'message': 'Case not found'}, HTTPStatus.NOT_FOUND
             
+            existing_ben = CaseBeneficiary.query.filter_by(idNumber=beneficiary_data['idNumber']).first()
+            
+            if existing_ben:
+                existing_case.category = CaseCat.C
+            
             new_beneficiary = CaseBeneficiary(
                 caseID=beneficiary_data['caseID'],
                 firstName=beneficiary_data['firstName'],
