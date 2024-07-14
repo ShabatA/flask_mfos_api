@@ -549,6 +549,59 @@ class AddDonationResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error adding donation: {str(e)}")
             return {'message': f'Error adding donation: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+    
+
+@finance_namespace.route('/donations/no_case_project')
+class DonationsNoCaseProjectResource(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            # Query for donations where caseID and ProjectID are None
+            donations = Donations.query.filter_by(caseID=None, projectID=None).all()
+            donation_list = []
+            for donation in donations:
+                donation_dict = {
+                    'donationID': donation.id,
+                    'donor': {
+                        'donorID': donation.donor.donorID,
+                        'donorName': donation.donor.donorName,
+                        'donorEmail': donation.donor.email,
+                        # Add other donor information as needed
+                    },
+                    'amount': donation.amount,
+                    'currencyName': donation.currency.currencyName,
+                    'donationType': donation.donationType.value,
+                    'createdAt': donation.createdAt.isoformat()
+                }
+                donation_list.append(donation_dict)
+        
+            return {'donations': donation_list}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error retrieving donations with no case or project: {str(e)}")
+            return {'message': f'Error retrieving donations: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route('/donations/no_case_project/donor/<int:donorID>')
+class DonationsNoCaseProjectByDonorResource(Resource):
+    @jwt_required()
+    def get(self, donorID):
+        try:
+            # Query for donations where caseID and ProjectID are None
+            donations = Donations.query.filter_by(caseID=None, projectID=None, donorID=donorID).all()
+            donation_list = []
+            for donation in donations:
+                donation_dict = {
+                    'donationID': donation.id,
+                    'amount': donation.amount,
+                    'currencyName': donation.currency.currencyName,
+                    'donationType': donation.donationType.value,
+                    'createdAt': donation.createdAt.isoformat()
+                }
+                donation_list.append(donation_dict)
+        
+            return {'donations': donation_list}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error retrieving donations with no case or project: {str(e)}")
+            return {'message': f'Error retrieving donations: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @finance_namespace.route('/region_accounts/all/summary/currency/<int:currency_conversion>')
 class RegionAccountSummaryResource(Resource):

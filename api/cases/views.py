@@ -437,11 +437,24 @@ class CaseGetAllResource(Resource):
                 region_details = {'regionID': case.regionID, 'regionName': Regions.query.get(case.regionID).regionName}
                 user = Users.query.get(case.userID)
                 user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
+                
+                stages = CaseToStage.query.filter_by(caseID=case.caseID).all()
+                completed_stages = [stage for stage in stages if stage.completed]
+
+                if completed_stages:
+                    # If there are completed stages, find the one with the latest completionDate
+                    latest_completed_stage = max(completed_stages, key=lambda stage: stage.completionDate)
+                    
+                else:
+                    # If no stages are completed, return the first stage object
+                    # Assuming stages are ordered in the way they are added or by a specific field
+                    latest_completed_stage = min(stages, key=lambda stage: stage.stageID) if stages else None
 
                 case_details = {
                     'caseID': case.caseID,
                     'caseName': case.caseName,
                     'region': region_details,
+                    'stageName': latest_completed_stage.stage.name if latest_completed_stage else 'N/A',
                     'user': user_details,
                     'budgetApproved': case.budgetApproved,
                     'sponsorAvailable': case.sponsorAvailable,
@@ -590,11 +603,23 @@ class CaseGetAllApprovedResource(Resource):
                                    'totalTasks': total_tasks, 'completedTasks': completed_tasks, 'completionPercent': completionPercent,
                                    'notStartedTasks': not_started_tasks, 'overdueTasks': overdue_tasks, 'inprogressTasks': inprogress_tasks}
                     stages_data.append(stage_details)
+               
+                completed_stages = [stage for stage in stages if stage.completed]
 
+                if completed_stages:
+                    # If there are completed stages, find the one with the latest completionDate
+                    latest_completed_stage = max(completed_stages, key=lambda stage: stage.completionDate)
+                    
+                else:
+                    # If no stages are completed, return the first stage object
+                    # Assuming stages are ordered in the way they are added or by a specific field
+                    latest_completed_stage = min(stages, key=lambda stage: stage.stageID) if stages else None
+                    
                 case_details = {
                     'caseID': case.caseID,
                     'caseName': case.caseName,
                     'region': region_details,
+                    'stageName': latest_completed_stage.stage.name if latest_completed_stage else 'N/A',
                     'user': user_details,
                     'budgetApproved': case.budgetApproved,
                     'sponsorAvailable': case.sponsorAvailable,
@@ -838,7 +863,7 @@ class CaseAddRequirementsResource(Resource):
                 case_function()
             
             approvedAmount = status_data.get('approvedAmount')
-            scope = case.question1['questionChoice']
+            
             region_account = RegionAccount.query.filter_by(regionID=case.regionID).first()
             if approvedAmount and region_account:
                 case_fund = CaseFunds(

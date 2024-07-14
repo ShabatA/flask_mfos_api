@@ -12,6 +12,7 @@ from flask_jwt_extended import (create_access_token,
 from werkzeug.exceptions import Conflict, BadRequest
 from ..models.regions import Regions  # Import the Region model
 from ..utils.db import db
+from datetime import timedelta
 
 auth_namespace = Namespace('auth', description="a namespace for authentication")
 
@@ -211,8 +212,8 @@ class Login(Resource):
         user = Users.query.filter_by(email=email).first()
 
         if (user is not None) and check_password_hash(user.password, password_hash):
-            access_token = create_access_token(identity=user.username)
-            refresh_token = create_refresh_token(identity=user.username)
+            access_token = create_access_token(identity=user.username, expires_delta=timedelta(hours=1))
+            refresh_token = create_refresh_token(identity=user.username, expires_delta=timedelta(hours=1))
 
             response = {
                 'access_token': access_token,
@@ -235,7 +236,7 @@ class Refresh(Resource):
     def post(self):
         username = get_jwt_identity()
 
-        access_token = create_access_token(identity=username)
+        access_token = create_access_token(identity=username, expires_delta=timedelta(hours=1))
 
         return {'access_token': access_token}, HTTPStatus.OK
 

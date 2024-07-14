@@ -87,6 +87,19 @@ activity_model = activity_namespace.model('ActivityInput',{
     'assignedTo': fields.List(fields.Integer, description='List of user IDs assigned to the activity'),
 })
 
+edit_activity_model = activity_namespace.model('EditActivity',{
+    'activityID': fields.Integer(required=True),
+    'activityName': fields.String(required=True),
+    'regionID': fields.Integer(required=True),
+    'programID': fields.Integer(required=False),
+    'description': fields.String(required=True),
+    'costRequired': fields.Float(required=True),
+    'duration': fields.String(required=True),
+    'deadline': fields.Date(required=True),
+    'assignedTo': fields.List(fields.Integer, description='List of user IDs assigned to the activity'),
+    'activityStatus': fields.String(enum=[stat.value for stat in ActStatus], required=True)
+})
+
 activity_stat = activity_namespace.model('ActivityStatusData',{
     'data': fields.Raw(required=True),
     'status': fields.String(enum=[stat.value for stat in ActStatus], required=True)
@@ -390,11 +403,23 @@ class ProjectGetAllResource(Resource):
                     .filter(ProjectUser.projectID == project.projectID)
                     .all()
                 )
+                stages = ProjectStage.query.filter_by(projectID=project.projectID).all()
+                completed_stages = [stage for stage in stages if stage.completed]
 
+                if completed_stages:
+                    # If there are completed stages, find the one with the latest completionDate
+                    latest_completed_stage = max(completed_stages, key=lambda stage: stage.completionDate)
+                    
+                else:
+                    # If no stages are completed, return the first stage object
+                    # Assuming stages are ordered in the way they are added or by a specific field
+                    latest_completed_stage = min(stages, key=lambda stage: stage.stageID) if stages else None
+                    
                 project_details = {
                     'projectID': project.projectID,
                     'projectName': project.projectName,
                     'region': region_details,
+                    'stageName': latest_completed_stage.stage.name if latest_completed_stage else 'N/A',
                     'user': user_details,
                     'budgetRequired': project.budgetRequired,
                     'budgetApproved': project.budgetApproved,
@@ -500,11 +525,23 @@ class ProjectGetAllApprovedResource(Resource):
                                    'totalTasks': total_tasks, 'completedTasks': completed_tasks, 'completionPercent': completionPercent,
                                    'notStartedTasks': not_started_tasks, 'overdueTasks': overdue_tasks, 'inprogressTasks': inprogress_tasks}
                     stages_data.append(stage_details)
+                    
+                completed_stages = [stage for stage in stages if stage.completed]
+
+                if completed_stages:
+                    # If there are completed stages, find the one with the latest completionDate
+                    latest_completed_stage = max(completed_stages, key=lambda stage: stage.completionDate)
+                    
+                else:
+                    # If no stages are completed, return the first stage object
+                    # Assuming stages are ordered in the way they are added or by a specific field
+                    latest_completed_stage = min(stages, key=lambda stage: stage.stageID) if stages else None
 
                 project_details = {
                     'projectID': project.projectID,
                     'projectName': project.projectName,
                     'region': region_details,
+                    'stageName': latest_completed_stage.stage.name if latest_completed_stage else 'N/A',
                     'user': user_details,
                     'budgetRequired': project.budgetRequired,
                     'budgetApproved': project.budgetApproved,
@@ -1832,7 +1869,7 @@ class AddorEditActivityResource(Resource):
             return {'message': 'Internal Server Error'}, HTTPStatus.INTERNAL_SERVER_ERROR
        
     @jwt_required()
-    @activity_namespace.expect(activity_model) 
+    @activity_namespace.expect(edit_activity_model) 
     def put(self):
         
             try:
@@ -1852,7 +1889,7 @@ class AddorEditActivityResource(Resource):
                 activity.costRequired = activity_data.get('costRequired', activity.costRequired)
                 activity.deadline = activity_data.get('deadline', activity.deadline)
                 activity.duration = activity_data['duration']
-                activity.activityStatus = activity_data.get('activityStauts', activity.activityStatus)
+                activity.activityStatus = activity_data.get('activityStatus', activity.activityStatus)
                 
                 assigned_users = activity_data.get('assignedTo',[])
                 if len(assigned_users) != 0:
