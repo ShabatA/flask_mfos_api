@@ -96,8 +96,7 @@ edit_activity_model = activity_namespace.model('EditActivity',{
     'costRequired': fields.Float(required=True),
     'duration': fields.String(required=True),
     'deadline': fields.Date(required=True),
-    'assignedTo': fields.List(fields.Integer, description='List of user IDs assigned to the activity'),
-    'activityStatus': fields.String(enum=[stat.value for stat in ActStatus], required=True)
+    'assignedTo': fields.List(fields.Integer, description='List of user IDs assigned to the activity')
 })
 
 activity_stat = activity_namespace.model('ActivityStatusData',{
@@ -1889,7 +1888,7 @@ class AddorEditActivityResource(Resource):
                 activity.costRequired = activity_data.get('costRequired', activity.costRequired)
                 activity.deadline = activity_data.get('deadline', activity.deadline)
                 activity.duration = activity_data['duration']
-                activity.activityStatus = activity_data.get('activityStatus', activity.activityStatus)
+                
                 
                 assigned_users = activity_data.get('assignedTo',[])
                 if len(assigned_users) != 0:
