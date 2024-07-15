@@ -376,9 +376,9 @@ class CaseStatusData(db.Model):
     status = db.Column(db.String, nullable=False)
     data = db.Column(JSONB, nullable=True)  # You can adjust the type based on the data you want to store
 
-    status = db.relationship('CasesData', backref='case_status_data', lazy=True)
+    case_data = db.relationship('CasesData', backref='case_status_data', lazy=True)
 
-    def _repr_(self):
+    def __repr__(self):
         return f"<CaseStatusData {self.id} caseID: {self.caseID}, Status: {self.status}>"
 
     def save(self):

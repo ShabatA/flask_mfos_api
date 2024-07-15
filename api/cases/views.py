@@ -854,10 +854,10 @@ class CaseAddRequirementsResource(Resource):
             # Parse the input data
             case_data = request.json
             status_data = case_data.pop('status_data', {})  # Assuming status_data is part of the input
-
+            print('before assign')
             # Assign status data to the case
             case.assign_status_data(status_data)
-            
+            print('after assign')
             # Instead of popping the 'predefined_req', just access it directly
             requirementsList = status_data.get('predefined_req', [])
             processor = CaseRequirementProcessor(case, current_user.userID)
@@ -881,6 +881,7 @@ class CaseAddRequirementsResource(Resource):
                 
             return {'message': 'Case requirements added successfully'}, HTTPStatus.CREATED
         except Exception as e:
+            current_app.logger.error(f"Error adding requirements: {str(e)}")
             # Handle exceptions (e.g., database errors) appropriately
             return {'message': f'Error adding case requirements, please review inputs and try again.'}, HTTPStatus.INTERNAL_SERVER_ERROR
 

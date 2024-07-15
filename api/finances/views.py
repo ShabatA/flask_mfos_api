@@ -128,8 +128,7 @@ case_funds_model = finance_namespace.model('CaseFunds', {
 reports_data_model = finance_namespace.model('Reports',{
     'reportTag': fields.String(required=True),
     'title': fields.String(required=True),
-    'createdBy': fields.String(required=True),
-    'pdfBytes': fields.String(required=True)
+    'createdBy': fields.String(required=True)
 })
 
 currencies_model = finance_namespace.model('CurrencyData',{
@@ -1189,7 +1188,6 @@ class AddReportResource(Resource):
             new_report = Reports(
                 title = report_data['title'],
                 reportTag = report_data['reportTag'],
-                pdfBytes = report_data['pdfBytes'],
                 createdBy = report_data.get('createdBy',f'{current_user.firstName} {current_user.lastName}')
             )
             
@@ -1211,7 +1209,7 @@ class GetAllReports(Resource):
             reports_data = []
             for report in reports:
                 report_details = {
-                    'reportID': report.reportID,
+                    'reportID': report.id,
                     'title': report.title,
                     'reportTag': report.reportTag,
                     'createdAt': report.dateCreated.isoformat(),
@@ -1224,20 +1222,20 @@ class GetAllReports(Resource):
             current_app.logger.error(f"Error getting all reports: {str(e)}")
             return {'message': f'Error getting all reports: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@finance_namespace.route('/reports/single/<string:reportTag>')
+@finance_namespace.route('/reports/by_tag/<string:reportTag>')
 class GetReportByTag(Resource):
     @jwt_required()
     def get(self, reportTag):
         try:
-            reports = Reports.query.filter_by(reportTag=reportTag).order_by(desc(Reports.createdAt)).all()
+            reports = Reports.query.filter_by(reportTag=reportTag).order_by(desc(Reports.dateCreated)).all()
             
             reports_data = []
             for report in reports:
                 report_details = {
-                    'reportID': report.reportID,
+                    'reportID': report.id,
                     'title': report.title,
                     'reportTag': report.reportTag,
-                    'createdAt': report.createdAt.isoformat(),
+                    'createdAt': report.dateCreated.isoformat(),
                     'createdBy': report.createdBy
                 }
                 reports_data.append(report_details)
