@@ -854,10 +854,10 @@ class CaseAddRequirementsResource(Resource):
             # Parse the input data
             case_data = request.json
             status_data = case_data.pop('status_data', {})  # Assuming status_data is part of the input
-            print('before assign')
+            
             # Assign status data to the case
             case.assign_status_data(status_data)
-            print('after assign')
+            
             # Instead of popping the 'predefined_req', just access it directly
             requirementsList = status_data.get('predefined_req', [])
             processor = CaseRequirementProcessor(case, current_user.userID)
@@ -940,6 +940,7 @@ class CaseChangeStatusResource(Resource):
                     stage4 = CaseStage.query.filter_by(name='Service Delivered').first()
                     stage5 = CaseStage.query.filter_by(name='Service Validated').first()
                     stage6 = CaseStage.query.filter_by(name='Case Closed').first()
+                    stage7 = CaseStage.query.filter_by(name='Print').first()
 
                     # Add the stages to the case
                     case_stages = [
@@ -948,7 +949,8 @@ class CaseChangeStatusResource(Resource):
                         CaseToStage(case=case, stage=stage3, started=True),
                         CaseToStage(case=case, stage=stage4, started=True),
                         CaseToStage(case=case, stage=stage5, started=True),
-                        CaseToStage(case=case, stage=stage6, started=True)
+                        CaseToStage(case=case, stage=stage6, started=True),
+                        CaseToStage(case=case, stage=stage7, started=True)
                     ]
 
                     # Commit the new stages to the database
