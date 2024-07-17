@@ -443,7 +443,7 @@ class CaseGetAllResource(Resource):
 
                 if completed_stages:
                     # If there are completed stages, find the one with the latest completionDate
-                    latest_completed_stage = max(completed_stages, key=lambda stage: stage.completionDate)
+                    latest_completed_stage = max(completed_stages, key=lambda stage: stage.stageID)
                     
                 else:
                     # If no stages are completed, return the first stage object
@@ -500,6 +500,7 @@ class CaseGetAllApprovedResource(Resource):
                 cases = (
                     CasesData.query.join(Users, Users.userID == CasesData.userID)
                     .filter(Users.userID == current_user.userID)
+                    .filter(CasesData.caseStatus == CaseStat.APPROVED)
                     .all()
                 )
 
@@ -507,13 +508,14 @@ class CaseGetAllApprovedResource(Resource):
                 case_user_cases = (
                     CasesData.query.join(CaseUser, CasesData.caseID == CaseUser.caseID)
                     .filter(CaseUser.userID == current_user.userID)
+                    .filter(CasesData.caseStatus == CaseStat.APPROVED)
                     .all()
                 )
             
                 # Combine the cases and remove duplicates
                 all_cases = list(set(cases + case_user_cases))
             else:
-                all_cases = CasesData.query.all()
+                all_cases = CasesData.query.filter_by(caseStatus= CaseStat.APPROVED).all()
 
             # Check if all_cases is empty
             if not all_cases:
@@ -608,7 +610,7 @@ class CaseGetAllApprovedResource(Resource):
 
                 if completed_stages:
                     # If there are completed stages, find the one with the latest completionDate
-                    latest_completed_stage = max(completed_stages, key=lambda stage: stage.completionDate)
+                    latest_completed_stage = max(completed_stages, key=lambda stage: stage.stageID)
                     
                 else:
                     # If no stages are completed, return the first stage object

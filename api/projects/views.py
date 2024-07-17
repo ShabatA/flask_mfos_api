@@ -407,7 +407,7 @@ class ProjectGetAllResource(Resource):
 
                 if completed_stages:
                     # If there are completed stages, find the one with the latest completionDate
-                    latest_completed_stage = max(completed_stages, key=lambda stage: stage.completionDate)
+                    latest_completed_stage = max(completed_stages, key=lambda stage: stage.stageID)
                     
                 else:
                     # If no stages are completed, return the first stage object
