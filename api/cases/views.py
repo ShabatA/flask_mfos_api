@@ -942,7 +942,7 @@ class CaseChangeStatusResource(Resource):
                     stage4 = CaseStage.query.filter_by(name='Service Delivered').first()
                     stage5 = CaseStage.query.filter_by(name='Service Validated').first()
                     stage6 = CaseStage.query.filter_by(name='Case Closed').first()
-                    stage7 = CaseStage.query.filter_by(name='Print').first()
+                    stage7 = CaseStage.query.filter_by(name='Print Report').first()
 
                     # Add the stages to the case
                     case_stages = [

@@ -830,12 +830,14 @@ class ProjectChangeStatusResource(Resource):
                     initiated_stage = Stage.query.filter_by(name='Project Initiated').first()
                     progress_stage = Stage.query.filter_by(name='In Progress').first()
                     closed_stage = Stage.query.filter_by(name='Closed').first()
+                    print_stage = Stage.query.filter_by(name='Print Report').first()
 
                     # Add the stages to the project
                     project_stages = [
                         ProjectStage(project=project, stage=initiated_stage, started=True),
                         ProjectStage(project=project, stage=progress_stage, started=True),
-                        ProjectStage(project=project, stage=closed_stage, started=True)
+                        ProjectStage(project=project, stage=closed_stage, started=True),
+                        ProjectStage(project=project, stage=print_stage, started=True)
                     ]
 
                     # Commit the new stages to the database
