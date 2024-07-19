@@ -869,6 +869,21 @@ class CaseAddRequirementsResource(Resource):
                 case_function = getattr(processor, function_name, processor.default_case)
                 case_function()
             
+            task =  CaseTask(
+                caseID = case.caseID,
+                title= 'Proof Of Service Delivery',
+                description= 'Describe the service provided.',
+                assignedTo = [],
+                cc = [],
+                createdBy= current_user.userID,
+                attachedFiles= 'N/A',
+                status= CaseTaskStatus.TODO,
+                stageID=4,
+                startDate = case.startDate,
+                deadline= case.dueDate    
+            )
+            task.save()
+            
             approvedAmount = status_data.get('approvedAmount')
             
             region_account = RegionAccount.query.filter_by(regionID=case.regionID).first()
