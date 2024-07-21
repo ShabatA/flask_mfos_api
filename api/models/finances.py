@@ -827,6 +827,7 @@ class Donor(db.Model):
     email = db.Column(db.String(255), nullable=True)
     startOfRelationship = db.Column(db.Date, nullable=False, default=datetime.utcnow)
     notes = db.Column(db.Text, nullable=True)
+    imageLink = db.Column(db.String, nullable=True)
     
     # Relationships
     representatives = db.relationship('Representative', back_populates='donors', lazy=True, cascade="all, delete-orphan")
@@ -870,6 +871,7 @@ class Representative(db.Model):
     jobPosition = db.Column(db.String(255), nullable=True)
     email = db.Column(db.String(255), nullable=True)
     phoneNumber = db.Column(db.String(50), nullable=True)
+    imageLink = db.Column(db.String, nullable=True)
     
     # Relationships
     donors = db.relationship('Donor', back_populates='representatives')

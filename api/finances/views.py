@@ -52,7 +52,8 @@ donor_rep_model = finance_namespace.model('DonorRepresentative',{
     'name': fields.String(required=True, description='name of the donor'),
     'jobPosition': fields.String(required=True),
     'email': fields.String(required=True),
-    'phoneNumber': fields.String(required=True)
+    'phoneNumber': fields.String(required=True),
+    'imageLink': fields.String(required=False)
 })
 
 donor_data_model = finance_namespace.model('DonorData', {
@@ -62,7 +63,20 @@ donor_data_model = finance_namespace.model('DonorData', {
     'email': fields.String(required=True),
     'phoneNumber': fields.String(required=True),
     'notes': fields.String(required=False),
-    'representatives': fields.List(fields.Nested(donor_rep_model), description='list of representatives')
+    'representatives': fields.List(fields.Nested(donor_rep_model), description='list of representatives'),
+    'imageLink': fields.String(required=False)
+})
+
+donor_edit_model = finance_namespace.model('DonorEdit', {
+    'donorID': fields.Integer(required=True, description='the donor ID'),
+    'name': fields.String(required=True, description='name of the donor'),
+    'donorType': fields.String(required=True, description='could be organization or individual', enum=[type.value for type in DonorTypes]),
+    'country': fields.String(required=True, description='country where donor is from'),
+    'email': fields.String(required=True),
+    'phoneNumber': fields.String(required=True),
+    'notes': fields.String(required=False),
+    'representatives': fields.List(fields.Nested(donor_rep_model), description='list of representatives'),
+    'imageLink': fields.String(required=False)
 })
 
 donations_data_model = finance_namespace.model('DonationData', {
@@ -416,7 +430,8 @@ class AddEditDonorsResource(Resource):
                 placeOfResidence = donor_data['country'],
                 email = donor_data['email'],
                 phoneNumber = donor_data['phoneNumber'],
-                notes = donor_data.get('notes', None)
+                notes = donor_data.get('notes', None),
+                imageLink = donor_data.get('imageLink', None)
             )
             
             new_donor.save()
@@ -428,7 +443,8 @@ class AddEditDonorsResource(Resource):
                         name = rep['name'],
                         jobPosition = rep['jobPosition'],
                         email = rep['email'],
-                        phoneNumber = rep['phoneNumber']
+                        phoneNumber = rep['phoneNumber'],
+                        imageLink = rep.get('imageLink', None)
                     )
                     new_rep.save()
             
@@ -439,7 +455,7 @@ class AddEditDonorsResource(Resource):
             return {'message': f'Error adding Donor: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
     
     @jwt_required()
-    @finance_namespace.expect(donor_data_model)
+    @finance_namespace.expect(donor_edit_model)
     def put(self):
         try:
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
@@ -459,6 +475,7 @@ class AddEditDonorsResource(Resource):
             existing_donor.email = donor_data['email']
             existing_donor.phoneNumber = donor_data['phoneNumber']
             existing_donor.notes = donor_data['notes']
+            existing_donor.imageLink = donor_data.get('imageLink', '')
             
             existing_donor.save()
             return {'message': 'Donor was updated successfully.'}, HTTPStatus.OK

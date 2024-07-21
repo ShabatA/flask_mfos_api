@@ -658,7 +658,7 @@ class CaseGetAllApprovedResource(Resource):
 
 @case_namespace.route('/beneficiary/add_or_edit', methods=['POST', 'PUT'])
 class CaseBeneficiaryAddOrEditResource(Resource):
-    @jwt_required()
+   
     @case_namespace.expect(beneficiary_data_model)
     def post(self):
         try:
@@ -729,7 +729,7 @@ class CaseBeneficiaryAddOrEditResource(Resource):
             current_app.logger.error(f"Error adding beneficiary: {str(e)}")
             return {'message': f'Error adding CaseBeneficiary, please review inputs and try again.'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-    @jwt_required()
+   
     @case_namespace.expect(beneficiary_data_model)
     def put(self):
         try:
