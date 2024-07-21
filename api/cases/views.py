@@ -662,7 +662,7 @@ class CaseBeneficiaryAddOrEditResource(Resource):
     @case_namespace.expect(beneficiary_data_model)
     def post(self):
         try:
-            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            
             beneficiary_data = request.json
             case_id = beneficiary_data.get('caseID')
             if not case_id:
@@ -727,13 +727,14 @@ class CaseBeneficiaryAddOrEditResource(Resource):
        
         except Exception as e:
             current_app.logger.error(f"Error adding beneficiary: {str(e)}")
-            return {'message': f'Error adding CaseBeneficiary, please review inputs and try again.'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            return {'message': f'Error adding CaseBeneficiary, please review inputs and try again.',
+                    'error': f"Error adding beneficiary: {str(e)}"}, HTTPStatus.INTERNAL_SERVER_ERROR
 
    
     @case_namespace.expect(beneficiary_data_model)
     def put(self):
         try:
-            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            
             beneficiary_data = request.json
 
             beneficiary_id = beneficiary_data.get('beneficiaryID')
@@ -782,7 +783,8 @@ class CaseBeneficiaryAddOrEditResource(Resource):
             return {'message': 'CaseBeneficiary updated successfully'}, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error updating beneficiary: {str(e)}")
-            return {'message': f'Error updating CaseBeneficiary, please review inputs and try again.'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            return {'message': f'Error updating CaseBeneficiary, please review inputs and try again.',
+                    'error': f"Error adding beneficiary: {str(e)}"}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @case_namespace.route('/get/beneficiaries/<int:case_id>')
 class CaseBeneficiaryByCaseIDResource(Resource):
