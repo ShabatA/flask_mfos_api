@@ -1017,7 +1017,7 @@ class GetBeneficiaryFormByCaseResource(Resource):
 
 @case_namespace.route('/add_or_edit/beneficiary_form/<int:case_id>', methods=['POST', 'PUT'])
 class AddBeneficiaryFormResource(Resource):
-    @jwt_required()
+    
     @case_namespace.expect(case_beneficiary_form)
     def post(self, case_id):
         try:
@@ -1056,7 +1056,7 @@ class AddBeneficiaryFormResource(Resource):
             current_app.logger.error(f"Error adding form: {str(e)}")
             return {'message': f'Error adding form: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
     
-    @jwt_required()
+   
     @case_namespace.expect(case_beneficiary_form_edit)
     def put(self, case_id):
         try:
