@@ -97,13 +97,35 @@ donations_data_model = finance_namespace.model('DonationData', {
 project_fund_release_request =finance_namespace.model('ProjectFundReleaseRequest', {
     'projectID': fields.Integer(required=True, description='The project the request is for'),
     'fundsRequested': fields.Float(required=True, description='The amount to be requested'),
-    'paymentCount': fields.Integer(required=True, description='Specify which payment you are requesting out of the payment breakdown')
+    'paymentCount': fields.Integer(required=True, description='Specify which payment you are requesting out of the payment breakdown'),
+    'paymentMethod': fields.String(required=True, enum=[type.value for type in TransferType], description='The payment method.'),
+    'notes': fields.String(required=False, description='any notes if applicable.')
 })
 
 case_fund_release_request =finance_namespace.model('CaseFundReleaseRequest', {
     'caseID': fields.Integer(required=True, description='The case the request is for'),
     'fundsRequested': fields.Float(required=True, description='The amount to be requested'),
-    'paymentCount': fields.Integer(required=True, description='Specify which payment you are requesting out of the payment breakdown')
+    'paymentCount': fields.Integer(required=True, description='Specify which payment you are requesting out of the payment breakdown'),
+    'paymentMethod': fields.String(required=True, enum=[type.value for type in TransferType], description='The payment method.'),
+    'notes': fields.String(required=False, description='any notes if applicable.')
+})
+
+approve_p_fund_release_request = finance_namespace.model('ProjectFundReleaseApproval', {
+    'requestID': fields.Integer(required=True, description='The request ID'),
+    'approvedAmount': fields.Float(required=True),
+    'notes': fields.String(required=False, description='any notes if applicable.'),
+    'accountID': fields.Integer(required=True, description='The region account to spend on'),
+    'fundID': fields.Integer(required=True, description='The actual bank account the money will be spent on'),
+    'paymentMethod': fields.String(required=True, enum=[type.value for type in TransferType], description='The payment method.'),
+})
+
+approve_c_fund_release_request = finance_namespace.model('CaseFundReleaseApproval', {
+    'requestID': fields.Integer(required=True, description='The request ID'),
+    'approvedAmount': fields.Float(required=True),
+    'notes': fields.String(required=False, description='any notes if applicable.'),
+    'accountID': fields.Integer(required=True, description='The region account to spend on'),
+    'fundID': fields.Integer(required=True, description='The actual bank account the money will be spent on'),
+    'paymentMethod': fields.String(required=True, enum=[type.value for type in TransferType], description='The payment method.'),
 })
 
 fund_transfer_model = finance_namespace.model('FundTransfer', {
@@ -111,7 +133,8 @@ fund_transfer_model = finance_namespace.model('FundTransfer', {
     'to_fund': fields.Integer(required=True, description= 'the fund to transfer to'),
     'transferAmount': fields.Float(required=True, description='The amount to be transfered'),
     'notes': fields.String(required=False, description='Supply any notes/details'),
-    'transfer_type': fields.String(required=True, enum=[type.value for type in TransferType] , description='EFT, Cash, or Check')
+    'transfer_type': fields.String(required=True, enum=[type.value for type in TransferType] , description='EFT, Cash, or Check'),
+    'currencyID': fields.Integer(required=True, description='the currency to be used for transfer')
 })
 
 payments_model = finance_namespace.model('Payments', {
@@ -730,7 +753,8 @@ class RequestProjectFundReleaseResource(Resource):
                 projectID = project_id,
                 fundsRequested = request_data['fundsRequested'],
                 requestedBy = current_user.userID,
-                paymentCount = request_data['paymentCount']
+                paymentCount = request_data['paymentCount'],
+                notes = request_data['notes']
             )
             
             request.save()
@@ -760,7 +784,8 @@ class RequestCaseFundReleaseResource(Resource):
                 caseID = case_id,
                 fundsRequested = request_data['fundsRequested'],
                 requestedBy = current_user.userID,
-                paymentCount = request_data['paymentCount']
+                paymentCount = request_data['paymentCount'],
+                notes = request_data['notes']
             )
             
             request.save()
@@ -771,8 +796,8 @@ class RequestCaseFundReleaseResource(Resource):
             current_app.logger.error(f"Error adding request: {str(e)}")
             return {'message': f'Error adding request: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@finance_namespace.route('/request_fund_transfer')
-class RequestFundTransferResource(Resource):
+@finance_namespace.route('/make_fund_transfer')
+class MakeFundTransferResource(Resource):
     @jwt_required()
     @finance_namespace.expect(fund_transfer_model)
     def post(self):
@@ -780,16 +805,19 @@ class RequestFundTransferResource(Resource):
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
             request_data = request.json
             
-            request = FundTransferRequests(
+            from_fund = FinancialFund.query.get_or_404(request_data['from_fund'])
+            to_fund = FinancialFund.query.get_or_404(request_data['to_fund'])
+            
+            transfer = FundTransfers(
                 from_fund = request_data['from_fund'],
                 to_fund = request_data['to_fund'],
                 transferAmount = request_data['transferAmount'],
                 notes = request_data['notes'],
-                requestedBy = current_user.userID,
+                createdBy = current_user.userID,
                 transferType = request_data['transferType']
             )
             
-            request.save()
+            transfer.save()
             
             return {'message': 'Transfer posted successfully.'}, HTTPStatus.OK
         
@@ -797,50 +825,76 @@ class RequestFundTransferResource(Resource):
             current_app.logger.error(f"Error adding request: {str(e)}")
             return {'message': f'Error adding request: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@finance_namespace.route('/record_payments')
-class RecordPaymentsResource(Resource):
+@finance_namespace.route('/close_fund_transfer/<int:transfer_id>')
+class CloseFundTransferResource(Resource):
     @jwt_required()
-    @finance_namespace.expect(payments_model)
-    def post(self):
+    def put(self, transfer_id):
         try:
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-            request_data = request.json
+            transfer = FundTransfers.query.get_or_404(transfer_id)
             
-            fund_id = request_data.get('from_fund')
+            if transfer.closed:
+                return {'message': 'Transfer is already closed'}, HTTPStatus.CONFLICT
             
-            if not current_user.is_admin():
-                return {'message': 'only admins can make payments.'}, HTTPStatus.FORBIDDEN
+            transfer.closed = True
+            transfer.save()
             
-            if not fund_id:
-                return {'message': 'Fund ID not provided'},HTTPStatus.BAD_REQUEST
+            from_fund = FinancialFund.query.get_or_404(transfer.from_fund)
+            to_fund = FinancialFund.query.get_or_404(transfer.to_fund)
             
-            fund = FinancialFund.query.get_or_404(fund_id)
+            from_fund.use_fund(transfer.transferAmount, transfer.currencyID)
+            to_fund.add_fund(transfer.transferAmount, transfer.currencyID)
             
-            request = Payments(
-                from_fund = request_data['from_fund'],
-                paymentFor = request_data['paymentFor'],
-                notes = request_data['notes'],
-                paymentName = request_data['paymentName'],
-                paymentMethod = request_data['paymentMethod'],
-                amount = request_data['amount'],
-                currencyID = request_data['currencyID'],
-                transferExpenses = request_data.get('transferExpenses', 0),
-                projectScope = request_data.get('projectScope', None),
-                subFundID = request_data.get('subFundID',None)
-            )
-            
-            request.save()
-            if request_data.get('subFundID',None) is not None:
-                sub_fund = SubFunds.query.get_or_404(request_data['subFundID'])
-                sub_fund.use_fund(request_data['amount'], request_data['currencyID'])
-            
-            fund.use_fund(request_data['amount'], request_data['currencyID'])
-            
-            return {'message': 'Payment recorded successfully.'}, HTTPStatus.OK
+            return {'message': 'Transfer closed successfully.'}, HTTPStatus.OK
         
         except Exception as e:
-            current_app.logger.error(f"Error adding request: {str(e)}")
-            return {'message': f'Error adding request: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            current_app.logger.error(f"Error closing transfer: {str(e)}")
+            return {'message': f'Error closing transfer: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+# @finance_namespace.route('/record_payments')
+# class RecordPaymentsResource(Resource):
+#     @jwt_required()
+#     @finance_namespace.expect(payments_model)
+#     def post(self):
+#         try:
+#             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+#             request_data = request.json
+            
+#             fund_id = request_data.get('from_fund')
+            
+#             if not current_user.is_admin():
+#                 return {'message': 'only admins can make payments.'}, HTTPStatus.FORBIDDEN
+            
+#             if not fund_id:
+#                 return {'message': 'Fund ID not provided'},HTTPStatus.BAD_REQUEST
+            
+#             fund = FinancialFund.query.get_or_404(fund_id)
+            
+#             request = Payments(
+#                 from_fund = request_data['from_fund'],
+#                 paymentFor = request_data['paymentFor'],
+#                 notes = request_data['notes'],
+#                 paymentName = request_data['paymentName'],
+#                 paymentMethod = request_data['paymentMethod'],
+#                 amount = request_data['amount'],
+#                 currencyID = request_data['currencyID'],
+#                 transferExpenses = request_data.get('transferExpenses', 0),
+#                 projectScope = request_data.get('projectScope', None),
+#                 subFundID = request_data.get('subFundID',None)
+#             )
+            
+#             request.save()
+#             if request_data.get('subFundID',None) is not None:
+#                 sub_fund = SubFunds.query.get_or_404(request_data['subFundID'])
+#                 sub_fund.use_fund(request_data['amount'], request_data['currencyID'])
+            
+#             fund.use_fund(request_data['amount'], request_data['currencyID'])
+            
+#             return {'message': 'Payment recorded successfully.'}, HTTPStatus.OK
+        
+#         except Exception as e:
+#             current_app.logger.error(f"Error adding request: {str(e)}")
+#             return {'message': f'Error adding request: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @finance_namespace.route('/add_project_funds')
 class AddProjectFundsResource(Resource):
@@ -919,113 +973,22 @@ class AddCaseFundsResource(Resource):
             current_app.logger.error(f"Error adding request: {str(e)}")
             return {'message': f'Error adding request: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@finance_namespace.route('/approve_case_fund_request/<int:case_id>/<int:request_id>')
-class ApproveCaseFundRelease(Resource):
-    @jwt_required()
-    def put(self, case_id, request_id):
-        try:
-            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-           
-            if not current_user.is_admin():
-                return {'message': 'only admins can make approvals.'}, HTTPStatus.FORBIDDEN
-            
-            case = CasesData.query.get_or_404(case_id)
-            fund_request = CaseFundReleaseRequests.query.get_or_404(request_id)
-            case_fund = CaseFunds.query.filter_by(caseID=case_id).first_or_404()
-            
-            # if there is still money to be spent, decrease the total and approve the request
-            if(fund_request.fundsRequested < case_fund.fundsAllocated):
-                case_fund.fundsAllocated -= fund_request.fundsRequested
-                fund_request.approved = True
-                fund_request.approvedAt = datetime.utcnow()
-                db.session.commit()
-                return {'message': 'Request approved successfully and total funds allocated have been adjusted.'}, HTTPStatus.OK
-            else:
-                return {'message': f'Insufficient funds available to spend on this case. Available is {case_fund.fundsAllocated}'}, HTTPStatus.BAD_REQUEST
-        except Exception as e:
-            current_app.logger.error(f"Error approving request: {str(e)}")
-            return {'message': f'Error approving request: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@finance_namespace.route('/approve_project_fund_request/<int:project_id>/<int:request_id>')
-class ApproveProjectFundRelease(Resource):
-    @jwt_required()
-    def put(self, project_id, request_id):
-        try:
-            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-           
-            if not current_user.is_admin():
-                return {'message': 'only admins can make approvals.'}, HTTPStatus.FORBIDDEN
-            
-            project = ProjectsData.query.get_or_404(project_id)
-            fund_request = CaseFundReleaseRequests.query.get_or_404(request_id)
-            project_fund = ProjectFunds.query.filter_by(projectID=project_id).first_or_404()
-            
-            # if there is still money to be spent, decrease the total and approve the request
-            if(fund_request.fundsRequested < project_fund.fundsAllocated):
-                project_fund.fundsAllocated -= fund_request.fundsRequested
-                fund_request.approved = True
-                fund_request.approvedAt = datetime.utcnow()
-                db.session.commit()
-                return {'message': 'Request approved successfully and total funds allocated have been adjusted.'}, HTTPStatus.OK
-            else:
-                return {'message': f'Insufficient funds available to spend on this project. Available is {project_fund.fundsAllocated}'}, HTTPStatus.BAD_REQUEST
-        except Exception as e:
-            current_app.logger.error(f"Error approving request: {str(e)}")
-            return {'message': f'Error approving request: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
-
-@finance_namespace.route('/change_transfer_request_stage/<int:request_id>')
-class ChangeTransferRequestStage(Resource):
-    @jwt_required()
-    @finance_namespace.expect(finance_namespace.model('TransferStage', {
-        'new_stage': fields.String(enum=[stage.value for stage in TransferStage],required=True ,description="What stage in the approval process")
-    }))
-    def put(self, request_id):
-        
-        try:
-            
-            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-            request_data = request.json
-           
-            if not current_user.is_admin():
-                return {'message': 'only admins can make approvals.'}, HTTPStatus.FORBIDDEN
-            
-            transfer = FundTransferRequests.query.get_or_404(request_id)
-            transfer.stage = request_data['new_stage']
-           
-            
-            #set the approval time and make the transfer
-            if request_data['new_stage'].lower() == 'approved':
-                transfer.approvedAt = datetime.utcnow()
-                from_fund = FinancialFund.query.get_or_404(transfer.from_fund)
-                to_fund = FinancialFund.query.get_or_404(transfer.to_fund)
-                # make the transfer
-                from_fund.use_fund(transfer.transferAmount, 1)
-                to_fund.add_fund(transfer.transferAmount, 1)
-                
-            db.session.commit()
-            
-            return {'message': 'Status changed successfully'}, HTTPStatus.OK
-        
-        except Exception as e:
-            current_app.logger.error(f"Error changing stage request: {str(e)}")
-            return {'message': f'Error changing stage request: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
-
-
-@finance_namespace.route('/get_all_fund_transfer_requests')
-class GetAllFundTransferRequests(Resource):
+@finance_namespace.route('/get_all_fund_transfers')
+class GetAllFundTransfers(Resource):
     @jwt_required()
     def get(self):
         try:
-            requests = FundTransferRequests.query.order_by(desc(FundTransferRequests.createdAt)).all()
-            requests_data = []
-            for request in requests:
-                user = Users.query.get(request.requestedBy)
-                from_fund = FinancialFund.query.get(request.from_fund)
-                to_fund = FinancialFund.query.get(request.to_fund)
+            transfers = FundTransfers.query.order_by(desc(FundTransfers.createdAt)).all()
+            transfers_data = []
+            for transfer in transfers:
+                user = Users.query.get(transfer.createdBy)
+                from_fund = FinancialFund.query.get(transfer.from_fund)
+                to_fund = FinancialFund.query.get(transfer.to_fund)
                 
                 
-                request_details = {
-                    'requestID': request.requestID,
+                transfer_details = {
+                    'transferID': transfer.transferID,
                     'from_fund': {
                         'fundID': from_fund.fundID,
                         'fundName': from_fund.fundName,
@@ -1038,26 +1001,26 @@ class GetAllFundTransferRequests(Resource):
                         'totalFund': to_fund.totalFund,
                         'currency': to_fund.currency.currencyCode
                     },
-                    'requestedBy': {
+                    'createdBy': {
                         'userID': user.userID,
                         'userFullName': f'{user.firstName} {user.lastName}',
                         'username': user.username
                     },
-                    'transferAmount': request.transferAmount,
-                    'createdAt': request.createdAt.isoformat(),
-                    'notes': request.notes,
-                    'stage': request.stage.value,
-                    'approvedAt': request.approvedAt.isoformat() if request.approvedAt else None   
+                    'transferAmount': transfer.transferAmount,
+                    'createdAt': transfer.createdAt.isoformat(),
+                    'notes': transfer.notes,
+                    'status': transfer.status,
+                    'closed': transfer.closed   
                 }
                 
-                requests_data.append(request_details)
+                transfers_data.append(transfer_details)
             
-            return {'all_requests': requests_data}, HTTPStatus.OK
+            return {'all_transfers': transfers_data}, HTTPStatus.OK
                 
                 
         except Exception as e:
-            current_app.logger.error(f"Error getting fund transfer requests: {str(e)}")
-            return {'message': f'Error getting fund transfer requests: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            current_app.logger.error(f"Error getting fund transfers: {str(e)}")
+            return {'message': f'Error getting fund transfers: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @finance_namespace.route('/get_all_fund_release_requests')
 class GetAllFundReleaseRequests(Resource):
@@ -1079,7 +1042,9 @@ class GetAllFundReleaseRequests(Resource):
                     'fundsRequested': request.fundsRequested,
                     'createdAt': request.createdAt.isoformat(),
                     'approved': request.approved,
-                    'approvedAt': request.approvedAt.isoformat() if request.approvedAt else None   
+                    'approvedAt': request.approvedAt.isoformat() if request.approvedAt else None,
+                    'receivedAmount': f'{request.approvedAmount}/{request.fundsRequested}',
+                    'regionName': Regions.query.get(case_data.regionID).regionName   
                 }
                 
                 case_requests_data.append(request_details)
@@ -1099,7 +1064,9 @@ class GetAllFundReleaseRequests(Resource):
                     'fundsRequested': request.fundsRequested,
                     'createdAt': request.createdAt.isoformat(),
                     'approved': request.approved,
-                    'approvedAt': request.approvedAt.isoformat() if request.approvedAt else None   
+                    'approvedAt': request.approvedAt.isoformat() if request.approvedAt else None,
+                    'receivedAmount': f'{request.approvedAmount}/{request.fundsRequested}',
+                    'regionName': Regions.query.get(project_data.regionID).regionName   
                 }
                 
                 project_requests_data.append(request_details)
@@ -1109,7 +1076,214 @@ class GetAllFundReleaseRequests(Resource):
                 
         except Exception as e:
             current_app.logger.error(f"Error getting fund release requests: {str(e)}")
-            return {'message': f'Error getting fund release requests: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR  
+            return {'message': f'Error getting fund release requests: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR 
+
+@finance_namespace.route('/release_project_fund_requested')
+class ReleaseProjectFundResource(Resource):
+    @jwt_required()
+    @finance_namespace.expect(approve_p_fund_release_request)
+    def post(self):
+        try:
+             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+             post_data = request.json
+             
+             approval = ProjectFundReleaseApproval(
+                    requestID = post_data['requestID'],
+                    approvedBy = current_user.userID,
+                    approvedAmount = post_data['approvedAmount'],
+                    accountID = post_data['accountID'],
+                    fundID = post_data['fundID'],
+                    notes = post_data['notes']
+                )
+             approval.save()
+             
+             project_request = ProjectFundReleaseRequests.query.get_or_404(post_data['requestID'])
+             project_request.approved = True
+             project_request.approvedAmount = post_data['approvedAmount']
+             db.session.commit()
+       
+        except Exception as e:
+            current_app.logger.error(f"Error releasing project funds: {str(e)}")
+            return {'message': f'Error releasing project funds: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route('/release_case_fund_requested')
+class ReleaseCaseFundResource(Resource):
+    @jwt_required()
+    @finance_namespace.expect(approve_c_fund_release_request)
+    def post(self):
+        try:
+             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+             post_data = request.json
+             
+             approval = CaseFundReleaseApproval(
+                    requestID = post_data['requestID'],
+                    approvedBy = current_user.userID,
+                    approvedAmount = post_data['approvedAmount'],
+                    accountID = post_data['accountID'],
+                    fundID = post_data['fundID'],
+                    notes = post_data['notes']
+                )
+             approval.save()
+             
+             case_request = CaseFundReleaseRequests.query.get_or_404(post_data['requestID'])
+             case_request.approved = True
+             case_request.approvedAmount = post_data['approvedAmount']
+             db.session.commit()
+       
+        except Exception as e:
+            current_app.logger.error(f"Error releasing case funds: {str(e)}")
+            return {'message': f'Error releasing case funds: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR   
+
+@finance_namespace.route('/get_all_fund_release_approvals')
+class GetFundReleaseHistory(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            case_approvals = CaseFundReleaseApproval.query.order_by(desc(CaseFundReleaseApproval.approvedAt)).all()
+            project_approvals = ProjectFundReleaseApproval.query.order_by(desc(ProjectFundReleaseApproval.approvedAt)).all()
+            
+            case_approvals_data = []
+            for approval in case_approvals:
+                user = Users.query.get(approval.approvedBy)
+                user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
+                request = CaseFundReleaseRequests.query.get(approval.requestID)
+                case_data = CasesData.query.get(request.caseID)
+                case_details = {'caseID': case_data.caseID, 'caseName': case_data.caseName, 'category': case_data.category.value, 'status': case_data.caseStatus.value}
+                
+                approval_details = {
+                    'approvalID': approval.approvalID,
+                    'case': case_details,
+                    'approvedBy': user_details,
+                    'approvedAmount': approval.approvedAmount,
+                    'approvedAt': approval.approvedAt.isoformat(),
+                    'notes': approval.notes,
+                    'status': approval.status,
+                    'closed': approval.closed
+                }
+                
+                case_approvals_data.append(approval_details)
+            
+            project_approvals_data = []
+            for approval in project_approvals:
+                user = Users.query.get(approval.approvedBy)
+                user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
+                request = ProjectFundReleaseRequests.query.get(approval.requestID)
+                project_data = ProjectsData.query.get(request.projectID)
+                project_details = {'projectID': project_data.projectID, 'projectName': project_data.caseName, 'category': project_data.category.value, 'status': project_data.caseStatus.value}
+                
+                approval_details = {
+                    'approvalID': approval.approvalID,
+                    'project': project_details,
+                    'approvedBy': user_details,
+                    'approvedAmount': approval.approvedAmount,
+                    'approvedAt': approval.approvedAt.isoformat(),
+                    'notes': approval.notes,
+                    'status': approval.status,
+                    'closed': approval.closed
+                }
+                
+                project_approvals_data.append(approval_details)
+            
+            return {'case_approvals': case_approvals_data, 'project_approvals': project_approvals_data}, HTTPStatus.OK
+            
+            
+        except Exception as e:
+            current_app.logger.error(f"Error getting fund release approvals: {str(e)}")
+            return {'message': f'Error getting fund release approvals: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR 
+        
+@finance_namespace.route('/update_project_fund_approval_status/<int:approvalID>/<string:status>')    
+class UpdatePFundApprovalStatus(Resource):
+    @jwt_required()
+    def put(self, approvalID, status):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            approval = ProjectFundReleaseApproval.query.get_or_404(approvalID)
+            
+            approval.status = status
+            db.session.commit()
+            
+            return {'message': 'Approval status updated successfully.'}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error updating approval status: {str(e)}")
+            return {'message': f'Error updating approval status: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route('/update_case_fund_approval_status/<int:approvalID>/<string:status>')    
+class UpdateCFundApprovalStatus(Resource):
+    @jwt_required()
+    def put(self, approvalID, status):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            approval = CaseFundReleaseApproval.query.get_or_404(approvalID)
+            
+            approval.status = status
+            db.session.commit()
+            
+            return {'message': 'Approval status updated successfully.'}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error updating approval status: {str(e)}")
+            return {'message': f'Error updating approval status: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route('/update_fund_transfer_status/<int:transferID>/<string:status>')    
+class UpdateFundTransferStatus(Resource):
+    @jwt_required()
+    def put(self, transferID, status):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            transfer = FundTransfers.query.get_or_404(transferID)
+            
+            transfer.status = status
+            db.session.commit()
+            
+            return {'message': 'Transfer status updated successfully.'}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error updating transfer status: {str(e)}")
+            return {'message': f'Error updating transfer status: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        
+
+@finance_namespace.route('/close_case_fund_release_approval/<int:approvalID>')
+class CloseCFundReleaseApproval(Resource):
+    @jwt_required()
+    def put(self, approvalID):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            approval = CaseFundReleaseApproval.query.get_or_404(approvalID)
+            
+            approval.closed = True
+            db.session.commit()
+            
+            from_fund = FinancialFund.query.get_or_404(approval.from_fund)
+            to_fund = FinancialFund.query.get_or_404(approval.to_fund)
+            
+            from_fund.use_fund(approval.transferAmount, approval.currencyID)
+            to_fund.add_fund(approval.transferAmount, approval.currencyID)
+            
+            return {'message': 'Approval closed successfully.'}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error closing approval: {str(e)}")
+            return {'message': f'Error closing approval: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route('/close_project_fund_release_approval/<int:approvalID>')
+class ClosePFundReleaseApproval(Resource):
+    @jwt_required()
+    def put(self, approvalID):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            approval = ProjectFundReleaseApproval.query.get_or_404(approvalID)
+            
+            approval.closed = True
+            db.session.commit()
+            
+            from_fund = FinancialFund.query.get_or_404(approval.from_fund)
+            to_fund = FinancialFund.query.get_or_404(approval.to_fund)
+            
+            from_fund.use_fund(approval.transferAmount, approval.currencyID)
+            to_fund.add_fund(approval.transferAmount, approval.currencyID)
+            
+            return {'message': 'Approval closed successfully.'}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error closing approval: {str(e)}")
+            return {'message': f'Error closing approval: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 @finance_namespace.route('/get_all_donors')
 class GetAllDonationsResource(Resource):

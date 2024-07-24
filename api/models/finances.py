@@ -88,7 +88,7 @@ class RegionAccount(db.Model):
     
     accountID = db.Column(db.Integer, primary_key=True)
     accountName = db.Column(db.String(255), nullable=False)
-    defaultCurrencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID'), default=1)
+    defaultCurrencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID', ondelete='CASCADE'), default=1)
     totalFund = db.Column(db.Numeric(10, 2), nullable=False, default=0)  # Total across all currencies
     usedFund = db.Column(db.Numeric(10, 2), nullable=False, default=0)   # Total across all currencies
     availableFund = db.Column(db.Numeric(10, 2), nullable=False, default=0)  # Total across all currencies
@@ -98,7 +98,7 @@ class RegionAccount(db.Model):
     general_funds = db.Column(db.Numeric(10, 2), nullable=True, default=0)
     shelter_funds = db.Column(db.Numeric(10, 2), nullable=True, default=0)
     sponsorship_funds = db.Column(db.Numeric(10, 2), nullable=True, default=0)
-    regionID = db.Column(db.Integer, db.ForeignKey('regions.regionID'))
+    regionID = db.Column(db.Integer, db.ForeignKey('regions.regionID', ondelete='CASCADE'))
     
     projectsFunds = db.relationship('ProjectFunds', backref='projects_data', lazy=True)
     casesFunds = db.relationship('CaseFunds', backref='cases_data', lazy=True)
@@ -352,8 +352,8 @@ class RegionAccountCurrencyBalance(db.Model):
     __tablename__ = 'region_account_currency_balances'
     
     balanceID = db.Column(db.Integer, primary_key=True)
-    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID'), nullable=False)
-    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID'), nullable=False)
+    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID', ondelete='CASCADE'), nullable=False)
+    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID', ondelete='CASCADE'), nullable=False)
     totalFund = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     availableFund = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     usedFund = db.Column(db.Numeric(10, 2), nullable=False, default=0)
@@ -385,13 +385,13 @@ class RegionAccountTransaction(db.Model):
     __tablename__ = 'region_account_transactions'
     
     transactionID = db.Column(db.Integer, primary_key=True)
-    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID'), nullable=False)
-    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID'), nullable=False)
+    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID', ondelete='CASCADE'), nullable=False)
+    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID', ondelete='CASCADE'), nullable=False)
     amount = db.Column(db.Numeric(10, 2), nullable=False)
     transactionType = db.Column(db.String(10), nullable=False)  # 'add' or 'use'
     transactionSubtype = db.Column(db.String(50), nullable=True)  # e.g., 'project_payment', 'case_payment'
-    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=True)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), nullable=True)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID', ondelete='CASCADE'), nullable=True)
     paymentNumber = db.Column(db.Integer, nullable=True)  # e.g., 1, 2, 3, etc.
     timestamp = db.Column(db.DateTime, nullable=False, default=func.now())
     category = db.Column(db.String(50), nullable=True)  # 'health', 'education', etc.
@@ -428,7 +428,7 @@ class CategoryFund(db.Model):
     __tablename__ = 'category_funds'
     
     id = db.Column(db.Integer, primary_key=True)
-    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID'), nullable=False)
+    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID', ondelete='CASCADE'), nullable=False)
     category = db.Column(db.String(50), nullable=False)
     amount = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     
@@ -457,8 +457,8 @@ class SubFundCurrencyBalance(db.Model):
     __tablename__ = 'sub_fund_currency_balances'
     
     id = db.Column(db.Integer, primary_key=True)
-    subFundID = db.Column(db.Integer, db.ForeignKey('sub_funds.subFundID'), nullable=False, index=True)
-    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID'), nullable=False, index=True)
+    subFundID = db.Column(db.Integer, db.ForeignKey('sub_funds.subFundID', ondelete='CASCADE'), nullable=False, index=True)
+    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID', ondelete='CASCADE'), nullable=False, index=True)
     totalFund = db.Column(db.Float, nullable=False, default=0)
     usedFund = db.Column(db.Float, nullable=False, default=0)
     availableFund = db.Column(db.Float, nullable=False, default=0)
@@ -495,9 +495,9 @@ class FinancialFund(db.Model):
     accountType = db.Column(db.String(50))
     notes = db.Column(db.Text)
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    administrator = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False) # the employee responsible for managing this fund
+    administrator = db.Column(db.Integer, db.ForeignKey('users.userID', ondelete='CASCADE'), nullable=False) # the employee responsible for managing this fund
     availableFund = db.Column(db.Float, default=0)
-    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID'), default=1, index=True)
+    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID', ondelete='CASCADE'), default=1, index=True)
     lastUpdate = db.Column(db.DateTime, nullable=False, default=func.now(), onupdate=func.now())
 
     # Relationships
@@ -649,8 +649,8 @@ class FinancialFundCurrencyBalance(db.Model):
     __tablename__ = 'financial_fund_currency_balances'
     
     id = db.Column(db.Integer, primary_key=True)
-    fundID = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID'), nullable=False, index=True)
-    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID'), nullable=False, index=True)
+    fundID = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID', ondelete='CASCADE'), nullable=False, index=True)
+    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID', ondelete='CASCADE'), nullable=False, index=True)
     totalFund = db.Column(db.Float, nullable=False, default=0)
     usedFund = db.Column(db.Float, nullable=False, default=0)
     availableFund = db.Column(db.Float, nullable=False, default=0)
@@ -673,7 +673,7 @@ class SubFunds(db.Model):
     __tablename__ = 'sub_funds'
     
     subFundID = db.Column(db.Integer, primary_key=True)
-    fundID = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID'), nullable=False, index=True)
+    fundID = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID', ondelete='CASCADE'), nullable=False, index=True)
     subFundName = db.Column(db.String(255), nullable=False)
     accountType = db.Column(db.String(50))
     totalFund = db.Column(db.Float, nullable=False, default=0)
@@ -681,7 +681,7 @@ class SubFunds(db.Model):
     availableFund = db.Column(db.Float, nullable=False, default=0)
     notes = db.Column(db.Text)
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID'), default=1, index=True)
+    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID', ondelete='CASCADE'), default=1, index=True)
 
     # Relationships
     currency_balances = db.relationship('SubFundCurrencyBalance', back_populates='sub_fund', lazy=True)
@@ -779,9 +779,9 @@ class ProjectFunds(db.Model):
     __tablename__ = 'project_funds'
     
     fundID = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=False)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), nullable=False)
     fundsAllocated = db.Column(db.Float, nullable=True)
-    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID'), nullable=False)
+    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID', ondelete='CASCADE'), nullable=False)
     
     
     def save(self):
@@ -797,9 +797,9 @@ class CaseFunds(db.Model):
     __tablename__ = 'case_funds'
     
     fundID = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID', ondelete='CASCADE'), nullable=False)
     fundsAllocated = db.Column(db.Float, nullable=True)
-    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID'), nullable=False)
+    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID', ondelete='CASCADE'), nullable=False)
     
     
     def save(self):
@@ -866,7 +866,7 @@ class Representative(db.Model):
     __tablename__ = 'representatives'
     
     representativeID = db.Column(db.Integer, primary_key=True)
-    donorID = db.Column(db.Integer, db.ForeignKey('donors.donorID'), nullable=False, index=True)
+    donorID = db.Column(db.Integer, db.ForeignKey('donors.donorID', ondelete='CASCADE'), nullable=False, index=True)
     name = db.Column(db.String(255), nullable=False)
     jobPosition = db.Column(db.String(255), nullable=True)
     email = db.Column(db.String(255), nullable=True)
@@ -901,16 +901,16 @@ class Donations(db.Model):
     __tablename__ = 'donations'
     
     id = db.Column(db.Integer, primary_key=True)
-    donorID = db.Column(db.Integer, db.ForeignKey('donors.donorID'), nullable=False)
-    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID'), nullable=False)
-    fundID = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID'), nullable=False)
+    donorID = db.Column(db.Integer, db.ForeignKey('donors.donorID', ondelete='CASCADE'), nullable=False)
+    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID', ondelete='CASCADE'), nullable=False)
+    fundID = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID', ondelete='CASCADE'), nullable=False)
     amount = db.Column(db.Float, nullable=False)
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     details = db.Column(db.Text, nullable=True) # this is "notes" on the UI
-    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID'), default=1)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=True)
-    subFundID = db.Column(db.Integer, db.ForeignKey('sub_funds.subFundID'), nullable=True)
+    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID',ondelete='CASCADE'), default=1)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID', ondelete='CASCADE'), nullable=True)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), nullable=True)
+    subFundID = db.Column(db.Integer, db.ForeignKey('sub_funds.subFundID', ondelete='CASCADE'), nullable=True)
     projectScope = db.Column(db.Enum(ProjectScopes), default=ProjectScopes.GENERAL)
     allocationTags = db.Column(db.String) # used to tag a donation made to a case/project that is not yet added to the database
     donationType = db.Column(db.Enum(DonationTypes),default=DonationTypes.GENERAL)
@@ -929,15 +929,17 @@ class ProjectFundReleaseRequests(db.Model):
     __tablename__ = 'project_fund_release_requests'
     
     requestID = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID'), nullable=False)
+    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), nullable=False)
     fundsRequested = db.Column(db.Float, nullable=False)
-    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    requestedBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
+    createdAt = db.Column(db.DateTime, default=func.now(), nullable=False)
+    requestedBy = db.Column(db.Integer, db.ForeignKey('users.userID', ondelete='CASCADE'), nullable=False)
     approved = db.Column(db.Boolean, default=False)
-    approvedAt = db.Column(db.DateTime, nullable=True)
+    approvedAt = db.Column(db.DateTime, nullable=True, onupdate=func.now())
     paymentCount = db.Column(db.Integer, nullable=False)
     approvedAmount = db.Column(db.Float, nullable=False, default=0)
     bulkName = db.Column(db.String, nullable=True)
+    paymentMethod = db.Column(db.String, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
     
     def save(self):
         db.session.add(self)
@@ -951,15 +953,61 @@ class CaseFundReleaseRequests(db.Model):
     __tablename__ = 'case_fund_release_requests'
     
     requestID = db.Column(db.Integer, primary_key=True)
-    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID'), nullable=False)
+    caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID', ondelete='CASCADE'), nullable=False)
     fundsRequested = db.Column(db.Float, nullable=False)
-    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    requestedBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
+    createdAt = db.Column(db.DateTime, default=func.now(), nullable=False)
+    requestedBy = db.Column(db.Integer, db.ForeignKey('users.userID', ondelete='CASCADE'), nullable=False)
     approved = db.Column(db.Boolean, default=False)
-    approvedAt = db.Column(db.DateTime, nullable=True)
+    approvedAt = db.Column(db.DateTime, nullable=True, onupdate=func.now())
     paymentCount = db.Column(db.Integer, nullable=False)
     approvedAmount = db.Column(db.Float, nullable=False, default=0)
     bulkName = db.Column(db.String, nullable=True)
+    paymentMethod = db.Column(db.String, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+        
+class ProjectFundReleaseApproval(db.Model):
+    __tablename__ = 'project_fund_release_approval'
+    
+    approvalID = db.Column(db.Integer, primary_key=True)
+    requestID = db.Column(db.Integer, db.ForeignKey('project_fund_release_requests.requestID', ondelete='CASCADE'), nullable=False)
+    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID', ondelete='CASCADE'), nullable=False)
+    fundID = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID', ondelete='CASCADE'), nullable=False)
+    approvedBy = db.Column(db.Integer, db.ForeignKey('users.userID', ondelete='CASCADE'), nullable=False)
+    approvedAmount = db.Column(db.Float, nullable=False)
+    approvedAt = db.Column(db.DateTime, default=func.now())
+    status = db.Column(db.String, default='Approved', nullable=False)
+    notes = db.Column(db.Text,nullable=True)
+    closed = db.Column(db.Boolean, default=False)
+    
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+
+class CaseFundReleaseApproval(db.Model):
+    __tablename__ = 'case_fund_release_approval'
+    
+    approvalID = db.Column(db.Integer, primary_key=True)
+    requestID = db.Column(db.Integer, db.ForeignKey('case_fund_release_requests.requestID', ondelete='CASCADE'), nullable=False)
+    accountID = db.Column(db.Integer, db.ForeignKey('region_account.accountID', ondelete='CASCADE'), nullable=False)
+    fundID = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID', ondelete='CASCADE'), nullable=False)
+    approvedBy = db.Column(db.Integer, db.ForeignKey('users.userID', ondelete='CASCADE'), nullable=False)
+    approvedAmount = db.Column(db.Float, nullable=False)
+    approvedAt = db.Column(db.DateTime, default=func.now())
+    status = db.Column(db.String, default='Approved', nullable=False)
+    notes = db.Column(db.Text,nullable=True)
+    closed = db.Column(db.Boolean, default=False)
     
     def save(self):
         db.session.add(self)
@@ -976,23 +1024,24 @@ class TransferStage(Enum):
     
 class TransferType(Enum):
     EFT = 'EFT'
-    CASH = 'Cash'
-    CHECK = 'Check'
+    CASH = 'CASH'
+    CHECK = 'CHECK'
     
 
-class FundTransferRequests(db.Model):
-    __tablename__ = 'fund_transfer_requests'
+class FundTransfers(db.Model):
+    __tablename__ = 'fund_transfers'
     
-    requestID = db.Column(db.Integer, primary_key=True)
-    from_fund = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID'))
-    to_fund = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID'))
+    transferID = db.Column(db.Integer, primary_key=True)
+    from_fund = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID', ondelete='CASCADE'))
+    to_fund = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID', ondelete='CASCADE'))
     transferAmount = db.Column(db.Float, nullable=False)
-    requestedBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
-    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    stage = db.Column(db.Enum(TransferStage), default=TransferStage.ASSESSMENT)
+    createdBy = db.Column(db.Integer, db.ForeignKey('users.userID', ondelete='CASCADE'), nullable=False)
+    createdAt = db.Column(db.DateTime, default=func.now(), nullable=False)
+    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID',ondelete='CASCADE'), default=1)
     notes = db.Column(db.Text)
-    approvedAt = db.Column(db.DateTime, nullable=True)
     transferType = db.Column(db.Enum(TransferType), default=TransferType.EFT)
+    closed = db.Column(db.Boolean, default=False)
+    status = db.Column(db.String, default='Initiated')
 
     
     def save(self):
@@ -1012,17 +1061,17 @@ class Payments(db.Model):
     __tablename__ = 'payments'
     
     paymentID = db.Column(db.Integer, primary_key=True)
-    from_fund = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID'))
+    from_fund = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID', ondelete='CASCADE'))
     paymentFor = db.Column(db.Enum(PaymentFor), nullable=False, default=PaymentFor.OTHER)
     paymentName = db.Column(db.String)
     amount = db.Column(db.Float)
     notes = db.Column(db.Text)
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID'), default=1)
+    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID', ondelete='CASCADE'), default=1)
     transferExpenses = db.Column(db.Float)
     projectScope = db.Column(db.Enum(ProjectScopes), default=ProjectScopes.GENERAL)
     paymentMethod = db.Column(db.Enum(TransferType), default=TransferType.EFT)
-    subFundID = db.Column(db.Integer, db.ForeignKey('sub_funds.subFundID'), nullable=True)
+    subFundID = db.Column(db.Integer, db.ForeignKey('sub_funds.subFundID', ondelete='CASCADE'), nullable=True)
     
     currency = db.relationship("Currencies", backref="payment_currency")
     
