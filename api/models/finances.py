@@ -1091,6 +1091,9 @@ class Reports(db.Model):
     reportTag = db.Column(db.String, nullable=False)
     createdBy = db.Column(db.String, nullable=False)
     dateCreated = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    type = db.Column(db.String)
+    reportId = db.Column(db.String)
+    pdfUrl = db.Column(db.String)
 
     
     def save(self):

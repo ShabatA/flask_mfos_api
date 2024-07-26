@@ -165,7 +165,10 @@ case_funds_model = finance_namespace.model('CaseFunds', {
 reports_data_model = finance_namespace.model('Reports',{
     'reportTag': fields.String(required=True),
     'title': fields.String(required=True),
-    'createdBy': fields.String(required=True)
+    'createdBy': fields.String(required=True),
+    'type': fields.String(required=True),
+    'reportId': fields.String(required=True),
+    'pdfUrl': fields.String(required=True)
 })
 
 currencies_model = finance_namespace.model('CurrencyData',{
@@ -1379,7 +1382,10 @@ class AddReportResource(Resource):
             new_report = Reports(
                 title = report_data['title'],
                 reportTag = report_data['reportTag'],
-                createdBy = report_data.get('createdBy',f'{current_user.firstName} {current_user.lastName}')
+                createdBy = report_data.get('createdBy',f'{current_user.firstName} {current_user.lastName}'),
+                type = report_data['type'],
+                reportId = report_data['reportId'],
+                pdfUrl = report_data['pdfUrl']
             )
             
             new_report.save()
@@ -1404,7 +1410,10 @@ class GetAllReports(Resource):
                     'title': report.title,
                     'reportTag': report.reportTag,
                     'createdAt': report.dateCreated.isoformat(),
-                    'createdBy': report.createdBy
+                    'createdBy': report.createdBy,
+                    'reportIdentity': report.reportId,
+                    'pdfUrl': report.pdfUrl,
+                    'type': report.type
                 }
                 reports_data.append(report_details)
             
@@ -1427,11 +1436,38 @@ class GetReportByTag(Resource):
                     'title': report.title,
                     'reportTag': report.reportTag,
                     'createdAt': report.dateCreated.isoformat(),
-                    'createdBy': report.createdBy
+                    'createdBy': report.createdBy,
+                    'reportIdentity': report.reportId,
+                    'pdfUrl': report.pdfUrl,
+                    'type': report.type
                 }
                 reports_data.append(report_details)
             
             return {'all_reports': reports_data}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error getting all reports: {str(e)}")
+            return {'message': f'Error getting all reports: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route('/reports/by_string_id/<string:reportId>')
+class GetReportByTag(Resource):
+    @jwt_required()
+    def get(self, reportId):
+        try:
+            report = Reports.query.filter_by(reportId=reportId).first()
+            
+           
+            report_details = {
+                'reportID': report.id,
+                'title': report.title,
+                'reportTag': report.reportTag,
+                'createdAt': report.dateCreated.isoformat(),
+                'createdBy': report.createdBy,
+                'reportIdentity': report.reportId,
+                'pdfUrl': report.pdfUrl,
+                'type': report.type
+            }
+                
+            return report_details, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error getting all reports: {str(e)}")
             return {'message': f'Error getting all reports: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
