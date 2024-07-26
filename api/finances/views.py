@@ -1254,11 +1254,21 @@ class CloseCFundReleaseApproval(Resource):
             approval.closed = True
             db.session.commit()
             
-            from_fund = FinancialFund.query.get_or_404(approval.from_fund)
-            to_fund = FinancialFund.query.get_or_404(approval.to_fund)
+            from_fund = FinancialFund.query.get_or_404(approval.fundID)
+            region_account = RegionAccount.query.get_or_404(approval.accountID)
             
+            #spend money
             from_fund.use_fund(approval.transferAmount, approval.currencyID)
-            to_fund.add_fund(approval.transferAmount, approval.currencyID)
+            
+            
+            
+            request = CaseFundReleaseRequests.query.get(approval.requestID)
+            case = CasesData.query.get(request.caseID)
+            
+            #spend money from region_account
+            # use_fund(self, amount, currencyID=None, transaction_subtype=None, projectID=None, caseID=None, payment_number=None, category=None)
+            # since cases do not have a scope, I made category to be none
+            region_account.use_fund(approval.approvedAmount, approval.currencyID, 'case_payment',None, case.caseID,request.paymentCount, None)
             
             return {'message': 'Approval closed successfully.'}, HTTPStatus.OK
         except Exception as e:
@@ -1276,11 +1286,21 @@ class ClosePFundReleaseApproval(Resource):
             approval.closed = True
             db.session.commit()
             
-            from_fund = FinancialFund.query.get_or_404(approval.from_fund)
-            to_fund = FinancialFund.query.get_or_404(approval.to_fund)
+            from_fund = FinancialFund.query.get_or_404(approval.fundID)
+            region_account = RegionAccount.query.get_or_404(approval.accountID)
             
-            from_fund.use_fund(approval.transferAmount, approval.currencyID)
-            to_fund.add_fund(approval.transferAmount, approval.currencyID)
+            #spend money from fund account
+            from_fund.use_fund(approval.approvedAmount, approval.currencyID)
+            
+            
+            #get the project scope
+            request = ProjectFundReleaseRequests.query.get(approval.requestID)
+            project = ProjectsData.query.get(request.projectID)
+            scope = project.status_data.data.projectScope
+            
+            #spend money from region_account
+            # use_fund(self, amount, currencyID=None, transaction_subtype=None, projectID=None, caseID=None, payment_number=None, category=None)
+            region_account.use_fund(approval.approvedAmount, approval.currencyID, 'project_payment',project.projectID, None,request.paymentCount, scope)
             
             return {'message': 'Approval closed successfully.'}, HTTPStatus.OK
         except Exception as e:
