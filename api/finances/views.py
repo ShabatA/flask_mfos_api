@@ -840,6 +840,7 @@ class CloseFundTransferResource(Resource):
                 return {'message': 'Transfer is already closed'}, HTTPStatus.CONFLICT
             
             transfer.closed = True
+            transfer.status = 'Closed'
             transfer.save()
             
             from_fund = FinancialFund.query.get_or_404(transfer.from_fund)
@@ -1037,6 +1038,8 @@ class GetAllFundReleaseRequests(Resource):
                 user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
                 case_data = CasesData.query.get(request.caseID)
                 case_details = {'caseID': case_data.caseID, 'caseName': case_data.caseName, 'category': case_data.category.value, 'status': case_data.caseStatus.value}
+                region_acc = RegionAccount.query.get(case_data.regionID)
+                region_acc_details = {'accountName': region_acc.accountName, 'availableFund': region_acc.availableFund}
                 
                 request_details = {
                     'requestID': request.requestID,
@@ -1047,7 +1050,13 @@ class GetAllFundReleaseRequests(Resource):
                     'approved': request.approved,
                     'approvedAt': request.approvedAt.isoformat() if request.approvedAt else None,
                     'receivedAmount': f'{request.approvedAmount}/{request.fundsRequested}',
-                    'regionName': Regions.query.get(case_data.regionID).regionName   
+                    'regionName': Regions.query.get(case_data.regionID).regionName,
+                    'region_account_details': region_acc_details,
+                    'approved_funding': f'${case_data.status_data.data['approvedFunding']} / ${case_data.beneficiaries.totalSupportCost}',
+                    'paymentCount': f'{request.paymentCount}/{case_data.status_data.data['paymentCount']}',
+                    'bulkName': '-',
+                    'paymentDueDate': f'{case_data.status_data.data['dueDate']}',
+                    'projectScope': '-'  
                 }
                 
                 case_requests_data.append(request_details)
@@ -1059,6 +1068,8 @@ class GetAllFundReleaseRequests(Resource):
                 user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
                 project_data = ProjectsData.query.get(request.projectID)
                 project_details = {'projectID': project_data.projectID, 'projectName': project_data.projectName, 'category': project_data.category.value, 'status': project_data.projectStatus.value}
+                region_acc = RegionAccount.query.get(project_data.regionID)
+                region_acc_details = {'accountName': region_acc.accountName, 'availableFund': region_acc.availableFund}
                 
                 request_details = {
                     'requestID': request.requestID,
@@ -1069,7 +1080,13 @@ class GetAllFundReleaseRequests(Resource):
                     'approved': request.approved,
                     'approvedAt': request.approvedAt.isoformat() if request.approvedAt else None,
                     'receivedAmount': f'{request.approvedAmount}/{request.fundsRequested}',
-                    'regionName': Regions.query.get(project_data.regionID).regionName   
+                    'regionName': Regions.query.get(project_data.regionID).regionName ,
+                    'region_account_details': region_acc_details,
+                    'approved_funding': f'${project_data.status_data.data['approvedFunding']} / ${project_data.budgetRequired}',
+                    'paymentCount': f'{request.paymentCount}/{project_data.status_data.data['paymentCount']}',
+                    'bulkName': '-',
+                    'paymentDueDate': f'{project_data.status_data.data['dueDate']}',
+                    'projectScope': f'{project_data.status_data.data['projectScope']}'  
                 }
                 
                 project_requests_data.append(request_details)
@@ -1252,6 +1269,7 @@ class CloseCFundReleaseApproval(Resource):
             approval = CaseFundReleaseApproval.query.get_or_404(approvalID)
             
             approval.closed = True
+            approval.status = 'Closed'
             db.session.commit()
             
             from_fund = FinancialFund.query.get_or_404(approval.fundID)
@@ -1284,6 +1302,7 @@ class ClosePFundReleaseApproval(Resource):
             approval = ProjectFundReleaseApproval.query.get_or_404(approvalID)
             
             approval.closed = True
+            approval.status = 'Closed'
             db.session.commit()
             
             from_fund = FinancialFund.query.get_or_404(approval.fundID)
@@ -1296,7 +1315,7 @@ class ClosePFundReleaseApproval(Resource):
             #get the project scope
             request = ProjectFundReleaseRequests.query.get(approval.requestID)
             project = ProjectsData.query.get(request.projectID)
-            scope = project.status_data.data.projectScope
+            scope = project.status_data.data['projectScope']
             
             #spend money from region_account
             # use_fund(self, amount, currencyID=None, transaction_subtype=None, projectID=None, caseID=None, payment_number=None, category=None)
