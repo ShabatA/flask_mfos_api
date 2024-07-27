@@ -1052,10 +1052,10 @@ class GetAllFundReleaseRequests(Resource):
                     'receivedAmount': f'{request.approvedAmount}/{request.fundsRequested}',
                     'regionName': Regions.query.get(case_data.regionID).regionName,
                     'region_account_details': region_acc_details,
-                    'approved_funding': f'${case_data.status_data.data['approvedFunding']} / ${case_data.beneficiaries.totalSupportCost}',
-                    'paymentCount': f'{request.paymentCount}/{case_data.status_data.data['paymentCount']}',
+                    'approved_funding': f"${case_data.status_data.data['approvedFunding']} / ${case_data.beneficiaries.totalSupportCost}",
+                    'paymentCount': f"{request.paymentCount}/{case_data.status_data.data['paymentCount']}",
                     'bulkName': '-',
-                    'paymentDueDate': f'{case_data.status_data.data['dueDate']}',
+                    'paymentDueDate': f"{case_data.status_data.data['dueDate']}",
                     'projectScope': '-'  
                 }
                 
@@ -1082,11 +1082,11 @@ class GetAllFundReleaseRequests(Resource):
                     'receivedAmount': f'{request.approvedAmount}/{request.fundsRequested}',
                     'regionName': Regions.query.get(project_data.regionID).regionName ,
                     'region_account_details': region_acc_details,
-                    'approved_funding': f'${project_data.status_data.data['approvedFunding']} / ${project_data.budgetRequired}',
-                    'paymentCount': f'{request.paymentCount}/{project_data.status_data.data['paymentCount']}',
+                    'approved_funding': f"${project_data.status_data.data['approvedFunding']} / ${project_data.budgetRequired}",
+                    'paymentCount': f"{request.paymentCount}/{project_data.status_data.data['paymentCount']}",
                     'bulkName': '-',
-                    'paymentDueDate': f'{project_data.status_data.data['dueDate']}',
-                    'projectScope': f'{project_data.status_data.data['projectScope']}'  
+                    'paymentDueDate': f"{project_data.status_data.data['dueDate']}",
+                    'projectScope': f"{project_data.status_data.data['projectScope']}"  
                 }
                 
                 project_requests_data.append(request_details)
