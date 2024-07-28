@@ -745,14 +745,14 @@ class RequestProjectFundReleaseResource(Resource):
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
             request_data = request.json
             
-            project_id = request.get('projectID')
+            project_id = request_data.get('projectID')
             
             if not project_id:
                 return {'message': 'project ID is required to make a request.'}, HTTPStatus.BAD_REQUEST
             
             project = ProjectsData.query.get_or_404(project_id)
             
-            request = ProjectFundReleaseRequests(
+            release = ProjectFundReleaseRequests(
                 projectID = project_id,
                 fundsRequested = request_data['fundsRequested'],
                 requestedBy = current_user.userID,
@@ -760,7 +760,7 @@ class RequestProjectFundReleaseResource(Resource):
                 notes = request_data['notes']
             )
             
-            request.save()
+            release.save()
             return {'message': 'Request posted successfully.'}, HTTPStatus.OK
         
         except Exception as e:
@@ -776,14 +776,14 @@ class RequestCaseFundReleaseResource(Resource):
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
             request_data = request.json
             
-            case_id = request.get('caseID')
+            case_id = request_data.get('caseID')
             
             if not case_id:
                 return {'message': 'case ID is required to make a request.'}, HTTPStatus.BAD_REQUEST
             
             case = CasesData.query.get_or_404(case_id)
             
-            request = CaseFundReleaseRequests(
+            release = CaseFundReleaseRequests(
                 caseID = case_id,
                 fundsRequested = request_data['fundsRequested'],
                 requestedBy = current_user.userID,
@@ -791,7 +791,7 @@ class RequestCaseFundReleaseResource(Resource):
                 notes = request_data['notes']
             )
             
-            request.save()
+            release.save()
             
             return {'message': 'Request posted successfully.'}, HTTPStatus.OK
         
