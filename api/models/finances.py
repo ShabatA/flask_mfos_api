@@ -940,6 +940,7 @@ class ProjectFundReleaseRequests(db.Model):
     bulkName = db.Column(db.String, nullable=True)
     paymentMethod = db.Column(db.String, nullable=True)
     notes = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String, default='Awaiting Release')
     
     def save(self):
         db.session.add(self)
@@ -964,6 +965,7 @@ class CaseFundReleaseRequests(db.Model):
     bulkName = db.Column(db.String, nullable=True)
     paymentMethod = db.Column(db.String, nullable=True)
     notes = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String, default='Awaiting Release')
     
     def save(self):
         db.session.add(self)
@@ -983,7 +985,7 @@ class ProjectFundReleaseApproval(db.Model):
     approvedBy = db.Column(db.Integer, db.ForeignKey('users.userID', ondelete='CASCADE'), nullable=False)
     approvedAmount = db.Column(db.Float, nullable=False)
     approvedAt = db.Column(db.DateTime, default=func.now())
-    status = db.Column(db.String, default='Approved', nullable=False)
+    status = db.Column(db.String, default='Awaiting Approval', nullable=False)
     notes = db.Column(db.Text,nullable=True)
     closed = db.Column(db.Boolean, default=False)
     
@@ -1005,7 +1007,7 @@ class CaseFundReleaseApproval(db.Model):
     approvedBy = db.Column(db.Integer, db.ForeignKey('users.userID', ondelete='CASCADE'), nullable=False)
     approvedAmount = db.Column(db.Float, nullable=False)
     approvedAt = db.Column(db.DateTime, default=func.now())
-    status = db.Column(db.String, default='Approved', nullable=False)
+    status = db.Column(db.String, default='Awaiting Approval', nullable=False)
     notes = db.Column(db.Text,nullable=True)
     closed = db.Column(db.Boolean, default=False)
     

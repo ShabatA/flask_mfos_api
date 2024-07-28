@@ -1118,7 +1118,7 @@ class ReleaseProjectFundResource(Resource):
              approval.save()
              
              project_request = ProjectFundReleaseRequests.query.get_or_404(post_data['requestID'])
-             project_request.approved = True
+             project_request.status = 'Awaiting Approval (Submit Docs)'
              project_request.approvedAmount = post_data['approvedAmount']
              db.session.commit()
        
@@ -1146,13 +1146,96 @@ class ReleaseCaseFundResource(Resource):
              approval.save()
              
              case_request = CaseFundReleaseRequests.query.get_or_404(post_data['requestID'])
-             case_request.approved = True
+             case_request.status = 'Awaiting Approval (Submit Docs)'
              case_request.approvedAmount = post_data['approvedAmount']
              db.session.commit()
        
         except Exception as e:
             current_app.logger.error(f"Error releasing case funds: {str(e)}")
             return {'message': f'Error releasing case funds: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR   
+
+        
+@finance_namespace.route('/update_case_fund_request_status/<int:requestID>/<string:status>')    
+class UpdateCFundReleaseStatus(Resource):
+    @jwt_required()
+    def put(self, requestID, status):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            request = CaseFundReleaseRequests.query.get_or_404(requestID)
+            
+            request.status = status
+            db.session.commit()
+            
+            return {'message': 'Request status updated successfully.'}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error updating request status: {str(e)}")
+            return {'message': f'Error updating request status: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route('/update_project_fund_request_status/<int:requestID>/<string:status>')    
+class UpdatePFundReleaseStatus(Resource):
+    @jwt_required()
+    def put(self, requestID, status):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            request = ProjectFundReleaseRequests.query.get_or_404(requestID)
+            
+            request.status = status
+            db.session.commit()
+            
+            return {'message': 'Request status updated successfully.'}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error updating request status: {str(e)}")
+            return {'message': f'Error updating request status: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route('/approve_case_fund_request/<int:requestID>/yes_or_no/<string:decision>')
+class ApproveCaseFundReq(Resource):
+    @jwt_required()
+    def put(self, requestID, decision):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            request = CaseFundReleaseRequests.query.get_or_404(requestID)
+            approval = CaseFundReleaseApproval.query.filter_by(requestID = request.requestID).first()
+            
+            if decision == 'yes':
+                request.approved = True
+                request.status = f'Approved - Track ApprovalID {approval.approvalID}'
+                approval.status = 'Approved'
+            else:
+                request.approved = False
+                approval.status = 'Rejected'
+                request.status = 'Rejected'
+                
+            db.session.commit()
+            
+            return {'message': 'Request approved successfully.'}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error approving request: {str(e)}")
+            return {'message': f'Error approving request: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route('/approve_project_fund_request/<int:requestID>/yes_or_no/<string:decision>')
+class ApproveProjectFundReq(Resource):
+    @jwt_required()
+    def put(self, requestID, decision):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            request = ProjectFundReleaseRequests.query.get_or_404(requestID)
+            approval = ProjectFundReleaseApproval.query.filter_by(requestID = request.requestID).first()
+            
+            if decision == 'yes':
+                request.approved = True
+                request.status = f'Approved - Track ApprovalID {approval.approvalID}'
+                approval.status = 'Approved'
+            else:
+                request.approved = False
+                approval.status = 'Rejected'
+                request.status = 'Rejected'
+                
+            db.session.commit()
+            
+            return {'message': 'Request approved successfully.'}, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error approving request: {str(e)}")
+            return {'message': f'Error approving request: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @finance_namespace.route('/get_all_fund_release_approvals')
 class GetFundReleaseHistory(Resource):
