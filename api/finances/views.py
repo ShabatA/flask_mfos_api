@@ -1039,7 +1039,7 @@ class GetAllFundReleaseRequests(Resource):
                 case_data = CasesData.query.get(request.caseID)
                 case_details = {'caseID': case_data.caseID, 'caseName': case_data.caseName, 'category': case_data.category.value, 'status': case_data.caseStatus.value}
                 region_acc = RegionAccount.query.get(case_data.regionID)
-                region_acc_details = {'accountName': region_acc.accountName, 'availableFund': region_acc.availableFund}
+                region_acc_details = {'accountName': region_acc.accountName, 'availableFund': float(region_acc.availableFund)}
                 
                 request_details = {
                     'requestID': request.requestID,
@@ -1069,7 +1069,7 @@ class GetAllFundReleaseRequests(Resource):
                 project_data = ProjectsData.query.get(request.projectID)
                 project_details = {'projectID': project_data.projectID, 'projectName': project_data.projectName, 'category': project_data.category.value, 'status': project_data.projectStatus.value}
                 region_acc = RegionAccount.query.get(project_data.regionID)
-                region_acc_details = {'accountName': region_acc.accountName, 'availableFund': region_acc.availableFund}
+                region_acc_details = {'accountName': region_acc.accountName, 'availableFund': float(region_acc.availableFund)}
                 
                 request_details = {
                     'requestID': request.requestID,
