@@ -4,8 +4,8 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
 
 from api.models.accountfields import *
-from api.models.cases import CasesData
-from api.models.projects import ProjectsData
+from api.models.cases import *
+from api.models.projects import *
 from ..models.users import Users
 from ..models.regions import Regions
 from ..utils.db import db
@@ -1040,6 +1040,7 @@ class GetAllFundReleaseRequests(Resource):
                 case_details = {'caseID': case_data.caseID, 'caseName': case_data.caseName, 'category': case_data.category.value, 'status': case_data.caseStatus.value}
                 region_acc = RegionAccount.query.get(case_data.regionID)
                 region_acc_details = {'accountName': region_acc.accountName, 'availableFund': float(region_acc.availableFund)}
+                beneficiary = CaseBeneficiary.query.filter_by(caseID=case_data.caseID).first()
                 
                 request_details = {
                     'requestID': request.requestID,
@@ -1052,7 +1053,7 @@ class GetAllFundReleaseRequests(Resource):
                     'receivedAmount': f'{request.approvedAmount}/{request.fundsRequested}',
                     'regionName': Regions.query.get(case_data.regionID).regionName,
                     'region_account_details': region_acc_details,
-                    'approved_funding': f"${case_data.status_data.data['approvedFunding']} / ${case_data.beneficiaries.totalSupportCost}",
+                    'approved_funding': f"${case_data.status_data.data['approvedFunding']}/${beneficiary.totalSupportCost}",
                     'paymentCount': f"{request.paymentCount}/{case_data.status_data.data['paymentCount']}",
                     'bulkName': '-',
                     'paymentDueDate': f"{case_data.status_data.data['dueDate']}",
