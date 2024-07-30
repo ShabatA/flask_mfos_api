@@ -1121,6 +1121,8 @@ class ReleaseProjectFundResource(Resource):
              project_request.status = 'Awaiting Approval (Submit Docs)'
              project_request.approvedAmount = post_data['approvedAmount']
              db.session.commit()
+             
+             return {'message': 'Project Funds released successfully.'}, HTTPStatus.OK
        
         except Exception as e:
             current_app.logger.error(f"Error releasing project funds: {str(e)}")
@@ -1149,6 +1151,8 @@ class ReleaseCaseFundResource(Resource):
              case_request.status = 'Awaiting Approval (Submit Docs)'
              case_request.approvedAmount = post_data['approvedAmount']
              db.session.commit()
+             
+             return {'message': 'Case Funds released successfully.'}, HTTPStatus.OK
        
         except Exception as e:
             current_app.logger.error(f"Error releasing case funds: {str(e)}")
@@ -1272,7 +1276,7 @@ class GetFundReleaseHistory(Resource):
                 user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
                 request = ProjectFundReleaseRequests.query.get(approval.requestID)
                 project_data = ProjectsData.query.get(request.projectID)
-                project_details = {'projectID': project_data.projectID, 'projectName': project_data.caseName, 'category': project_data.category.value, 'status': project_data.caseStatus.value}
+                project_details = {'projectID': project_data.projectID, 'projectName': project_data.projectName, 'category': project_data.category.value, 'status': project_data.projectStatus.value}
                 
                 approval_details = {
                     'approvalID': approval.approvalID,
