@@ -180,6 +180,43 @@ beneficiary_data_model = case_namespace.model('BeneficiaryData', {
     'serviceDate': fields.String()
 })
 
+edit_beneficiary_data_model = case_namespace.model('EditBeneficiaryData', {
+    'beneficiaryID': fields.Integer(required=True),
+    'caseID': fields.Integer(required=True),
+    'firstName': fields.String(required=True),
+    'surName': fields.String(required=True),
+    'gender': fields.String(required=True),
+    'birthDate': fields.Date(required=True),
+    'birthPlace': fields.String(required=True),
+    'nationality': fields.String(required=True),
+    'idType': fields.String(required=True),
+    'idNumber': fields.String(required=True),
+    'phoneNumber': fields.String(required=True),
+    'altPhoneNumber': fields.String(),
+    'email': fields.String(required=True),
+    'serviceRequired': fields.String(required=True),
+    'otherServiceRequired': fields.String(),
+    'problemDescription': fields.String(),
+    'serviceDescription': fields.String(),
+    'totalSupportCost': fields.Float(),
+    'receiveFundDate': fields.Date(),
+    'paymentMethod': fields.String(),
+    'paymentsType': fields.String(),
+    'otherPaymentType': fields.String(),
+    'incomeType': fields.String(),
+    'otherIncomeType': fields.String(),
+    'housing': fields.String(),
+    'otherHousing': fields.String(),
+    'housingType': fields.String(),
+    'otherHousingType': fields.String(),
+    'totalFamilyMembers': fields.Integer(),
+    'childrenUnder15': fields.String(),
+    'isOldPeople': fields.Boolean(),
+    'isDisabledPeople': fields.Boolean(),
+    'isStudentsPeople': fields.Boolean(),
+    'serviceDate': fields.String()
+})
+
 case_beneficiary_form = case_namespace.model('BeneficiaryForm',{
     'url': fields.String(required=True, description="The url with the uuid as a URL param.")
 })
@@ -731,7 +768,7 @@ class CaseBeneficiaryAddOrEditResource(Resource):
                     'error': f"Error adding beneficiary: {str(e)}"}, HTTPStatus.INTERNAL_SERVER_ERROR
 
    
-    @case_namespace.expect(beneficiary_data_model)
+    @case_namespace.expect(edit_beneficiary_data_model)
     def put(self):
         try:
             
