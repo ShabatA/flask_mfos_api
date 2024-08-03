@@ -1057,7 +1057,8 @@ class GetAllFundReleaseRequests(Resource):
                     'paymentCount': f"{request.paymentCount}/{case_data.status_data.data['paymentCount']}",
                     'bulkName': '-',
                     'paymentDueDate': f"{case_data.status_data.data['dueDate']}",
-                    'projectScope': '-'  
+                    'projectScope': '-',
+                    'status': request.status  
                 }
                 
                 case_requests_data.append(request_details)
@@ -1087,7 +1088,8 @@ class GetAllFundReleaseRequests(Resource):
                     'paymentCount': f"{request.paymentCount}/{project_data.status_data.data['paymentCount']}",
                     'bulkName': '-',
                     'paymentDueDate': f"{project_data.status_data.data['dueDate']}",
-                    'projectScope': f"{project_data.status_data.data['projectScope']}"  
+                    'projectScope': f"{project_data.status_data.data['projectScope']}",
+                    'status': request.status   
                 }
                 
                 project_requests_data.append(request_details)
