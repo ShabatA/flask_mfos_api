@@ -817,7 +817,7 @@ class MakeFundTransferResource(Resource):
                 transferAmount = request_data['transferAmount'],
                 notes = request_data['notes'],
                 createdBy = current_user.userID,
-                transferType = request_data['transferType']
+                transferType = request_data['transfer_type']
             )
             
             transfer.save()
