@@ -996,14 +996,13 @@ class GetAllFundTransfers(Resource):
                     'from_fund': {
                         'fundID': from_fund.fundID,
                         'fundName': from_fund.fundName,
-                        'totalFund': from_fund.totalFund,
-                        'currency': from_fund.currency.currencyCode
+                        'balances': to_fund.get_fund_balance(1)
+                        
                     },
                     'to_fund': {
                         'fundID': to_fund.fundID,
                         'fundName': to_fund.fundName,
-                        'totalFund': to_fund.totalFund,
-                        'currency': to_fund.currency.currencyCode
+                        'balances': to_fund.get_fund_balance(1)  
                     },
                     'createdBy': {
                         'userID': user.userID,
@@ -1366,7 +1365,7 @@ class CloseCFundReleaseApproval(Resource):
             region_account = RegionAccount.query.get_or_404(approval.accountID)
             
             #spend money
-            from_fund.use_fund(approval.transferAmount, approval.currencyID)
+            from_fund.use_fund(approval.approvedAmount, 1)
             
             
             
@@ -1376,7 +1375,7 @@ class CloseCFundReleaseApproval(Resource):
             #spend money from region_account
             # use_fund(self, amount, currencyID=None, transaction_subtype=None, projectID=None, caseID=None, payment_number=None, category=None)
             # since cases do not have a scope, I made category to be none
-            region_account.use_fund(approval.approvedAmount, approval.currencyID, 'case_payment',None, case.caseID,request.paymentCount, None)
+            region_account.use_fund(approval.approvedAmount, 1, 'case_payment',None, case.caseID,request.paymentCount, None)
             
             return {'message': 'Approval closed successfully.'}, HTTPStatus.OK
         except Exception as e:
@@ -1399,7 +1398,7 @@ class ClosePFundReleaseApproval(Resource):
             region_account = RegionAccount.query.get_or_404(approval.accountID)
             
             #spend money from fund account
-            from_fund.use_fund(approval.approvedAmount, approval.currencyID)
+            from_fund.use_fund(approval.approvedAmount, 1)
             
             
             #get the project scope
@@ -1409,7 +1408,7 @@ class ClosePFundReleaseApproval(Resource):
             
             #spend money from region_account
             # use_fund(self, amount, currencyID=None, transaction_subtype=None, projectID=None, caseID=None, payment_number=None, category=None)
-            region_account.use_fund(approval.approvedAmount, approval.currencyID, 'project_payment',project.projectID, None,request.paymentCount, scope)
+            region_account.use_fund(approval.approvedAmount, 1, 'project_payment',project.projectID, None,request.paymentCount, scope)
             
             return {'message': 'Approval closed successfully.'}, HTTPStatus.OK
         except Exception as e:
