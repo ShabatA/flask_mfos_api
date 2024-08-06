@@ -1,4 +1,5 @@
 
+from api.models.regions import Regions
 from ..utils.db import db
 from enum import Enum
 from datetime import datetime
@@ -134,6 +135,18 @@ class CasesData(db.Model):
 
         #Delete Project Status Data
         CaseStatusData.filter_by(caseID=self.caseID).delete()
+    
+    def serialize(self):
+        return {
+            'caseID': self.caseID,
+            'caseName': self.caseName,
+            'caseStatus': self.caseStatus.value,
+            'createdAt': self.createdAt.isoformat(),
+            'category': self.category.value,
+            'startDate': self.startDate.isoformat() if self.startDate else None,
+            'dueDate': self.dueDate.isoformat() if self.dueDate else None,
+            'regionName': Regions.query.get(self.regionID).regionName
+        }
 
 class CaseBeneficiary(db.Model):
     __tablename__ = 'case_beneficiary'
@@ -180,6 +193,8 @@ class CaseBeneficiary(db.Model):
     def delete(self):
         db.session.delete(self)
         db.session.commit()
+    
+        
 
 class BeneficiaryForm(db.Model):
     __tablename__ = 'beneficiary_form'

@@ -1,3 +1,4 @@
+from api.models.regions import Regions
 from ..utils.db import db
 from enum import Enum
 from flask import jsonify
@@ -94,6 +95,20 @@ class ProjectsData(db.Model):
         db.session.delete(self)
         db.session.commit()
     
+    def serialize(self):
+        return {
+            'projectID': self.projectID,
+            'projectName': self.projectName,
+            'projectStatus': self.projectStatus.value,
+            'createdAt': self.createdAt.isoformat(),
+            'category': self.category.value,
+            'startDate': self.startDate.isoformat() if self.startDate else None,
+            'dueDate': self.dueDate.isoformat() if self.dueDate else None,
+            'regionName': Regions.query.get(self.regionID).regionName,
+            'project_type': self.project_type.value,
+            'active': self.active
+        }
+    
     @classmethod
     def get_by_id(cls, projectID):
         return cls.query.get_or_404(projectID)
@@ -111,7 +126,7 @@ class ProjectsData(db.Model):
             # Assuming status_data.get('dueDate', self.dueDate) returns a string
             due_date_string = status_data.get('dueDate') or str(self.dueDate)
 
-            # Handle the case when due_date_string is an empty string
+            # Handle the project when due_date_string is an empty string
             if due_date_string:
                 # Convert the string to a date object
                 self.dueDate = datetime.strptime(due_date_string, '%Y-%m-%d %H:%M:%S.%f').date()

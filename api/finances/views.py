@@ -1417,7 +1417,7 @@ class ClosePFundReleaseApproval(Resource):
 
 
 @finance_namespace.route('/get_all_donors')
-class GetAllDonationsResource(Resource):
+class GetAllDonorsResource(Resource):
     @jwt_required()
     def get(self):
         try:
@@ -1452,10 +1452,25 @@ class GetAllDonationsResource(Resource):
                     if latest_donation is None or donation.createdAt > latest_donation:
                         latest_donation = donation.createdAt
                 
+                 # Fetch cases and projects the donor has contributed to
+                cases = (
+                    CasesData.query.join(Donations, CasesData.caseID == Donations.caseID)
+                    .filter(Donations.donorID == donor.donorID, Donations.caseID.isnot(None))
+                    .all()
+                )
+                
+                projects = (
+                    ProjectsData.query.join(Donations, ProjectsData.projectID == Donations.projectID)
+                    .filter(Donations.donorID == donor.donorID, Donations.projectID.isnot(None))
+                    .all()
+                )
+                
                 donor_info = donor.get_donor_info()
                 donor_info['totalDonationAmount'] = total_donation_amount
                 donor_info['donations'] = donations_data
                 donor_info['latestDonation'] = latest_donation.strftime("%d %b %Y") if latest_donation else None  # Format latest_donation as "20 Sept 2023"
+                donor_info['cases'] = [case.serialize() for case in cases],
+                donor_info['projects'] = [project.serialize() for project in projects]
                 donors_data.append(donor_info)
             
             return {'donors': donors_data}, HTTPStatus.OK
