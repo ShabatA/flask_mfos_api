@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
+from decimal import Decimal
 
 class Currencies(db.Model):
     __tablename__ = 'currencies'
@@ -180,14 +181,17 @@ class RegionAccount(db.Model):
         if not currency:
             raise ValueError("Invalid currencyID")
         
+        amount_decimal = Decimal(amount)
+        
         amount_in_default_currency = currency.convert_to_default(amount, self.defaultCurrencyID)
+        amount_in_default_currency = Decimal(amount_in_default_currency)
         
         balance = RegionAccountCurrencyBalance.query.filter_by(accountID=self.accountID, currencyID=currencyID).first()
         if not balance or balance.availableFund < amount:
             raise ValueError("Insufficient funds in the specified currency")
         
-        balance.usedFund += amount
-        balance.availableFund -= amount
+        balance.usedFund += amount_decimal
+        balance.availableFund -= amount_decimal
         balance.save()
         
         self.usedFund += amount_in_default_currency
@@ -197,16 +201,18 @@ class RegionAccount(db.Model):
         category_short_names = {v.lower(): k for k, v in category_names.items()}
 
         # Convert the human-readable category name to its corresponding short name
-        category_key = category_short_names.get(category.lower(), None)
-        
-        if category_key:
-            category_fund = CategoryFund.query.filter_by(accountID=self.accountID, category=category_key).first()
-            if not category_fund or category_fund.amount < amount_in_default_currency:
-                raise ValueError("Insufficient funds in the specified category")
-            category_fund.amount -= amount_in_default_currency
-            category_fund.save()
-        
-        self.save()
+        category_key = None
+        if category is not None:
+            category_key = category_short_names.get(category.lower(), None)
+            
+            if category_key:
+                category_fund = CategoryFund.query.filter_by(accountID=self.accountID, category=category_key).first()
+                if not category_fund or category_fund.amount < amount_in_default_currency:
+                    raise ValueError("Insufficient funds in the specified category")
+                category_fund.amount -= amount_in_default_currency
+                category_fund.save()
+            
+            self.save()
         
         transaction = RegionAccountTransaction(
             accountID=self.accountID,

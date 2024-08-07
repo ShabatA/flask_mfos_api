@@ -822,7 +822,8 @@ class MakeFundTransferResource(Resource):
             
             transfer.save()
             
-            return {'message': 'Transfer posted successfully.'}, HTTPStatus.OK
+            return {'message': 'Transfer posted successfully.',
+                    'transferID': transfer.transferID}, HTTPStatus.OK
         
         except Exception as e:
             current_app.logger.error(f"Error adding request: {str(e)}")
