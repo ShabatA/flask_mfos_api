@@ -675,7 +675,9 @@ class AllUsers(Resource):
             print(all_cases)
 
         # Fetch all ProjectTasks the user is assigned to
-        project_tasks = ProjectTask.query.join(Users.assigned_tasks).filter(Users.userID == user.userID).all()
+        project_task1 = ProjectTask.query.join(Users.assigned_tasks).filter(Users.userID == user.userID).all()
+        project_tasks2 = ProjectTask.query.join(Users.cc_tasks).filter(Users.userID == user.userID).all()
+        project_tasks = list(set(project_task1 + project_tasks2))
         total_p_tasks = len(project_tasks)
         completed_p_tasks = 0
         inprogress_p_tasks = 0
@@ -694,7 +696,10 @@ class AllUsers(Resource):
                     not_started_p_tasks += 1
 
         # Fetch all CaseTasks the user is assigned to
-        case_tasks = CaseTask.query.join(Users.case_assigned_tasks).filter(Users.userID == user.userID).all()
+        case_tasks1 = CaseTask.query.join(Users.case_assigned_tasks).filter(Users.userID == user.userID).all()
+        case_tasks2 = CaseTask.query.join(Users.case_cc_tasks).filter(Users.userID == user.userID).all()
+        case_tasks = list(set(case_tasks1 + case_tasks2))
+        
         total_c_tasks = len(case_tasks)
         completed_c_tasks = 0
         inprogress_c_tasks = 0
