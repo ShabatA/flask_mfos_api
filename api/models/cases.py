@@ -185,6 +185,7 @@ class CaseBeneficiary(db.Model):
     isDisabledPeople = db.Column(db.Boolean, nullable=True)
     isStudentsPeople = db.Column(db.Boolean, nullable=True)
     serviceDate = db.Column(db.String, nullable=True)
+    numberOfPayments = db.Column(db.String, nullable=True)
     
     def save(self):
         db.session.add(self)

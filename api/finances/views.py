@@ -137,18 +137,18 @@ fund_transfer_model = finance_namespace.model('FundTransfer', {
     'currencyID': fields.Integer(required=True, description='the currency to be used for transfer')
 })
 
-payments_model = finance_namespace.model('Payments', {
-    'from_fund': fields.Integer(required=True, description= 'the actual bank account the money will come from'),
-    'subFundID': fields.Integer(required=False, description='the sub fund of the main if applicable'),
-    'paymentFor': fields.String(enum=[payment.value for payment in PaymentFor], description="What the payment is for"),
-    'paymentName': fields.String(required=True, description='the name of the case/project is for, or something else'),
-    'paymentMethod': fields.String(required=True, enum=[type.value for type in TransferType] , description='EFT, Cash, or Check'),
-    'amount': fields.Float(required=True, description='The amount to be paid'),
-    'currencyID': fields.Integer(required=True, description='The currency the payment is made in'),
-    'transferExpenses': fields.Float(required=False, description='Transfer expenses if any.'),
-    'projectScope': fields.String(required=False, enum=[scope.value for scope in ProjectScopes], description='In what scope or field will the money be spent on'),
-    'notes': fields.String(required=False, description='any notes if applicable.')
-})
+# payments_model = finance_namespace.model('Payments', {
+#     'from_fund': fields.Integer(required=True, description= 'the actual bank account the money will come from'),
+#     'subFundID': fields.Integer(required=False, description='the sub fund of the main if applicable'),
+#     'paymentFor': fields.String(enum=[payment.value for payment in PaymentFor], description="What the payment is for"),
+#     'paymentName': fields.String(required=True, description='the name of the case/project is for, or something else'),
+#     'paymentMethod': fields.String(required=True, enum=[type.value for type in TransferType] , description='EFT, Cash, or Check'),
+#     'amount': fields.Float(required=True, description='The amount to be paid'),
+#     'currencyID': fields.Integer(required=True, description='The currency the payment is made in'),
+#     'transferExpenses': fields.Float(required=False, description='Transfer expenses if any.'),
+#     'projectScope': fields.String(required=False, enum=[scope.value for scope in ProjectScopes], description='In what scope or field will the money be spent on'),
+#     'notes': fields.String(required=False, description='any notes if applicable.')
+# })
 
 project_funds_model = finance_namespace.model('ProjectFunds', {
     'projectID': fields.Integer(required=True),
@@ -1481,38 +1481,38 @@ class GetAllDonorsResource(Resource):
             current_app.logger.error(f"Error getting all donors: {str(e)}")
             return {'message': f'Error getting all donors: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@finance_namespace.route('/get_all_payments')
-class GetAllPaymentsResource(Resource):
-    @jwt_required()
-    def get(self):
-        try:
-            payments = Payments.query.order_by(desc(Payments.createdAt)).all()
+# @finance_namespace.route('/get_all_payments')
+# class GetAllPaymentsResource(Resource):
+#     @jwt_required()
+#     def get(self):
+#         try:
+#             payments = Payments.query.order_by(desc(Payments.createdAt)).all()
             
-            payments_data = []
-            for payment in payments:
-                from_fund = FinancialFund.query.get(payment.from_fund)
-                from_fund_details = {'fundID': from_fund.fundID, 'fundName': from_fund.fundName, 'totalFund': from_fund.totalFund}
-                payment_details = {
-                    'paymentID': payment.paymentID,
-                    'from_fund': from_fund_details,
-                    'paymentName': payment.paymentName,
-                    'paymentMethod': payment.paymentMethod.value,
-                    'paymentFor': payment.paymentFor.value,
-                    'projectScope': payment.projectScope.value,
-                    'notes': payment.notes,
-                    'amount': payment.amount,
-                    'currency': Currencies.query.get(payment.currencyID).currencyCode,
-                    'transferExpenses': payment.transferExpenses,
-                    'createdAt': payment.createdAt.isoformat()
-                }
-                payments_data.append(payment_details)
+#             payments_data = []
+#             for payment in payments:
+#                 from_fund = FinancialFund.query.get(payment.from_fund)
+#                 from_fund_details = {'fundID': from_fund.fundID, 'fundName': from_fund.fundName, 'totalFund': from_fund.totalFund}
+#                 payment_details = {
+#                     'paymentID': payment.paymentID,
+#                     'from_fund': from_fund_details,
+#                     'paymentName': payment.paymentName,
+#                     'paymentMethod': payment.paymentMethod.value,
+#                     'paymentFor': payment.paymentFor.value,
+#                     'projectScope': payment.projectScope.value,
+#                     'notes': payment.notes,
+#                     'amount': payment.amount,
+#                     'currency': Currencies.query.get(payment.currencyID).currencyCode,
+#                     'transferExpenses': payment.transferExpenses,
+#                     'createdAt': payment.createdAt.isoformat()
+#                 }
+#                 payments_data.append(payment_details)
             
-            return {'all_payments': payments_data}, HTTPStatus.OK 
+#             return {'all_payments': payments_data}, HTTPStatus.OK 
         
         
-        except Exception as e:
-            current_app.logger.error(f"Error getting all payments: {str(e)}")
-            return {'message': f'Error getting all payments: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+#         except Exception as e:
+#             current_app.logger.error(f"Error getting all payments: {str(e)}")
+#             return {'message': f'Error getting all payments: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @finance_namespace.route('/reports/create')
 class AddReportResource(Resource):

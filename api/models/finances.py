@@ -509,7 +509,6 @@ class FinancialFund(db.Model):
     # Relationships
     currency_balances = db.relationship('FinancialFundCurrencyBalance', back_populates='financial_fund', lazy=True)
     donations = db.relationship('Donations', backref='financial_fund', lazy=True)
-    payments = db.relationship('Payments', backref='financial_fund', lazy=True)
     subFunds = db.relationship('SubFunds', back_populates='financial_fund', lazy=True)
     
     def save(self):
@@ -632,24 +631,7 @@ class FinancialFund(db.Model):
         return donation_list
     
     
-    def get_all_payments(self):
-        payments = self.payments
-        payment_list = []
-        for payment in payments:
-            payment_dict = {
-                'paymentID': payment.paymentID,
-                'accountID': payment.accountID,
-                'currencyID': payment.currency.currencyName,
-                'amount': payment.amount,
-                'transactionType': payment.transactionType.value,
-                'transactionSubtype': payment.transactionSubtype.value,
-                'projectID': payment.projectID,
-                'caseID': payment.caseID,
-                'paymentNumber': payment.paymentNumber,
-                'timestamp': payment.timestamp.isoformat()
-            }
-            payment_list.append(payment_dict)
-        return payment_list
+    
 
 class FinancialFundCurrencyBalance(db.Model):
     __tablename__ = 'financial_fund_currency_balances'
@@ -1060,36 +1042,36 @@ class FundTransfers(db.Model):
         db.session.delete(self)
         db.session.commit()
 
-class PaymentFor(Enum):
-    CASE = 'Case'
-    PROJECT = 'Project'
-    OTHER = 'Other'
+# class PaymentFor(Enum):
+#     CASE = 'Case'
+#     PROJECT = 'Project'
+#     OTHER = 'Other'
 
-class Payments(db.Model):
-    __tablename__ = 'payments'
+# class Payments(db.Model):
+#     __tablename__ = 'payments'
     
-    paymentID = db.Column(db.Integer, primary_key=True)
-    from_fund = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID', ondelete='CASCADE'))
-    paymentFor = db.Column(db.Enum(PaymentFor), nullable=False, default=PaymentFor.OTHER)
-    paymentName = db.Column(db.String)
-    amount = db.Column(db.Float)
-    notes = db.Column(db.Text)
-    createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID', ondelete='CASCADE'), default=1)
-    transferExpenses = db.Column(db.Float)
-    projectScope = db.Column(db.Enum(ProjectScopes), default=ProjectScopes.GENERAL)
-    paymentMethod = db.Column(db.Enum(TransferType), default=TransferType.EFT)
-    subFundID = db.Column(db.Integer, db.ForeignKey('sub_funds.subFundID', ondelete='CASCADE'), nullable=True)
+#     paymentID = db.Column(db.Integer, primary_key=True)
+#     from_fund = db.Column(db.Integer, db.ForeignKey('financial_fund.fundID', ondelete='CASCADE'))
+#     paymentFor = db.Column(db.Enum(PaymentFor), nullable=False, default=PaymentFor.OTHER)
+#     paymentName = db.Column(db.String)
+#     amount = db.Column(db.Float)
+#     notes = db.Column(db.Text)
+#     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+#     currencyID = db.Column(db.Integer, db.ForeignKey('currencies.currencyID', ondelete='CASCADE'), default=1)
+#     transferExpenses = db.Column(db.Float)
+#     projectScope = db.Column(db.Enum(ProjectScopes), default=ProjectScopes.GENERAL)
+#     paymentMethod = db.Column(db.Enum(TransferType), default=TransferType.EFT)
+#     subFundID = db.Column(db.Integer, db.ForeignKey('sub_funds.subFundID', ondelete='CASCADE'), nullable=True)
     
-    currency = db.relationship("Currencies", backref="payment_currency")
+#     currency = db.relationship("Currencies", backref="payment_currency")
     
-    def save(self):
-        db.session.add(self)
-        db.session.commit()
+#     def save(self):
+#         db.session.add(self)
+#         db.session.commit()
     
-    def delete(self):
-        db.session.delete(self)
-        db.session.commit()
+#     def delete(self):
+#         db.session.delete(self)
+#         db.session.commit()
 
 class Reports(db.Model):
     __tablename__ = 'reports'
