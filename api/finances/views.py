@@ -1465,22 +1465,20 @@ class GetAllDonorsResource(Resource):
                     .all()
                 )
                 projects_ = []
-                project_statuses = ProjectStatusData.query.filter_by(status='approved').all()
+                project_statuses = ProjectsData.query.filter_by(projectStatus='APPROVED').all()
                 for project_st in project_statuses:
-                    if project_st.data.get('donorID') is None:
+                    if project_st.status_data.data.get('donorNames') is None:
                         continue
-                    if int(project_st['donorID']) == donor.donorID:
-                        project = ProjectsData.query.get(project_st.projectID)
-                        projects_.append(project)
+                    if donor.donorName in project_st.status_data.data.get('donorNames'):
+                        projects_.append(project_st)
 
                 cases_ = []
-                case_statuses = CaseStatusData.query.filter_by(status='approved').all()
+                case_statuses = CasesData.query.filter_by(caseStatus='APPROVED').all()
                 for case_st in case_statuses:
-                    if case_st.data.get('donorID') is None:
+                    if case_st.status_data.data.get('donorNames') is None:
                         continue
-                    if int(case_st.data['donorID']) == donor.donorID:
-                        case = CasesData.query.get(case_st.caseID)
-                        cases_.append(case)
+                    if donor.donorName in case_st.status_data.data.get('donorNames'):
+                        cases_.append(case_st)
 
                 all_projects = list(set(projects + projects_))
                 all_cases = list(set(cases + cases_))
