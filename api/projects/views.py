@@ -817,13 +817,14 @@ class ProjectChangeStatusResource(Resource):
 
             # Update the project status
             project.projectStatus = new_status
-            project.startDate = datetime.utcnow().date()
+            
 
             # Save the updated project status to the database
             try:
                 db.session.commit()
                 # Check if the new status is 'Approved' and add stages if true
                 if new_status == "APPROVED":
+                    project.startDate = datetime.utcnow().date()
                     #Delete linked stages
                     ProjectStage.query.filter_by(projectID=project.projectID).delete()
                     # Add three stages for the project
