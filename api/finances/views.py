@@ -726,7 +726,6 @@ class SingleFinancialFundSummaryResource(Resource):
                 'lastUpdate': fund.lastUpdate.isoformat(),
                 'availableCurrencies': fund.get_available_currencies(),
                 'subFunds': fund.get_all_sub_funds(),
-                'payments': fund.get_all_payments(),
                 'donations': fund.get_all_donations()
             }
             #get balances based on the currency conversion
@@ -1053,10 +1052,10 @@ class GetAllFundReleaseRequests(Resource):
                     'receivedAmount': f'{request.approvedAmount}/{request.fundsRequested}',
                     'regionName': Regions.query.get(case_data.regionID).regionName,
                     'region_account_details': region_acc_details,
-                    'approved_funding': f"${case_data.status_data.data['approvedFunding']}/${beneficiary.totalSupportCost}",
-                    'paymentCount': f"{request.paymentCount}/{case_data.status_data.data['paymentCount']}",
+                    'approved_funding': f"${case_data.status_data.data.get('approvedFunding', 0)}/${beneficiary.totalSupportCost}",
+                    'paymentCount': f"{request.paymentCount}/{case_data.status_data.data.get('paymentCount', 0)}",
                     'bulkName': '-',
-                    'paymentDueDate': f"{case_data.status_data.data['dueDate']}",
+                    'paymentDueDate': f"{case_data.dueDate}",
                     'projectScope': '-',
                     'status': request.status  
                 }
@@ -1084,11 +1083,11 @@ class GetAllFundReleaseRequests(Resource):
                     'receivedAmount': f'{request.approvedAmount}/{request.fundsRequested}',
                     'regionName': Regions.query.get(project_data.regionID).regionName ,
                     'region_account_details': region_acc_details,
-                    'approved_funding': f"${project_data.status_data.data['approvedFunding']} / ${project_data.budgetRequired}",
-                    'paymentCount': f"{request.paymentCount}/{project_data.status_data.data['paymentCount']}",
+                    'approved_funding': f"${project_data.status_data.data.get('approvedFunding', 0)} / ${project_data.budgetRequired}",
+                    'paymentCount': f"{request.paymentCount}/{project_data.status_data.data.get('paymentCount', 0)}",
                     'bulkName': '-',
-                    'paymentDueDate': f"{project_data.status_data.data['dueDate']}",
-                    'projectScope': f"{project_data.status_data.data['projectScope']}",
+                    'paymentDueDate': f"{project_data.dueDate}",
+                    'projectScope': f"{project_data.status_data.data.get('projectScope', '-')}",
                     'status': request.status   
                 }
                 
@@ -1465,13 +1464,33 @@ class GetAllDonorsResource(Resource):
                     .filter(Donations.donorID == donor.donorID, Donations.projectID.isnot(None))
                     .all()
                 )
+                projects_ = []
+                project_statuses = ProjectStatusData.query.filter_by(status='approved').all()
+                for project_st in project_statuses:
+                    if project_st.data.get('donorID') is None:
+                        continue
+                    if int(project_st['donorID']) == donor.donorID:
+                        project = ProjectsData.query.get(project_st.projectID)
+                        projects_.append(project)
+
+                cases_ = []
+                case_statuses = CaseStatusData.query.filter_by(status='approved').all()
+                for case_st in case_statuses:
+                    if case_st.data.get('donorID') is None:
+                        continue
+                    if int(case_st.data['donorID']) == donor.donorID:
+                        case = CasesData.query.get(case_st.caseID)
+                        cases_.append(case)
+
+                all_projects = list(set(projects + projects_))
+                all_cases = list(set(cases + cases_))
                 
                 donor_info = donor.get_donor_info()
                 donor_info['totalDonationAmount'] = total_donation_amount
                 donor_info['donations'] = donations_data
                 donor_info['latestDonation'] = latest_donation.strftime("%d %b %Y") if latest_donation else None  # Format latest_donation as "20 Sept 2023"
-                donor_info['cases'] = [case.serialize() for case in cases],
-                donor_info['projects'] = [project.serialize() for project in projects]
+                donor_info['cases'] = [case.serialize() for case in all_cases],
+                donor_info['projects'] = [project.serialize() for project in all_projects]
                 donors_data.append(donor_info)
             
             return {'donors': donors_data}, HTTPStatus.OK
