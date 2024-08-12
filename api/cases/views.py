@@ -1144,6 +1144,8 @@ class CaseGetAllSortedResource(Resource):
     def get(self, sort_field, sort_order):
         try:
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            if not current_user:
+                return {'message': 'User not found.'}, HTTPStatus.NOT_FOUND
 
             # Base query for fetching cases
             if not current_user.is_admin():
@@ -1162,7 +1164,7 @@ class CaseGetAllSortedResource(Resource):
                 'status': CasesData.caseStatus,
                 'category': CasesData.category,
                 'submissionDate': CasesData.createdAt,
-                'referringPerson': Users.firstName  # Assuming sorting by firstName, could be adjusted
+                'referringPerson': Users.firstName  # Adjust if needed
             }
             
             if sort_field in sort_mapping:
@@ -1173,7 +1175,7 @@ class CaseGetAllSortedResource(Resource):
                 
                 all_cases_query = all_cases_query.order_by(sort_func(sort_mapping[sort_field]))
             else:
-                all_cases_query = all_cases_query.order_by(sort_func(CasesData.caseName))
+                return {'message': f'Sorting by {sort_field} is not supported.'}, HTTPStatus.BAD_REQUEST
 
             all_cases = all_cases_query.all()
 
@@ -1192,7 +1194,7 @@ class CaseGetAllSortedResource(Resource):
                     'category': case.category.value if case.category else None,
                     'serviceRequired': beneficiaries[0].serviceRequired if beneficiaries else None,
                     'cost': beneficiaries[0].totalSupportCost if beneficiaries else None,
-                    'referringPerson': f'{user.firstName} {user.lastName}',
+                    'referringPerson': f'{user.firstName} {user.lastName}' if user else None,
                     'region': Regions.query.get(case.regionID).regionName if case.regionID else None,
                     'submissionDate': case.createdAt.isoformat(),
                 }
