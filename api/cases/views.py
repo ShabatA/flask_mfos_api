@@ -1144,26 +1144,20 @@ class CaseGetAllSortedResource(Resource):
     def get(self, sort_field, sort_order):
         try:
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-
             if not current_user.is_admin():
                 # Fetch all cases the user has access to
                 cases_query = (
                     CasesData.query.join(Users, Users.userID == CasesData.userID)
                     .filter(Users.userID == current_user.userID)
                 )
-
-                # Fetch all cases associated with the user through CaseUser
                 case_user_cases_query = (
                     CasesData.query.join(CaseUser, CasesData.caseID == CaseUser.caseID)
                     .filter(CaseUser.userID == current_user.userID)
                 )
-                
-                # Combine the queries
                 all_cases_query = cases_query.union(case_user_cases_query)
             else:
                 all_cases_query = CasesData.query
 
-            # Apply sorting
             sort_func = asc if sort_order == 'asc' else desc
             if sort_field == 'caseName':
                 all_cases_query = all_cases_query.order_by(sort_func(CasesData.caseName))
@@ -1180,16 +1174,13 @@ class CaseGetAllSortedResource(Resource):
             elif sort_field == 'category':
                 all_cases_query = all_cases_query.order_by(sort_func(CasesData.category))
             else:
-                # Default sorting if an unknown sort_field is provided
                 all_cases_query = all_cases_query.order_by(sort_func(CasesData.caseName))
 
             all_cases = all_cases_query.all()
 
-            # Check if all_cases is empty
             if not all_cases:
-                return [], HTTPStatus.OK  # Return an empty list
+                return [], HTTPStatus.OK
 
-            # Prepare the list of cases with additional details
             cases_data = []
             for case in all_cases:
                 beneficiaries = CaseBeneficiary.query.filter_by(caseID=case.caseID).all()
@@ -1208,7 +1199,7 @@ class CaseGetAllSortedResource(Resource):
                             'firstName': beneficiary.firstName,
                             'surName': beneficiary.surName,
                             'gender': beneficiary.gender,
-                            'birthDate': beneficiary.birthDate,
+                            'birthDate': beneficiary.birthDate.isoformat() if beneficiary.birthDate else None,
                             'birthPlace': beneficiary.birthPlace,
                             'nationality': beneficiary.nationality,
                             'idType': beneficiary.idType,
@@ -1221,7 +1212,7 @@ class CaseGetAllSortedResource(Resource):
                             'problemDescription': beneficiary.problemDescription,
                             'serviceDescription': beneficiary.serviceDescription,
                             'totalSupportCost': beneficiary.totalSupportCost,
-                            'receiveFundDate': beneficiary.receiveFundDate.isoformat(),
+                            'receiveFundDate': beneficiary.receiveFundDate.isoformat() if beneficiary.receiveFundDate else None,
                             'paymentMethod': beneficiary.paymentMethod,
                             'paymentsType': beneficiary.paymentsType,
                             'otherPaymentType': beneficiary.otherPaymentType,
@@ -1236,7 +1227,7 @@ class CaseGetAllSortedResource(Resource):
                             'isOldPeople': beneficiary.isOldPeople,
                             'isDisabledPeople': beneficiary.isDisabledPeople,
                             'isStudentsPeople': beneficiary.isStudentsPeople,
-                            'serviceDate': beneficiary.serviceDate,
+                            'serviceDate': beneficiary.serviceDate.isoformat() if beneficiary.serviceDate else None,
                             'numberOfPayments': beneficiary.numberOfPayments,
                             'address': beneficiary.address
                         }
@@ -1248,14 +1239,7 @@ class CaseGetAllSortedResource(Resource):
                 
                 stages = CaseToStage.query.filter_by(caseID=case.caseID).all()
                 completed_stages = [stage for stage in stages if stage.completed]
-
-                if completed_stages:
-                    # If there are completed stages, find the one with the latest completionDate
-                    latest_completed_stage = max(completed_stages, key=lambda stage: stage.stageID)
-                else:
-                    # If no stages are completed, return the first stage object
-                    # Assuming stages are ordered in the way they are added or by a specific field
-                    latest_completed_stage = min(stages, key=lambda stage: stage.stageID) if stages else None
+                latest_completed_stage = max(completed_stages, key=lambda stage: stage.stageID) if completed_stages else min(stages, key=lambda stage: stage.stageID) if stages else None
 
                 case_details = {
                     'caseID': case.caseID,
@@ -1293,7 +1277,6 @@ class CaseGetAllSortedResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error fetching sorted cases: {str(e)}")
             return {'message': f'Error fetching sorted cases, please try again later.'}, HTTPStatus.INTERNAL_SERVER_ERROR
-
 #####################################################
 # STAGE ENDPOINTS
 #####################################################
