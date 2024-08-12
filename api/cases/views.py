@@ -17,6 +17,14 @@ from sqlalchemy import func
 from sqlalchemy import asc, desc
 
 
+def parse_date(date_str):
+    try:
+        # Adjust format to match your date strings
+        return datetime.strptime(date_str, '%d %b %Y')
+    except ValueError:
+        return datetime.min
+
+
 
 def get_region_id_by_name(region_name):
     region = Regions.query.filter_by(regionName=region_name).first()
@@ -1140,6 +1148,134 @@ class AddBeneficiaryFormResource(Resource):
 
 @case_namespace.route('/get_all/sort/<string:sort_field>/<string:sort_order>', methods=['GET'])
 class CaseGetAllSortedResource(Resource):
+    @jwt_required()
+    def get(self, sort_field, sort_order):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            if not current_user.is_admin():
+                cases_query = (
+                    CasesData.query.join(Users, Users.userID == CasesData.userID)
+                    .filter(Users.userID == current_user.userID)
+                )
+                case_user_cases_query = (
+                    CasesData.query.join(CaseUser, CasesData.caseID == CaseUser.caseID)
+                    .filter(CaseUser.userID == current_user.userID)
+                )
+                all_cases_query = cases_query.union(case_user_cases_query)
+            else:
+                all_cases_query = CasesData.query
+
+            # Fetch cases without sorting
+            all_cases = all_cases_query.all()
+
+            if not all_cases:
+                return [], HTTPStatus.OK
+
+            # Convert to a list of dictionaries
+            cases_data = []
+            for case in all_cases:
+                beneficiaries = CaseBeneficiary.query.filter_by(caseID=case.caseID).all()
+                users_assigned_to_case = (
+                    Users.query.join(CaseUser, Users.userID == CaseUser.userID)
+                    .filter(CaseUser.caseID == case.caseID)
+                    .all()
+                )
+
+                serialized_beneficiaries = []
+                if beneficiaries:
+                    for beneficiary in beneficiaries:
+                        serialized_beneficiary = {
+                            'beneficiaryID': beneficiary.beneficiaryID,
+                            'caseID': case.caseID,
+                            'firstName': beneficiary.firstName,
+                            'surName': beneficiary.surName,
+                            'gender': beneficiary.gender,
+                            'birthDate': beneficiary.birthDate.isoformat() if beneficiary.birthDate else None,
+                            'birthPlace': beneficiary.birthPlace,
+                            'nationality': beneficiary.nationality,
+                            'idType': beneficiary.idType,
+                            'idNumber': beneficiary.idNumber,
+                            'phoneNumber': beneficiary.phoneNumber,
+                            'altPhoneNumber': beneficiary.altPhoneNumber,
+                            'email': beneficiary.email,
+                            'serviceRequired': beneficiary.serviceRequired,
+                            'otherServiceRequired': beneficiary.otherServiceRequired,
+                            'problemDescription': beneficiary.problemDescription,
+                            'serviceDescription': beneficiary.serviceDescription,
+                            'totalSupportCost': beneficiary.totalSupportCost,
+                            'receiveFundDate': beneficiary.receiveFundDate.isoformat() if beneficiary.receiveFundDate else None,
+                            'paymentMethod': beneficiary.paymentMethod,
+                            'paymentsType': beneficiary.paymentsType,
+                            'otherPaymentType': beneficiary.otherPaymentType,
+                            'incomeType': beneficiary.incomeType,
+                            'otherIncomeType': beneficiary.otherIncomeType,
+                            'housing': beneficiary.housing,
+                            'otherHousing': beneficiary.otherHousing,
+                            'housingType': beneficiary.housingType,
+                            'otherHousingType': beneficiary.housingType,
+                            'totalFamilyMembers': beneficiary.totalFamilyMembers,
+                            'childrenUnder15': beneficiary.childrenUnder15,
+                            'isOldPeople': beneficiary.isOldPeople,
+                            'isDisabledPeople': beneficiary.isDisabledPeople,
+                            'isStudentsPeople': beneficiary.isStudentsPeople,
+                            'serviceDate': beneficiary.serviceDate.isoformat() if beneficiary.serviceDate else None,
+                            'numberOfPayments': beneficiary.numberOfPayments,
+                            'address': beneficiary.address
+                        }
+                        serialized_beneficiaries.append(serialized_beneficiary)
+                
+                region_details = {'regionID': case.regionID, 'regionName': Regions.query.get(case.regionID).regionName}
+                user = Users.query.get(case.userID)
+                user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
+                
+                stages = CaseToStage.query.filter_by(caseID=case.caseID).all()
+                completed_stages = [stage for stage in stages if stage.completed]
+                latest_completed_stage = max(completed_stages, key=lambda stage: stage.stageID) if completed_stages else min(stages, key=lambda stage: stage.stageID) if stages else None
+
+                case_details = {
+                    'caseID': case.caseID,
+                    'caseName': case.caseName,
+                    'region': region_details,
+                    'stageName': latest_completed_stage.stage.name if latest_completed_stage else 'N/A',
+                    'user': user_details,
+                    'budgetApproved': case.budgetApproved,
+                    'sponsorAvailable': case.sponsorAvailable,
+                    'question1': case.question1,
+                    'question2': case.question2,
+                    'question3': case.question3,
+                    'question4': case.question4,
+                    'question5': case.question5,
+                    'question6': case.question6,
+                    'question7': case.question7,
+                    'question8': case.question8,
+                    'question9': case.question9,
+                    'question10': case.question10,
+                    'question11': case.question11,
+                    'question12': case.question12,
+                    'caseStatus': 'Assessment' if case.caseStatus == CaseStat.ASSESSMENT else case.caseStatus.value,
+                    'category': case.category.value if case.category else None,
+                    'createdAt': case.createdAt.isoformat(),
+                    'dueDate': case.dueDate.isoformat() if case.dueDate else None,
+                    'startDate': case.startDate.isoformat() if case.startDate else None,
+                    'totalPoints': case.total_points,
+                    'beneficaries': serialized_beneficiaries,
+                    'assignedUsers': [user.userID for user in users_assigned_to_case] if users_assigned_to_case else [],
+                }
+
+                cases_data.append(case_details)
+
+            # Sort cases data in Python
+            if sort_field == 'serviceDate':
+                # Handle date string sorting
+                cases_data.sort(key=lambda x: parse_date(x['serviceDate']), reverse=(sort_order == 'desc'))
+            else:
+                cases_data.sort(key=lambda x: x.get(sort_field, ''), reverse=(sort_order == 'desc'))
+
+            return cases_data, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error fetching sorted cases: {str(e)}")
+            return {'message': f'Error fetching sorted cases, please try again later.'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
     @jwt_required()
     def get(self, sort_field, sort_order):
         try:
