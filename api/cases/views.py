@@ -1144,65 +1144,152 @@ class CaseGetAllSortedResource(Resource):
     def get(self, sort_field, sort_order):
         try:
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-            if not current_user:
-                return {'message': 'User not found.'}, HTTPStatus.NOT_FOUND
 
-            # Base query for fetching cases
             if not current_user.is_admin():
-                cases_query = CasesData.query.join(Users, Users.userID == CasesData.userID).filter(Users.userID == current_user.userID)
-                case_user_cases_query = CasesData.query.join(CaseUser, CasesData.caseID == CaseUser.caseID).filter(CaseUser.userID == current_user.userID)
+                # Fetch all cases the user has access to
+                cases_query = (
+                    CasesData.query.join(Users, Users.userID == CasesData.userID)
+                    .filter(Users.userID == current_user.userID)
+                )
+
+                # Fetch all cases associated with the user through CaseUser
+                case_user_cases_query = (
+                    CasesData.query.join(CaseUser, CasesData.caseID == CaseUser.caseID)
+                    .filter(CaseUser.userID == current_user.userID)
+                )
+                
+                # Combine the queries
                 all_cases_query = cases_query.union(case_user_cases_query)
             else:
                 all_cases_query = CasesData.query
 
-            # Sorting logic
-            sort_func = asc if sort_order.lower() == 'asc' else desc
-            sort_mapping = {
-                'caseName': CasesData.caseName,
-                'serviceDate': CaseBeneficiary.serviceDate,
-                'cost': CaseBeneficiary.totalSupportCost,
-                'status': CasesData.caseStatus,
-                'category': CasesData.category,
-                'submissionDate': CasesData.createdAt,
-                'referringPerson': Users.firstName  # Adjust if needed
-            }
-            
-            if sort_field in sort_mapping:
-                if sort_field in ['serviceDate', 'cost']:
-                    all_cases_query = all_cases_query.join(CaseBeneficiary, CasesData.caseID == CaseBeneficiary.caseID)
-                elif sort_field == 'referringPerson':
-                    all_cases_query = all_cases_query.join(Users, Users.userID == CasesData.userID)
-                
-                all_cases_query = all_cases_query.order_by(sort_func(sort_mapping[sort_field]))
+            # Apply sorting
+            sort_func = asc if sort_order == 'asc' else desc
+            if sort_field == 'caseName':
+                all_cases_query = all_cases_query.order_by(sort_func(CasesData.caseName))
+            elif sort_field == 'serviceDate':
+                all_cases_query = all_cases_query.join(CaseBeneficiary, CasesData.caseID == CaseBeneficiary.caseID).order_by(sort_func(CaseBeneficiary.serviceDate))
+            elif sort_field == 'userFullName':
+                all_cases_query = all_cases_query.join(Users, Users.userID == CasesData.userID).order_by(sort_func(Users.firstName))
+            elif sort_field == 'totalSupportCost':
+                all_cases_query = all_cases_query.join(CaseBeneficiary, CasesData.caseID == CaseBeneficiary.caseID).order_by(sort_func(CaseBeneficiary.totalSupportCost))
+            elif sort_field == 'createdAt':
+                all_cases_query = all_cases_query.order_by(sort_func(CasesData.createdAt))
+            elif sort_field == 'caseStatus':
+                all_cases_query = all_cases_query.order_by(sort_func(CasesData.caseStatus))
+            elif sort_field == 'category':
+                all_cases_query = all_cases_query.order_by(sort_func(CasesData.category))
             else:
-                return {'message': f'Sorting by {sort_field} is not supported.'}, HTTPStatus.BAD_REQUEST
+                # Default sorting if an unknown sort_field is provided
+                all_cases_query = all_cases_query.order_by(sort_func(CasesData.caseName))
 
             all_cases = all_cases_query.all()
 
+            # Check if all_cases is empty
             if not all_cases:
-                return [], HTTPStatus.OK
+                return [], HTTPStatus.OK  # Return an empty list
 
+            # Prepare the list of cases with additional details
             cases_data = []
             for case in all_cases:
                 beneficiaries = CaseBeneficiary.query.filter_by(caseID=case.caseID).all()
+                users_assigned_to_case = (
+                    Users.query.join(CaseUser, Users.userID == CaseUser.userID)
+                    .filter(CaseUser.caseID == case.caseID)
+                    .all()
+                )
+
+                serialized_beneficiaries = []
+                if beneficiaries:
+                    for beneficiary in beneficiaries:
+                        serialized_beneficiary = {
+                            'beneficiaryID': beneficiary.beneficiaryID,
+                            'caseID': case.caseID,
+                            'firstName': beneficiary.firstName,
+                            'surName': beneficiary.surName,
+                            'gender': beneficiary.gender,
+                            'birthDate': beneficiary.birthDate,
+                            'birthPlace': beneficiary.birthPlace,
+                            'nationality': beneficiary.nationality,
+                            'idType': beneficiary.idType,
+                            'idNumber': beneficiary.idNumber,
+                            'phoneNumber': beneficiary.phoneNumber,
+                            'altPhoneNumber': beneficiary.altPhoneNumber,
+                            'email': beneficiary.email,
+                            'serviceRequired': beneficiary.serviceRequired,
+                            'otherServiceRequired': beneficiary.otherServiceRequired,
+                            'problemDescription': beneficiary.problemDescription,
+                            'serviceDescription': beneficiary.serviceDescription,
+                            'totalSupportCost': beneficiary.totalSupportCost,
+                            'receiveFundDate': beneficiary.receiveFundDate.isoformat(),
+                            'paymentMethod': beneficiary.paymentMethod,
+                            'paymentsType': beneficiary.paymentsType,
+                            'otherPaymentType': beneficiary.otherPaymentType,
+                            'incomeType': beneficiary.incomeType,
+                            'otherIncomeType': beneficiary.otherIncomeType,
+                            'housing': beneficiary.housing,
+                            'otherHousing': beneficiary.otherHousing,
+                            'housingType': beneficiary.housingType,
+                            'otherHousingType': beneficiary.housingType,
+                            'totalFamilyMembers': beneficiary.totalFamilyMembers,
+                            'childrenUnder15': beneficiary.childrenUnder15,
+                            'isOldPeople': beneficiary.isOldPeople,
+                            'isDisabledPeople': beneficiary.isDisabledPeople,
+                            'isStudentsPeople': beneficiary.isStudentsPeople,
+                            'serviceDate': beneficiary.serviceDate,
+                            'numberOfPayments': beneficiary.numberOfPayments,
+                            'address': beneficiary.address
+                        }
+                        serialized_beneficiaries.append(serialized_beneficiary)
+                
+                region_details = {'regionID': case.regionID, 'regionName': Regions.query.get(case.regionID).regionName}
                 user = Users.query.get(case.userID)
+                user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
+                
+                stages = CaseToStage.query.filter_by(caseID=case.caseID).all()
+                completed_stages = [stage for stage in stages if stage.completed]
+
+                if completed_stages:
+                    # If there are completed stages, find the one with the latest completionDate
+                    latest_completed_stage = max(completed_stages, key=lambda stage: stage.stageID)
+                else:
+                    # If no stages are completed, return the first stage object
+                    # Assuming stages are ordered in the way they are added or by a specific field
+                    latest_completed_stage = min(stages, key=lambda stage: stage.stageID) if stages else None
 
                 case_details = {
+                    'caseID': case.caseID,
                     'caseName': case.caseName,
-                    'status': 'Assessment' if case.caseStatus == CaseStat.ASSESSMENT else case.caseStatus.value,
-                    'serviceDate': beneficiaries[0].serviceDate.isoformat() if beneficiaries else None,
+                    'region': region_details,
+                    'stageName': latest_completed_stage.stage.name if latest_completed_stage else 'N/A',
+                    'user': user_details,
+                    'budgetApproved': case.budgetApproved,
+                    'sponsorAvailable': case.sponsorAvailable,
+                    'question1': case.question1,
+                    'question2': case.question2,
+                    'question3': case.question3,
+                    'question4': case.question4,
+                    'question5': case.question5,
+                    'question6': case.question6,
+                    'question7': case.question7,
+                    'question8': case.question8,
+                    'question9': case.question9,
+                    'question10': case.question10,
+                    'question11': case.question11,
+                    'question12': case.question12,
+                    'caseStatus': 'Assessment' if case.caseStatus == CaseStat.ASSESSMENT else case.caseStatus.value,
                     'category': case.category.value if case.category else None,
-                    'serviceRequired': beneficiaries[0].serviceRequired if beneficiaries else None,
-                    'cost': beneficiaries[0].totalSupportCost if beneficiaries else None,
-                    'referringPerson': f'{user.firstName} {user.lastName}' if user else None,
-                    'region': Regions.query.get(case.regionID).regionName if case.regionID else None,
-                    'submissionDate': case.createdAt.isoformat(),
+                    'createdAt': case.createdAt.isoformat(),
+                    'dueDate': case.dueDate.isoformat() if case.dueDate else None,
+                    'startDate': case.startDate.isoformat() if case.startDate else None,
+                    'totalPoints': case.total_points,
+                    'beneficaries': serialized_beneficiaries,
+                    'assignedUsers': [user.userID for user in users_assigned_to_case] if users_assigned_to_case else [],
                 }
 
                 cases_data.append(case_details)
 
             return cases_data, HTTPStatus.OK
-
         except Exception as e:
             current_app.logger.error(f"Error fetching sorted cases: {str(e)}")
             return {'message': f'Error fetching sorted cases, please try again later.'}, HTTPStatus.INTERNAL_SERVER_ERROR
