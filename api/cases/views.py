@@ -14,6 +14,8 @@ from datetime import datetime, date
 from flask import jsonify, current_app
 from flask import request
 from sqlalchemy import func
+from sqlalchemy import asc, desc
+
 
 
 def get_region_id_by_name(region_name):
