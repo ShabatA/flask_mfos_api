@@ -1280,7 +1280,11 @@ class CaseGetAllSortedResource(Resource):
                 if sort_field == 'serviceDate':
                     return datetime.strptime(case['beneficiaries'][0]['serviceDate'], "%d %b %Y") if case['beneficiaries'] and case['beneficiaries'][0].get('serviceDate') else datetime.min
                 elif sort_field == 'totalSupportCost':
-                    return float(case.get('beneficiaries', [{}])[0].get('totalSupportCost', 0))
+                    if case.get('beneficiaries'):
+                        # Use the first beneficiary's totalSupportCost if available
+                        return float(case['beneficiaries'][0].get('totalSupportCost', 0))
+                    else:
+                        return 0
                 elif sort_field == 'caseStatus':
                     return case.get('caseStatus', '')
                 else:
