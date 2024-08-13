@@ -1145,6 +1145,8 @@ class AddBeneficiaryFormResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error adding form: {str(e)}")
             return {'message': f'Error adding form: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
 # add sort function
 @case_namespace.route('/get_all/sort/<string:sort_field>/<string:sort_order>', methods=['GET'])
 class CaseGetAllSortedResource(Resource):
@@ -1154,7 +1156,6 @@ class CaseGetAllSortedResource(Resource):
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
             if not current_user.is_admin():
-                # Fetch all cases the user has access to
                 cases_query = (
                     CasesData.query.join(Users, Users.userID == CasesData.userID)
                     .filter(Users.userID == current_user.userID)
@@ -1167,14 +1168,11 @@ class CaseGetAllSortedResource(Resource):
             else:
                 all_cases_query = CasesData.query
 
-            # Determine sorting function (ascending or descending)
             sort_func = asc if sort_order == 'asc' else desc
 
-            # Apply sorting based on the requested field
             if sort_field == 'caseName':
                 all_cases_query = all_cases_query.order_by(sort_func(CasesData.caseName))
             elif sort_field == 'serviceDate':
-                # Use the STR_TO_DATE function to convert the varchar date to a date for sorting
                 all_cases_query = all_cases_query.join(CaseBeneficiary, CasesData.caseID == CaseBeneficiary.caseID)\
                     .order_by(sort_func(func.str_to_date(CaseBeneficiary.serviceDate, '%d %b %Y')))
             elif sort_field == 'userFullName':
@@ -1290,8 +1288,9 @@ class CaseGetAllSortedResource(Resource):
             return cases_data, HTTPStatus.OK
 
         except Exception as e:
+            # Log the exact error message
             current_app.logger.error(f"Error fetching sorted cases: {str(e)}")
-            return {'message': f'Error fetching sorted cases, please try again later.'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            return {'message': f'Error fetching sorted cases: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 #####################################################
 # STAGE ENDPOINTS
