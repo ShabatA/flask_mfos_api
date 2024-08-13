@@ -1297,6 +1297,8 @@ class CaseGetAllSortedResource(Resource):
                             return datetime.min
                     else:
                         return datetime.min
+                elif sort_field == 'username':
+                    return case['user'].get('username', '').lower()
                 else:
                     return case.get(sort_field, '').strip().lower() if isinstance(case.get(sort_field, ''), str) else case.get(sort_field, '')
 
