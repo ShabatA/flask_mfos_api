@@ -1279,6 +1279,8 @@ class CaseGetAllSortedResource(Resource):
             def get_sort_key(case):
                 if sort_field == 'serviceDate':
                     return datetime.strptime(case['beneficiaries'][0]['serviceDate'], "%d %b %Y") if case['beneficiaries'] and case['beneficiaries'][0].get('serviceDate') else datetime.min
+                elif sort_field == 'totalSupportCost':
+                    return float(case.get('totalSupportCost', 0))
                 elif sort_field == 'caseStatus':
                     return case.get('caseStatus', '')
                 else:
