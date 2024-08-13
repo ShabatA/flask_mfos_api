@@ -1145,7 +1145,7 @@ class AddBeneficiaryFormResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error adding form: {str(e)}")
             return {'message': f'Error adding form: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
-
+# add sort function
 @case_namespace.route('/get_all/sort/<string:sort_field>/<string:sort_order>', methods=['GET'])
 class CaseGetAllSortedResource(Resource):
     @jwt_required()
