@@ -1287,6 +1287,16 @@ class CaseGetAllSortedResource(Resource):
                         return -1
                 elif sort_field == 'caseStatus':
                     return case.get('caseStatus', '')
+                 # Handle sorting based on startDate
+                elif sort_field == 'startDate':
+                    start_date = case.get('startDate')
+                    if start_date:
+                        try:
+                            return datetime.strptime(start_date, "%Y-%m-%dT%H:%M:%S.%f")
+                        except ValueError:
+                            return datetime.min
+                    else:
+                        return datetime.min
                 else:
                     return case.get(sort_field, '')
 
