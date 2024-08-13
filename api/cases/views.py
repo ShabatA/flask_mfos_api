@@ -1175,7 +1175,7 @@ class CaseGetAllSortedResource(Resource):
                 all_cases_query = all_cases_query.order_by(sort_func(CasesData.caseName))
             elif sort_field == 'serviceDate':
                 all_cases_query = all_cases_query.join(CaseBeneficiary, CasesData.caseID == CaseBeneficiary.caseID)\
-                    .order_by(sort_func(CaseBeneficiary.serviceDate.cast(Date)))
+                    .order_by(sort_func(func.to_date(CaseBeneficiary.serviceDate, 'DD Mon YYYY')))
             elif sort_field == 'userFullName':
                 all_cases_query = all_cases_query.join(Users, Users.userID == CasesData.userID)\
                     .order_by(sort_func(Users.firstName))
@@ -1236,7 +1236,7 @@ class CaseGetAllSortedResource(Resource):
                             'housing': beneficiary.housing,
                             'otherHousing': beneficiary.otherHousing,
                             'housingType': beneficiary.housingType,
-                            'otherHousingType': beneficiary.housingType,
+                            'otherHousingType': beneficiary.otherHousingType,
                             'totalFamilyMembers': beneficiary.totalFamilyMembers,
                             'childrenUnder15': beneficiary.childrenUnder15,
                             'isOldPeople': beneficiary.isOldPeople,
@@ -1306,8 +1306,7 @@ class CaseGetAllSortedResource(Resource):
 
         except Exception as e:
             current_app.logger.error(f"Error fetching sorted cases: {str(e)}")
-            return {'message': f'Error fetching sorted cases, please try again later.'}, HTTPStatus.INTERNAL_SERVER_ERROR
-
+            return {'message': 'Error fetching sorted cases, please try again later.', 'error': str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR
 #####################################################
 # STAGE ENDPOINTS
 #####################################################
