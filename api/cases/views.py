@@ -1307,6 +1307,8 @@ class CaseGetAllSortedResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error fetching sorted cases: {str(e)}")
             return {'message': 'Error fetching sorted cases, please try again later.', 'error': str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
 #####################################################
 # STAGE ENDPOINTS
 #####################################################
