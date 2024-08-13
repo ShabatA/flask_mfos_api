@@ -1239,10 +1239,8 @@ class CaseGetAllSortedResource(Resource):
                 completed_stages = [stage for stage in stages if stage.completed]
 
                 if completed_stages:
-                    # If there are completed stages, find the one with the latest completionDate
                     latest_completed_stage = max(completed_stages, key=lambda stage: stage.stageID)
                 else:
-                    # If no stages are completed, return the first stage object
                     latest_completed_stage = min(stages, key=lambda stage: stage.stageID) if stages else None
 
                 case_details = {
@@ -1278,16 +1276,20 @@ class CaseGetAllSortedResource(Resource):
                 cases_data.append(case_details)
 
             # Sorting cases in Python
-            if sort_field == 'serviceDate':
-                cases_data.sort(key=lambda x: datetime.strptime(x['beneficiaries'][0]['serviceDate'], "%d %b %Y") if x['beneficiaries'] and x['beneficiaries'][0].get('serviceDate') else datetime.min, reverse=(sort_order == 'desc'))
-            else:
-                cases_data.sort(key=lambda x: x.get(sort_field, ''), reverse=(sort_order == 'desc'))
+            def get_sort_key(case):
+                if sort_field == 'serviceDate':
+                    return datetime.strptime(case['beneficiaries'][0]['serviceDate'], "%d %b %Y") if case['beneficiaries'] and case['beneficiaries'][0].get('serviceDate') else datetime.min
+                elif sort_field == 'caseStatus':
+                    return case.get('caseStatus', '')
+                else:
+                    return case.get(sort_field, '')
+
+            cases_data.sort(key=get_sort_key, reverse=(sort_order == 'desc'))
 
             return cases_data, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error fetching sorted cases: {str(e)}")
             return {'message': 'Error fetching sorted cases, please try again later.', 'error': str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR
-
 
 #####################################################
 # STAGE ENDPOINTS
