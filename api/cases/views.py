@@ -1190,47 +1190,46 @@ class CaseGetAllSortedResource(Resource):
                 )
                 
                 serialized_beneficiaries = []
-                if beneficiaries:
-                    for beneficiary in beneficiaries:
-                        serialized_beneficiary = {
-                            'beneficiaryID': beneficiary.beneficiaryID,
-                            'caseID': case.caseID,
-                            'firstName': beneficiary.firstName,
-                            'surName': beneficiary.surName,
-                            'gender': beneficiary.gender,
-                            'birthDate': beneficiary.birthDate,
-                            'birthPlace': beneficiary.birthPlace,
-                            'nationality': beneficiary.nationality,
-                            'idType': beneficiary.idType,
-                            'idNumber': beneficiary.idNumber,
-                            'phoneNumber': beneficiary.phoneNumber,
-                            'altPhoneNumber': beneficiary.altPhoneNumber,
-                            'email': beneficiary.email,
-                            'serviceRequired': beneficiary.serviceRequired,
-                            'otherServiceRequired': beneficiary.otherServiceRequired,
-                            'problemDescription': beneficiary.problemDescription,
-                            'serviceDescription': beneficiary.serviceDescription,
-                            'totalSupportCost': beneficiary.totalSupportCost,
-                            'receiveFundDate': beneficiary.receiveFundDate.isoformat(),
-                            'paymentMethod': beneficiary.paymentMethod,
-                            'paymentsType': beneficiary.paymentsType,
-                            'otherPaymentType': beneficiary.otherPaymentType,
-                            'incomeType': beneficiary.incomeType,
-                            'otherIncomeType': beneficiary.otherIncomeType,
-                            'housing': beneficiary.housing,
-                            'otherHousing': beneficiary.otherHousing,
-                            'housingType': beneficiary.housingType,
-                            'otherHousingType': beneficiary.otherHousingType,
-                            'totalFamilyMembers': beneficiary.totalFamilyMembers,
-                            'childrenUnder15': beneficiary.childrenUnder15,
-                            'isOldPeople': beneficiary.isOldPeople,
-                            'isDisabledPeople': beneficiary.isDisabledPeople,
-                            'isStudentsPeople': beneficiary.isStudentsPeople,
-                            'serviceDate': beneficiary.serviceDate,
-                            'numberOfPayments': beneficiary.numberOfPayments,
-                            'address': beneficiary.address
-                        }
-                        serialized_beneficiaries.append(serialized_beneficiary)
+                for beneficiary in beneficiaries:
+                    serialized_beneficiary = {
+                        'beneficiaryID': beneficiary.beneficiaryID,
+                        'caseID': case.caseID,
+                        'firstName': beneficiary.firstName,
+                        'surName': beneficiary.surName,
+                        'gender': beneficiary.gender,
+                        'birthDate': beneficiary.birthDate,
+                        'birthPlace': beneficiary.birthPlace,
+                        'nationality': beneficiary.nationality,
+                        'idType': beneficiary.idType,
+                        'idNumber': beneficiary.idNumber,
+                        'phoneNumber': beneficiary.phoneNumber,
+                        'altPhoneNumber': beneficiary.altPhoneNumber,
+                        'email': beneficiary.email,
+                        'serviceRequired': beneficiary.serviceRequired,
+                        'otherServiceRequired': beneficiary.otherServiceRequired,
+                        'problemDescription': beneficiary.problemDescription,
+                        'serviceDescription': beneficiary.serviceDescription,
+                        'totalSupportCost': beneficiary.totalSupportCost,
+                        'receiveFundDate': beneficiary.receiveFundDate.isoformat() if beneficiary.receiveFundDate else None,
+                        'paymentMethod': beneficiary.paymentMethod,
+                        'paymentsType': beneficiary.paymentsType,
+                        'otherPaymentType': beneficiary.otherPaymentType,
+                        'incomeType': beneficiary.incomeType,
+                        'otherIncomeType': beneficiary.otherIncomeType,
+                        'housing': beneficiary.housing,
+                        'otherHousing': beneficiary.otherHousing,
+                        'housingType': beneficiary.housingType,
+                        'otherHousingType': beneficiary.otherHousingType,
+                        'totalFamilyMembers': beneficiary.totalFamilyMembers,
+                        'childrenUnder15': beneficiary.childrenUnder15,
+                        'isOldPeople': beneficiary.isOldPeople,
+                        'isDisabledPeople': beneficiary.isDisabledPeople,
+                        'isStudentsPeople': beneficiary.isStudentsPeople,
+                        'serviceDate': beneficiary.serviceDate,
+                        'numberOfPayments': beneficiary.numberOfPayments,
+                        'address': beneficiary.address
+                    }
+                    serialized_beneficiaries.append(serialized_beneficiary)
                 
                 region_details = {'regionID': case.regionID, 'regionName': Regions.query.get(case.regionID).regionName}
                 user = Users.query.get(case.userID)
@@ -1280,7 +1279,7 @@ class CaseGetAllSortedResource(Resource):
 
             # Sorting cases in Python
             if sort_field == 'serviceDate':
-                cases_data.sort(key=lambda x: datetime.strptime(x['beneficiaries'][0]['serviceDate'], "%d %b %Y") if x['beneficiaries'] else datetime.min, reverse=(sort_order == 'desc'))
+                cases_data.sort(key=lambda x: datetime.strptime(x['beneficiaries'][0]['serviceDate'], "%d %b %Y") if x['beneficiaries'] and x['beneficiaries'][0].get('serviceDate') else datetime.min, reverse=(sort_order == 'desc'))
             else:
                 cases_data.sort(key=lambda x: x.get(sort_field, ''), reverse=(sort_order == 'desc'))
 
