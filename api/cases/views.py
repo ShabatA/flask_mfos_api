@@ -1154,8 +1154,8 @@ class CaseGetAllSortedResource(Resource):
     def get(self, sort_field, sort_order):
         try:
             current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-
             if not current_user.is_admin():
+                # Fetch all cases the user has access to
                 cases_query = (
                     CasesData.query.join(Users, Users.userID == CasesData.userID)
                     .filter(Users.userID == current_user.userID)
@@ -1170,23 +1170,26 @@ class CaseGetAllSortedResource(Resource):
 
             sort_func = asc if sort_order == 'asc' else desc
 
+            # Handle sorting by the different fields
             if sort_field == 'caseName':
                 all_cases_query = all_cases_query.order_by(sort_func(CasesData.caseName))
             elif sort_field == 'serviceDate':
                 all_cases_query = all_cases_query.join(CaseBeneficiary, CasesData.caseID == CaseBeneficiary.caseID)\
-                    .order_by(sort_func(func.to_date(CaseBeneficiary.serviceDate, 'DD Mon YYYY')))
+                    .order_by(sort_func(CaseBeneficiary.serviceDate.cast(Date)))
             elif sort_field == 'userFullName':
-                all_cases_query = all_cases_query.join(Users, Users.userID == CasesData.userID).order_by(sort_func(Users.firstName))
+                all_cases_query = all_cases_query.join(Users, Users.userID == CasesData.userID)\
+                    .order_by(sort_func(Users.firstName))
             elif sort_field == 'totalSupportCost':
-                all_cases_query = all_cases_query.join(CaseBeneficiary, CasesData.caseID == CaseBeneficiary.caseID).order_by(sort_func(CaseBeneficiary.totalSupportCost))
+                all_cases_query = all_cases_query.join(CaseBeneficiary, CasesData.caseID == CaseBeneficiary.caseID)\
+                    .order_by(sort_func(CaseBeneficiary.totalSupportCost))
             elif sort_field == 'createdAt':
-                all_cases_query = all_cases_query.order_by(sort_func(CasesData.createdAt))
+                all_cases_query = all_cases_query.order_by(sort_func(CasesData.createdAt.cast(Date)))
             elif sort_field == 'caseStatus':
                 all_cases_query = all_cases_query.order_by(sort_func(CasesData.caseStatus))
             elif sort_field == 'category':
                 all_cases_query = all_cases_query.order_by(sort_func(CasesData.category))
             else:
-                return {'message': f'Invalid sort field: {sort_field}'}, HTTPStatus.BAD_REQUEST
+                all_cases_query = all_cases_query.order_by(sort_func(CasesData.caseName))
 
             all_cases = all_cases_query.all()
 
@@ -1211,7 +1214,7 @@ class CaseGetAllSortedResource(Resource):
                             'firstName': beneficiary.firstName,
                             'surName': beneficiary.surName,
                             'gender': beneficiary.gender,
-                            'birthDate': beneficiary.birthDate.isoformat() if beneficiary.birthDate else None,
+                            'birthDate': beneficiary.birthDate,
                             'birthPlace': beneficiary.birthPlace,
                             'nationality': beneficiary.nationality,
                             'idType': beneficiary.idType,
@@ -1224,7 +1227,7 @@ class CaseGetAllSortedResource(Resource):
                             'problemDescription': beneficiary.problemDescription,
                             'serviceDescription': beneficiary.serviceDescription,
                             'totalSupportCost': beneficiary.totalSupportCost,
-                            'receiveFundDate': beneficiary.receiveFundDate.isoformat() if beneficiary.receiveFundDate else None,
+                            'receiveFundDate': beneficiary.receiveFundDate,
                             'paymentMethod': beneficiary.paymentMethod,
                             'paymentsType': beneficiary.paymentsType,
                             'otherPaymentType': beneficiary.otherPaymentType,
@@ -1245,13 +1248,21 @@ class CaseGetAllSortedResource(Resource):
                         }
                         serialized_beneficiaries.append(serialized_beneficiary)
 
-                region_details = {'regionID': case.regionID, 'regionName': Regions.query.get(case.regionID).regionName}
+                region_details = {
+                    'regionID': case.regionID,
+                    'regionName': Regions.query.get(case.regionID).regionName
+                }
                 user = Users.query.get(case.userID)
-                user_details = {'userID': user.userID, 'userFullName': f'{user.firstName} {user.lastName}', 'username': user.username}
+                user_details = {
+                    'userID': user.userID,
+                    'userFullName': f'{user.firstName} {user.lastName}',
+                    'username': user.username
+                }
 
                 stages = CaseToStage.query.filter_by(caseID=case.caseID).all()
                 completed_stages = [stage for stage in stages if stage.completed]
-                latest_completed_stage = max(completed_stages, key=lambda stage: stage.stageID) if completed_stages else min(stages, key=lambda stage: stage.stageID) if stages else None
+                latest_completed_stage = max(
+                    completed_stages, key=lambda stage: stage.stageID) if completed_stages else None
 
                 case_details = {
                     'caseID': case.caseID,
@@ -1275,9 +1286,9 @@ class CaseGetAllSortedResource(Resource):
                     'question12': case.question12,
                     'caseStatus': 'Assessment' if case.caseStatus == CaseStat.ASSESSMENT else case.caseStatus.value,
                     'category': case.category.value if case.category else None,
-                    'createdAt': case.createdAt.isoformat(),
-                    'dueDate': case.dueDate.isoformat() if case.dueDate else None,
-                    'startDate': case.startDate.isoformat() if case.startDate else None,
+                    'createdAt': case.createdAt,
+                    'dueDate': case.dueDate,
+                    'startDate': case.startDate,
                     'totalPoints': case.total_points,
                     'beneficiaries': serialized_beneficiaries,
                     'assignedUsers': [user.userID for user in users_assigned_to_case] if users_assigned_to_case else [],
@@ -1285,11 +1296,17 @@ class CaseGetAllSortedResource(Resource):
 
                 cases_data.append(case_details)
 
+            # Sorting cases in Python if needed
+            if sort_field == 'serviceDate':
+                cases_data.sort(key=lambda x: datetime.strptime(x['serviceDate'], "%d %b %Y"), reverse=(sort_order == 'desc'))
+            else:
+                cases_data.sort(key=lambda x: x.get(sort_field, ''), reverse=(sort_order == 'desc'))
+
             return cases_data, HTTPStatus.OK
 
         except Exception as e:
             current_app.logger.error(f"Error fetching sorted cases: {str(e)}")
-            return {'message': f'Error fetching sorted cases: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+            return {'message': f'Error fetching sorted cases, please try again later.'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 #####################################################
 # STAGE ENDPOINTS
