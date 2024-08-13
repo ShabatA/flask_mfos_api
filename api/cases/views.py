@@ -1174,7 +1174,7 @@ class CaseGetAllSortedResource(Resource):
                 all_cases_query = all_cases_query.order_by(sort_func(CasesData.caseName))
             elif sort_field == 'serviceDate':
                 all_cases_query = all_cases_query.join(CaseBeneficiary, CasesData.caseID == CaseBeneficiary.caseID)\
-                    .order_by(sort_func(func.str_to_date(CaseBeneficiary.serviceDate, '%d %b %Y')))
+                    .order_by(sort_func(func.to_date(CaseBeneficiary.serviceDate, 'DD Mon YYYY')))
             elif sort_field == 'userFullName':
                 all_cases_query = all_cases_query.join(Users, Users.userID == CasesData.userID).order_by(sort_func(Users.firstName))
             elif sort_field == 'totalSupportCost':
@@ -1239,7 +1239,7 @@ class CaseGetAllSortedResource(Resource):
                             'isOldPeople': beneficiary.isOldPeople,
                             'isDisabledPeople': beneficiary.isDisabledPeople,
                             'isStudentsPeople': beneficiary.isStudentsPeople,
-                            'serviceDate': beneficiary.serviceDate.isoformat() if beneficiary.serviceDate else None,
+                            'serviceDate': beneficiary.serviceDate,
                             'numberOfPayments': beneficiary.numberOfPayments,
                             'address': beneficiary.address
                         }
@@ -1288,7 +1288,6 @@ class CaseGetAllSortedResource(Resource):
             return cases_data, HTTPStatus.OK
 
         except Exception as e:
-            # Log the exact error message
             current_app.logger.error(f"Error fetching sorted cases: {str(e)}")
             return {'message': f'Error fetching sorted cases: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
