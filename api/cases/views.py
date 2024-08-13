@@ -1284,7 +1284,7 @@ class CaseGetAllSortedResource(Resource):
                         # Use the first beneficiary's totalSupportCost if available
                         return float(case['beneficiaries'][0].get('totalSupportCost', 0))
                     else:
-                        return 0
+                        return -1
                 elif sort_field == 'caseStatus':
                     return case.get('caseStatus', '')
                 else:
