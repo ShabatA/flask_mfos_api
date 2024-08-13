@@ -1298,7 +1298,7 @@ class CaseGetAllSortedResource(Resource):
                     else:
                         return datetime.min
                 else:
-                    return case.get(sort_field, '')
+                    return case.get(sort_field, '').strip().lower() if isinstance(case.get(sort_field, ''), str) else case.get(sort_field, '')
 
             cases_data.sort(key=get_sort_key, reverse=(sort_order == 'desc'))
 
