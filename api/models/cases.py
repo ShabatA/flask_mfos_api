@@ -153,6 +153,7 @@ class CaseBeneficiary(db.Model):
     
     beneficiaryID = db.Column(db.Integer, primary_key=True)
     caseID = db.Column(db.Integer, db.ForeignKey('cases_data.caseID', ondelete='CASCADE'))
+    # Personal Information
     firstName = db.Column(db.String, nullable=False)
     surName = db.Column(db.String, nullable=False)
     gender = db.Column(db.String, nullable=False)
@@ -161,13 +162,22 @@ class CaseBeneficiary(db.Model):
     nationality = db.Column(db.String, nullable=False)
     idType = db.Column(db.String, nullable=False)
     idNumber = db.Column(db.String, nullable=False)
+    
+    # Address and Contact Information
+    regionId = db.Column(db.Integer, db.ForeignKey('regions.regionID', ondelete='CASCADE'), nullable=True)  # New field added to match 'regionId'
+    otherRegion = db.Column(db.String, nullable=True)  # New field added to match 'otherRegion'
+    address = db.Column(db.String, nullable=True)  # Marked as non-nullable to match the Dart model
     phoneNumber = db.Column(db.String, nullable=False)
     altPhoneNumber = db.Column(db.String, nullable=True)
     email = db.Column(db.String, nullable=False)
+    
+    # Service Information
     serviceRequired = db.Column(db.String, nullable=False)
     otherServiceRequired = db.Column(db.String, nullable=True)
     problemDescription = db.Column(db.Text, nullable=True)
     serviceDescription = db.Column(db.Text, nullable=True)
+    
+    # Financial Information
     totalSupportCost = db.Column(db.Float, nullable=True)
     receiveFundDate = db.Column(db.Date, nullable=True)
     paymentMethod = db.Column(db.String, nullable=True)
@@ -175,18 +185,23 @@ class CaseBeneficiary(db.Model):
     otherPaymentType = db.Column(db.String, nullable=True)
     incomeType = db.Column(db.String, nullable=True)
     otherIncomeType = db.Column(db.String, nullable=True)
+    
+    # Housing Information
     housing = db.Column(db.String, nullable=True)
     otherHousing = db.Column(db.String, nullable=True)
     housingType = db.Column(db.String, nullable=True)
     otherHousingType = db.Column(db.String, nullable=True)
+    
+    # Family Information
     totalFamilyMembers = db.Column(db.Integer, nullable=True)
     childrenUnder15 = db.Column(db.String, nullable=True)
     isOldPeople = db.Column(db.Boolean, nullable=True)
     isDisabledPeople = db.Column(db.Boolean, nullable=True)
     isStudentsPeople = db.Column(db.Boolean, nullable=True)
-    serviceDate = db.Column(db.String, nullable=True)
+    
+    # Other Information
+    serviceDate = db.Column(db.String, nullable=True)  # Marked as String to match the Dart model
     numberOfPayments = db.Column(db.String, nullable=True)
-    address = db.Column(db.String, nullable=True)
     
     def save(self):
         db.session.add(self)

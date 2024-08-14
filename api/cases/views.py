@@ -159,11 +159,14 @@ beneficiary_data_model = case_namespace.model('BeneficiaryData', {
     'firstName': fields.String(required=True),
     'surName': fields.String(required=True),
     'gender': fields.String(required=True),
-    'birthDate': fields.Date(required=True),
+    'birthDate': fields.String(required=True),  # Changed to String to match db.Model
     'birthPlace': fields.String(required=True),
     'nationality': fields.String(required=True),
     'idType': fields.String(required=True),
     'idNumber': fields.String(required=True),
+    'regionId': fields.Integer(required=True),  # New field added
+    'otherRegion': fields.String(),  # New field added
+    'address': fields.String(required=True),  # Marked as required to match db.Model
     'phoneNumber': fields.String(required=True),
     'altPhoneNumber': fields.String(),
     'email': fields.String(required=True),
@@ -187,10 +190,10 @@ beneficiary_data_model = case_namespace.model('BeneficiaryData', {
     'isOldPeople': fields.Boolean(),
     'isDisabledPeople': fields.Boolean(),
     'isStudentsPeople': fields.Boolean(),
-    'serviceDate': fields.String(),
+    'serviceDate': fields.String(),  # Marked as String to match db.Model
     'numberOfPayments': fields.String(),
-    'address': fields.String()
 })
+
 
 edit_beneficiary_data_model = case_namespace.model('EditBeneficiaryData', {
     'beneficiaryID': fields.Integer(required=True),
@@ -198,11 +201,14 @@ edit_beneficiary_data_model = case_namespace.model('EditBeneficiaryData', {
     'firstName': fields.String(required=True),
     'surName': fields.String(required=True),
     'gender': fields.String(required=True),
-    'birthDate': fields.Date(required=True),
+    'birthDate': fields.String(required=True),  # Changed to String to match db.Model
     'birthPlace': fields.String(required=True),
     'nationality': fields.String(required=True),
     'idType': fields.String(required=True),
     'idNumber': fields.String(required=True),
+    'regionId': fields.Integer(required=True),  # New field added
+    'otherRegion': fields.String(),  # New field added
+    'address': fields.String(required=True),  # Marked as required to match db.Model
     'phoneNumber': fields.String(required=True),
     'altPhoneNumber': fields.String(),
     'email': fields.String(required=True),
@@ -226,10 +232,10 @@ edit_beneficiary_data_model = case_namespace.model('EditBeneficiaryData', {
     'isOldPeople': fields.Boolean(),
     'isDisabledPeople': fields.Boolean(),
     'isStudentsPeople': fields.Boolean(),
-    'serviceDate': fields.String(),
+    'serviceDate': fields.String(),  # Marked as String to match db.Model
     'numberOfPayments': fields.String(),
-    'address': fields.String()
 })
+
 
 case_beneficiary_form = case_namespace.model('BeneficiaryForm',{
     'url': fields.String(required=True, description="The url with the uuid as a URL param.")
@@ -449,7 +455,7 @@ class CaseGetAllResource(Resource):
                     for beneficiary in beneficiaries:
                         serialized_beneficiary = {
                             'beneficiaryID': beneficiary.beneficiaryID,
-                            'caseID': case.caseID,
+                            'caseID': beneficiary.caseID,
                             'firstName': beneficiary.firstName,
                             'surName': beneficiary.surName,
                             'gender': beneficiary.gender,
@@ -458,6 +464,9 @@ class CaseGetAllResource(Resource):
                             'nationality': beneficiary.nationality,
                             'idType': beneficiary.idType,
                             'idNumber': beneficiary.idNumber,
+                            'regionId': beneficiary.regionId,  # New field added
+                            'otherRegion': beneficiary.otherRegion,  # New field added
+                            'address': beneficiary.address,
                             'phoneNumber': beneficiary.phoneNumber,
                             'altPhoneNumber': beneficiary.altPhoneNumber,
                             'email': beneficiary.email,
@@ -466,7 +475,7 @@ class CaseGetAllResource(Resource):
                             'problemDescription': beneficiary.problemDescription,
                             'serviceDescription': beneficiary.serviceDescription,
                             'totalSupportCost': beneficiary.totalSupportCost,
-                            'receiveFundDate': beneficiary.receiveFundDate.isoformat(),
+                            'receiveFundDate': beneficiary.receiveFundDate.isoformat() if beneficiary.receiveFundDate else None,
                             'paymentMethod': beneficiary.paymentMethod,
                             'paymentsType': beneficiary.paymentsType,
                             'otherPaymentType': beneficiary.otherPaymentType,
@@ -482,8 +491,7 @@ class CaseGetAllResource(Resource):
                             'isDisabledPeople': beneficiary.isDisabledPeople,
                             'isStudentsPeople': beneficiary.isStudentsPeople,
                             'serviceDate': beneficiary.serviceDate,
-                            'numberOfPayments': beneficiary.numberOfPayments,
-                            'address': beneficiary.address
+                            'numberOfPayments': beneficiary.numberOfPayments
                         }
                         serialized_beneficiaries.append(serialized_beneficiary)
                 
@@ -589,7 +597,7 @@ class CaseGetAllApprovedResource(Resource):
                     for beneficiary in beneficiaries:
                         serialized_beneficiary = {
                             'beneficiaryID': beneficiary.beneficiaryID,
-                            'caseID': case.caseID,
+                            'caseID': beneficiary.caseID,
                             'firstName': beneficiary.firstName,
                             'surName': beneficiary.surName,
                             'gender': beneficiary.gender,
@@ -598,6 +606,9 @@ class CaseGetAllApprovedResource(Resource):
                             'nationality': beneficiary.nationality,
                             'idType': beneficiary.idType,
                             'idNumber': beneficiary.idNumber,
+                            'regionId': beneficiary.regionId,  # New field added
+                            'otherRegion': beneficiary.otherRegion,  # New field added
+                            'address': beneficiary.address,
                             'phoneNumber': beneficiary.phoneNumber,
                             'altPhoneNumber': beneficiary.altPhoneNumber,
                             'email': beneficiary.email,
@@ -606,7 +617,7 @@ class CaseGetAllApprovedResource(Resource):
                             'problemDescription': beneficiary.problemDescription,
                             'serviceDescription': beneficiary.serviceDescription,
                             'totalSupportCost': beneficiary.totalSupportCost,
-                            'receiveFundDate': beneficiary.receiveFundDate.isoformat(),
+                            'receiveFundDate': beneficiary.receiveFundDate.isoformat() if beneficiary.receiveFundDate else None,
                             'paymentMethod': beneficiary.paymentMethod,
                             'paymentsType': beneficiary.paymentsType,
                             'otherPaymentType': beneficiary.otherPaymentType,
@@ -622,8 +633,7 @@ class CaseGetAllApprovedResource(Resource):
                             'isDisabledPeople': beneficiary.isDisabledPeople,
                             'isStudentsPeople': beneficiary.isStudentsPeople,
                             'serviceDate': beneficiary.serviceDate,
-                            'numberOfPayments': beneficiary.numberOfPayments,
-                            'address': beneficiary.address
+                            'numberOfPayments': beneficiary.numberOfPayments
                         }
                         serialized_beneficiaries.append(serialized_beneficiary)
                 
@@ -742,6 +752,9 @@ class CaseBeneficiaryAddOrEditResource(Resource):
                 nationality=beneficiary_data['nationality'],
                 idType=beneficiary_data['idType'],
                 idNumber=beneficiary_data['idNumber'],
+                regionId=beneficiary_data['regionId'],  # New field added
+                otherRegion=beneficiary_data.get('otherRegion'),  # New field added
+                address=beneficiary_data['address'],
                 phoneNumber=beneficiary_data['phoneNumber'],
                 altPhoneNumber=beneficiary_data.get('altPhoneNumber'),
                 email=beneficiary_data['email'],
@@ -766,8 +779,7 @@ class CaseBeneficiaryAddOrEditResource(Resource):
                 isDisabledPeople=beneficiary_data.get('isDisabledPeople'),
                 isStudentsPeople=beneficiary_data.get('isStudentsPeople'),
                 serviceDate=beneficiary_data.get('serviceDate'),
-                numberOfPayments=beneficiary_data.get('numberOfPayments'),
-                address=beneficiary_data.get('address')
+                numberOfPayments=beneficiary_data.get('numberOfPayments')
             )
 
             new_beneficiary.save()
@@ -810,6 +822,9 @@ class CaseBeneficiaryAddOrEditResource(Resource):
             existing_beneficiary.nationality = beneficiary_data['nationality']
             existing_beneficiary.idType = beneficiary_data['idType']
             existing_beneficiary.idNumber = beneficiary_data['idNumber']
+            existing_beneficiary.regionId = beneficiary_data['regionId']  # New field added
+            existing_beneficiary.otherRegion = beneficiary_data.get('otherRegion')  # New field added
+            existing_beneficiary.address = beneficiary_data['address']
             existing_beneficiary.phoneNumber = beneficiary_data['phoneNumber']
             existing_beneficiary.altPhoneNumber = beneficiary_data.get('altPhoneNumber')
             existing_beneficiary.email = beneficiary_data['email']
@@ -835,7 +850,6 @@ class CaseBeneficiaryAddOrEditResource(Resource):
             existing_beneficiary.isStudentsPeople = beneficiary_data.get('isStudentsPeople')
             existing_beneficiary.serviceDate = beneficiary_data.get('serviceDate')
             existing_beneficiary.numberOfPayments = beneficiary_data.get('numberOfPayments')
-            existing_beneficiary.address = beneficiary_data.get('address')
 
             existing_beneficiary.save()
 
@@ -868,6 +882,9 @@ class CaseBeneficiaryByCaseIDResource(Resource):
                     'nationality': beneficiary.nationality,
                     'idType': beneficiary.idType,
                     'idNumber': beneficiary.idNumber,
+                    'regionId': beneficiary.regionId,  # New field added
+                    'otherRegion': beneficiary.otherRegion,  # New field added
+                    'address': beneficiary.address,
                     'phoneNumber': beneficiary.phoneNumber,
                     'altPhoneNumber': beneficiary.altPhoneNumber,
                     'email': beneficiary.email,
@@ -876,7 +893,7 @@ class CaseBeneficiaryByCaseIDResource(Resource):
                     'problemDescription': beneficiary.problemDescription,
                     'serviceDescription': beneficiary.serviceDescription,
                     'totalSupportCost': beneficiary.totalSupportCost,
-                    'receiveFundDate': beneficiary.receiveFundDate.isoformat(),
+                    'receiveFundDate': beneficiary.receiveFundDate.isoformat() if beneficiary.receiveFundDate else None,
                     'paymentMethod': beneficiary.paymentMethod,
                     'paymentsType': beneficiary.paymentsType,
                     'otherPaymentType': beneficiary.otherPaymentType,
@@ -892,8 +909,7 @@ class CaseBeneficiaryByCaseIDResource(Resource):
                     'isDisabledPeople': beneficiary.isDisabledPeople,
                     'isStudentsPeople': beneficiary.isStudentsPeople,
                     'serviceDate': beneficiary.serviceDate,
-                    'numberOfPayments': beneficiary.numberOfPayments,
-                    'address': beneficiary.address
+                    'numberOfPayments': beneficiary.numberOfPayments
                 }
                 serialized_beneficiaries.append(serialized_beneficiary)
             return {'beneficiaries': serialized_beneficiaries}, HTTPStatus.OK
@@ -1193,7 +1209,7 @@ class CaseGetAllSortedResource(Resource):
                 for beneficiary in beneficiaries:
                     serialized_beneficiary = {
                         'beneficiaryID': beneficiary.beneficiaryID,
-                        'caseID': case.caseID,
+                        'caseID': beneficiary.caseID,
                         'firstName': beneficiary.firstName,
                         'surName': beneficiary.surName,
                         'gender': beneficiary.gender,
@@ -1202,6 +1218,9 @@ class CaseGetAllSortedResource(Resource):
                         'nationality': beneficiary.nationality,
                         'idType': beneficiary.idType,
                         'idNumber': beneficiary.idNumber,
+                        'regionId': beneficiary.regionId,  # New field added
+                        'otherRegion': beneficiary.otherRegion,  # New field added
+                        'address': beneficiary.address,
                         'phoneNumber': beneficiary.phoneNumber,
                         'altPhoneNumber': beneficiary.altPhoneNumber,
                         'email': beneficiary.email,
@@ -1226,8 +1245,7 @@ class CaseGetAllSortedResource(Resource):
                         'isDisabledPeople': beneficiary.isDisabledPeople,
                         'isStudentsPeople': beneficiary.isStudentsPeople,
                         'serviceDate': beneficiary.serviceDate,
-                        'numberOfPayments': beneficiary.numberOfPayments,
-                        'address': beneficiary.address
+                        'numberOfPayments': beneficiary.numberOfPayments
                     }
                     serialized_beneficiaries.append(serialized_beneficiary)
                 
