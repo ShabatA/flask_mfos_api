@@ -53,7 +53,7 @@ user_model = auth_namespace.model(
     'Users', {
         'username': fields.String(required=True, description="A username"),
         'email': fields.String(required=True, description="An email"),
-        'password': fields.String(required=True, description="A password"),
+        'password': fields.String(required=True,description="A password"),
         'active': fields.Boolean(description="This shows that User is active", default=True),
         'UserStatus': fields.String(description="This shows of staff status"),
         'regionID': fields.Integer(description="Region ID"),  # Added regionID field
@@ -61,13 +61,27 @@ user_model = auth_namespace.model(
         'RoleName': fields.String(required=True, description="Role Name"),  # Added roleName
         'permissionNames': fields.List(fields.String, required=True, description="List of permission names"),
         'imageLink': fields.String(required=True, description='Image link.')
+    }
+)
 
+update_user_model = auth_namespace.model(
+    'UpdateUser', {
+        'username': fields.String(description="A username"),
+        'email': fields.String(description="An email"),
+        'password': fields.String(description="A password"),
+        'active': fields.Boolean(description="This shows that User is active", default=True),
+        'UserStatus': fields.String(description="This shows of staff status"),
+        'regionID': fields.Integer(description="Region ID"),  # Added regionID field
+        'regionName': fields.String(description="Region Name"),  # Added regionName field
+        'RoleName': fields.String(description="Role Name"),  # Added roleName
+        'permissionNames': fields.List(fields.String, description="List of permission names"),
+        'imageLink': fields.String(description='Image link.')
     }
 )
 
 
 user2_model = auth_namespace.model(
-    'Users', {
+    'Users2', {
         'userID': fields.Integer(),
         'username': fields.String(required=True, description="A username"),
         'email': fields.String(required=True, description="An email"),
@@ -263,7 +277,7 @@ class AdminOnlyResource(Resource):
 
 @auth_namespace.route('/admin/update-user/<int:user_id>')
 class UpdateUserByAdmin(Resource):
-    @auth_namespace.expect(user_model)
+    @auth_namespace.expect(update_user_model)
     @auth_namespace.doc(
         description="Update a user's details",
         params={'user_id': 'Specify the user ID'}
@@ -272,7 +286,7 @@ class UpdateUserByAdmin(Resource):
     @jwt_required()
     def put(self, user_id):
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-        # current_user = Users.query.filter_by(username=get_jwt_identity(), is_admin=True).first()
+        
 
         if not current_user.is_admin():
             return {'message': 'Access forbidden. Admins only.'}, HTTPStatus.FORBIDDEN
@@ -301,7 +315,7 @@ class UpdateUserByAdmin(Resource):
 
 @auth_namespace.route('/user/update-details/<int:user_id>')
 class UpdateUserByUser(Resource):
-    @auth_namespace.expect(user_model)
+    @auth_namespace.expect(update_user_model)
     @auth_namespace.doc(
         description="Update a user's details",
         params={'user_id': 'Specify the user ID'}

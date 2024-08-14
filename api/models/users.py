@@ -4,6 +4,8 @@ from ..utils.db import db
 from enum import Enum
 from datetime import datetime
 from .regions import Regions
+from werkzeug.security import generate_password_hash, check_password_hash
+
 
 
 # class UserRole(Enum):
@@ -116,7 +118,15 @@ class Users(db.Model):
     
     def update(self, data):
         for key, value in data.items():
-            if key == 'regionName':
+            if key == 'password':
+                # Check if the new password is different from the existing one
+                if not check_password_hash(self.password, value):
+                    value = generate_password_hash(value)
+                    setattr(self, key, value)
+                else:
+                    # Skip updating the password if it's the same
+                    continue
+            elif key == 'regionName':
                 # Handle 'regionName' separately
                 region = Regions.query.filter_by(regionName=value).first()
                 if region is not None:
@@ -130,7 +140,6 @@ class Users(db.Model):
                 self.update_projects(value)
             elif key == 'cases':
                 self.update_cases(value)
-
             else:
                 # For other fields, simply update them
                 setattr(self, key, value)
