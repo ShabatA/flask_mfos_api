@@ -769,7 +769,7 @@ class AllUsers(Resource):
                                'checklist': task.checklist,
                                'stageName': task.stage.name,
                                'projectName': ProjectsData.query.get(task.projectID).projectName,
-                               'projectID': task.projetID,
+                               'projectID': task.projectID,
                                'completionDate': task.completionDate.isoformat() if task.completionDate else None} for task in project_tasks] if project_tasks else [],
             'project_tasks_summary': {'total_p_tasks': total_p_tasks,'completed_p_tasks': completed_p_tasks, 'overdue_p_tasks': overdue_p_tasks,
                                      'not_started_p_tasks': not_started_p_tasks, 'inprogress_p_tasks': inprogress_p_tasks},
