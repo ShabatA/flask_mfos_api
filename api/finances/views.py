@@ -1041,6 +1041,15 @@ class GetAllFundReleaseRequests(Resource):
                 region_acc_details = {'accountName': region_acc.accountName, 'availableFund': float(region_acc.availableFund)}
                 beneficiary = CaseBeneficiary.query.filter_by(caseID=case_data.caseID).first()
                 
+                paymentList = case_data.status_data.data.get('paymentsList', [])
+                paymentsList_ = []
+                for index,item in enumerate(paymentList):
+                    paymentsList_.append({
+                        'paymentNum': index+1,
+                        'amount': item
+                    })
+                
+                
                 request_details = {
                     'requestID': request.requestID,
                     'case': case_details,
@@ -1057,7 +1066,8 @@ class GetAllFundReleaseRequests(Resource):
                     'bulkName': '-',
                     'paymentDueDate': f"{case_data.dueDate}",
                     'projectScope': '-',
-                    'status': request.status  
+                    'status': request.status,
+                    'paymentList': paymentsList_   
                 }
                 
                 case_requests_data.append(request_details)
@@ -1071,6 +1081,14 @@ class GetAllFundReleaseRequests(Resource):
                 project_details = {'projectID': project_data.projectID, 'projectName': project_data.projectName, 'category': project_data.category.value, 'status': project_data.projectStatus.value}
                 region_acc = RegionAccount.query.get(project_data.regionID)
                 region_acc_details = {'accountName': region_acc.accountName, 'availableFund': float(region_acc.availableFund)}
+                
+                paymentList = project_data.status_data.data.get('paymentsList', [])
+                paymentsList_ = []
+                for index,item in enumerate(paymentList):
+                    paymentsList_.append({
+                        'paymentNum': index+1,
+                        'amount': item
+                    })
                 
                 request_details = {
                     'requestID': request.requestID,
@@ -1088,7 +1106,8 @@ class GetAllFundReleaseRequests(Resource):
                     'bulkName': '-',
                     'paymentDueDate': f"{project_data.dueDate}",
                     'projectScope': f"{project_data.status_data.data.get('projectScope', '-')}",
-                    'status': request.status   
+                    'status': request.status,
+                    'paymentList': paymentsList_   
                 }
                 
                 project_requests_data.append(request_details)
