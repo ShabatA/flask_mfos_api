@@ -2632,9 +2632,10 @@ class GetSingleProjectResource(Resource):
             if project.projectStatus == ProjectStatus.APPROVED:
                 return project.approved_serialize(), HTTPStatus.OK
             else:
-                return project.serialize(), HTTPStatus.OK
+                return project.full_serialize(), HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error getting project: {str(e)}")
             return {
-                "message": "Internal Server Error"
+                "message": "Internal Server Error",
+                "error": str(e)
             }, HTTPStatus.INTERNAL_SERVER_ERROR
