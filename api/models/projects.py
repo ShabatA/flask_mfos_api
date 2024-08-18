@@ -1,4 +1,5 @@
 from api.models.regions import Regions
+from api.models.users import Users
 from ..utils.db import db
 from enum import Enum
 from flask import jsonify
@@ -10,51 +11,57 @@ from sqlalchemy import func
 
 
 class ProjectStatus(Enum):
-    PENDING = 'pending'
-    APPROVED = 'approved'
-    REJECTED = 'rejected'
-    ASSESSMENT = 'pending assessment'
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    ASSESSMENT = "pending assessment"
 
     def to_dict(self):
-        return {'status': self.value}
+        return {"status": self.value}
+
 
 class TaskStatus(Enum):
-    TODO = 'To Do'
-    INPROGRESS = 'In Progress'
-    DONE = 'Done'
-    OVERDUE = 'Overdue'
+    TODO = "To Do"
+    INPROGRESS = "In Progress"
+    DONE = "Done"
+    OVERDUE = "Overdue"
+
 
 class ProjectCategory(Enum):
-    A = 'A'
-    B = 'B'
-    C = 'C'
-    D = 'D'
+    A = "A"
+    B = "B"
+    C = "C"
+    D = "D"
+
 
 class Category(Enum):
-    A = 'A'
-    B = 'B'
-    C = 'C'
-    D = 'D'
+    A = "A"
+    B = "B"
+    C = "C"
+    D = "D"
+
 
 class Status(Enum):
-    PENDING = 'pending'
-    APPROVED = 'approved'
-    REJECTED = 'rejected'
-    ASSESSMENT = 'pending assessment'
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    ASSESSMENT = "pending assessment"
 
     def to_dict(self):
-        return {'status': self.value}
+        return {"status": self.value}
+
 
 class ProType(Enum):
-    PROJECT = 'PROJECT'
-    PROGRAM = 'PROGRAM'
+    PROJECT = "PROJECT"
+    PROGRAM = "PROGRAM"
+
 
 class ProjectsData(db.Model):
-    __tablename__ = 'projects_data'
+    __tablename__ = "projects_data"
 
     projectID = db.Column(db.Integer, primary_key=True)
-    createdBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=True)
-    regionID = db.Column(db.Integer, db.ForeignKey('regions.regionID'), nullable=False)
+    createdBy = db.Column(db.Integer, db.ForeignKey("users.userID"), nullable=True)
+    regionID = db.Column(db.Integer, db.ForeignKey("regions.regionID"), nullable=False)
     projectName = db.Column(db.String, nullable=False)
     budgetRequired = db.Column(db.Float, nullable=False)
     budgetApproved = db.Column(db.Float, nullable=True)
@@ -69,72 +76,271 @@ class ProjectsData(db.Model):
     commitmentType = db.Column(db.Integer, nullable=True)
     supportingOrg = db.Column(db.Text, nullable=True)
     documents = db.Column(ARRAY(db.String))
-    recommendationLetter = db.Column(db.Integer, nullable=True)  
+    recommendationLetter = db.Column(db.Integer, nullable=True)
     category = db.Column(db.Enum(Category), nullable=True)
     startDate = db.Column(db.Date, nullable=True)
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     dueDate = db.Column(db.Date, nullable=True)
     totalPoints = db.Column(db.Integer, default=0, nullable=True)
-    project_type = db.Column(db.Enum(ProType), default= ProType.PROJECT)
+    project_type = db.Column(db.Enum(ProType), default=ProType.PROJECT)
     active = db.Column(db.Boolean, default=True)
 
+    users = db.relationship(
+        "Users", secondary="project_user", backref="projects_data", lazy="dynamic"
+    )
+    tasks = db.relationship("ProjectTask", backref="projects_data", lazy=True)
+    status_data = db.relationship(
+        "ProjectStatusData",
+        backref="projects_data",
+        uselist=False,
+        lazy=True,
+        overlaps="projects_data,status_data",
+    )
 
-    users = db.relationship('Users', secondary='project_user', backref='projects_data', lazy='dynamic')
-    tasks = db.relationship('ProjectTask', backref='projects_data', lazy=True)
-    status_data = db.relationship('ProjectStatusData', backref='projects_data', uselist=False, lazy=True, overlaps="projects_data,status_data")
-    
     def _repr_(self):
         return f"<ProjectsData {self.projectID} {self.projectName} {self.createdAt}>"
-    
+
     def save(self):
-        
+
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         db.session.delete(self)
         db.session.commit()
-    
+
     def serialize(self):
         return {
-            'projectID': self.projectID,
-            'projectName': self.projectName,
-            'projectStatus': self.projectStatus.value,
-            'createdAt': self.createdAt.isoformat(),
-            'category': self.category.value,
-            'startDate': self.startDate.isoformat() if self.startDate else None,
-            'dueDate': self.dueDate.isoformat() if self.dueDate else None,
-            'regionName': Regions.query.get(self.regionID).regionName,
-            'project_type': self.project_type.value,
-            'active': self.active
+            "projectID": self.projectID,
+            "projectName": self.projectName,
+            "projectStatus": self.projectStatus.value,
+            "createdAt": self.createdAt.isoformat(),
+            "category": self.category.value,
+            "startDate": self.startDate.isoformat() if self.startDate else None,
+            "dueDate": self.dueDate.isoformat() if self.dueDate else None,
+            "regionName": Regions.query.get(self.regionID).regionName,
+            "project_type": self.project_type.value,
+            "active": self.active,
         }
-    
+
+    def full_serialize(self):
+        region_details = {
+            "regionID": self.regionID,
+            "regionName": Regions.query.get(self.regionID).regionName,
+        }
+        user = Users.query.get(self.createdBy)
+        user_details = {
+            "userID": user.userID,
+            "userFullName": f"{user.firstName} {user.lastName}",
+            "username": user.username,
+        }
+
+        users_assigned_to_project = (
+            Users.query.join(ProjectUser, Users.userID == ProjectUser.userID)
+            .filter(ProjectUser.projectID == self.projectID)
+            .all()
+        )
+        stages = ProjectStage.query.filter_by(projectID=self.projectID).all()
+        completed_stages = [stage for stage in stages if stage.completed]
+
+        if completed_stages:
+            # If there are completed stages, find the one with the latest completionDate
+            latest_completed_stage = max(
+                completed_stages, key=lambda stage: stage.stageID
+            )
+
+        else:
+            # If no stages are completed, return the first stage object
+            # Assuming stages are ordered in the way they are added or by a specific field
+            latest_completed_stage = (
+                min(stages, key=lambda stage: stage.stageID) if stages else None
+            )
+
+        return {
+            "projectID": self.projectID,
+            "projectName": self.projectName,
+            "region": region_details,
+            "stageName": (
+                latest_completed_stage.stage.name if latest_completed_stage else "N/A"
+            ),
+            "user": user_details,
+            "budgetRequired": self.budgetRequired,
+            "budgetApproved": self.budgetApproved,
+            "projectStatus": (
+                "Assessment"
+                if self.projectStatus == Status.ASSESSMENT
+                else self.projectStatus.value
+            ),
+            "category": self.category.value if self.category else None,
+            "projectScope": self.projectScope,
+            "projectIdea": self.projectIdea,
+            "solution": self.solution,
+            "addedValue": self.addedValue,
+            "projectNature": self.projectNature,
+            "beneficiaryCategory": self.beneficiaryCategory,
+            "commitment": self.commitment,
+            "commitmentType": self.commitmentType,
+            "supportingOrg": self.supportingOrg,
+            "documents": self.documents,
+            "recommendationLetter": self.recommendationLetter,
+            "createdAt": self.createdAt.isoformat(),
+            "dueDate": self.dueDate.isoformat() if self.dueDate else None,
+            "startDate": self.startDate.isoformat() if self.startDate else None,
+            "totalPoints": self.totalPoints,
+            "projectType": self.project_type.value,
+            "assignedUsers": (
+                [user.userID for user in users_assigned_to_project]
+                if users_assigned_to_project
+                else []
+            ),
+            "active": self.active,
+        }
+
+    def approved_serialize(self):
+        region_details = {
+            "regionID": self.regionID,
+            "regionName": Regions.query.get(self.regionID).regionName,
+        }
+        user = Users.query.get(self.createdBy)
+        user_details = {
+            "userID": user.userID,
+            "userFullName": f"{user.firstName} {user.lastName}",
+            "username": user.username,
+        }
+
+        users_assigned_to_project = (
+            Users.query.join(ProjectUser, Users.userID == ProjectUser.userID)
+            .filter(ProjectUser.projectID == self.projectID)
+            .all()
+        )
+        stages = ProjectStage.query.filter_by(projectID=self.projectID).all()
+        completed_stages = [stage for stage in stages if stage.completed]
+
+        if completed_stages:
+            # If there are completed stages, find the one with the latest completionDate
+            latest_completed_stage = max(
+                completed_stages, key=lambda stage: stage.stageID
+            )
+
+        else:
+            # If no stages are completed, return the first stage object
+            # Assuming stages are ordered in the way they are added or by a specific field
+            latest_completed_stage = (
+                min(stages, key=lambda stage: stage.stageID) if stages else None
+            )
+        stages_data = []
+        for stage in stages:
+            # Fetch all tasks for the linked stage
+            tasks = ProjectTask.query.filter_by(
+                projectID=self.projectID, stageID=stage.stageID
+            ).all()
+            total_tasks = len(tasks)
+            completed_tasks = 0
+            inprogress_tasks = 0
+            overdue_tasks = 0
+            not_started_tasks = 0
+            completionPercent = 0
+            if total_tasks > 0:
+
+                total_tasks = len(tasks)
+                for task in tasks:
+                    if task.status == TaskStatus.DONE:
+                        completed_tasks += 1
+                    if task.status == TaskStatus.OVERDUE:
+                        overdue_tasks += 1
+                    if task.status == TaskStatus.INPROGRESS:
+                        inprogress_tasks += 1
+                    if task.status == TaskStatus.TODO:
+                        not_started_tasks += 1
+                completionPercent = (completed_tasks / total_tasks) * 100
+            stage_details = {
+                "stageID": stage.stage.stageID,
+                "name": stage.stage.name,
+                "started": stage.started,
+                "completed": stage.completed,
+                "completionDate": (
+                    stage.completionDate.isoformat() if stage.completionDate else None
+                ),
+                "totalTasks": total_tasks,
+                "completedTasks": completed_tasks,
+                "completionPercent": completionPercent,
+                "notStartedTasks": not_started_tasks,
+                "overdueTasks": overdue_tasks,
+                "inprogressTasks": inprogress_tasks,
+            }
+            stages_data.append(stage_details)
+
+        return {
+            "projectID": self.projectID,
+            "projectName": self.projectName,
+            "region": region_details,
+            "stageName": (
+                latest_completed_stage.stage.name if latest_completed_stage else "N/A"
+            ),
+            "user": user_details,
+            "budgetRequired": self.budgetRequired,
+            "budgetApproved": self.budgetApproved,
+            "projectStatus": (
+                "Assessment"
+                if self.projectStatus == Status.ASSESSMENT
+                else self.projectStatus.value
+            ),
+            "category": self.category.value if self.category else None,
+            "projectScope": self.projectScope,
+            "projectIdea": self.projectIdea,
+            "solution": self.solution,
+            "addedValue": self.addedValue,
+            "projectNature": self.projectNature,
+            "beneficiaryCategory": self.beneficiaryCategory,
+            "commitment": self.commitment,
+            "commitmentType": self.commitmentType,
+            "supportingOrg": self.supportingOrg,
+            "documents": self.documents,
+            "recommendationLetter": self.recommendationLetter,
+            "createdAt": self.createdAt.isoformat(),
+            "dueDate": self.dueDate.isoformat() if self.dueDate else None,
+            "startDate": self.startDate.isoformat() if self.startDate else None,
+            "totalPoints": self.totalPoints,
+            "projectType": self.project_type.value,
+            "assignedUsers": (
+                [user.userID for user in users_assigned_to_project]
+                if users_assigned_to_project
+                else []
+            ),
+            "stages_data": stages_data,
+            "active": self.active,
+        }
+
     @classmethod
     def get_by_id(cls, projectID):
         return cls.query.get_or_404(projectID)
-    
+
     def assign_status_data(self, status_data):
         # Delete Project Status Data
         ProjectStatusData.query.filter_by(projectID=self.projectID).delete()
 
-        new_status_data = ProjectStatusData(projectID=self.projectID, status=self.projectStatus.value, data=status_data)
-        
+        new_status_data = ProjectStatusData(
+            projectID=self.projectID, status=self.projectStatus.value, data=status_data
+        )
+
         if len(status_data) > 2:
             # Set the startDate to the current date
             self.startDate = datetime.utcnow().date()
 
             # Assuming status_data.get('dueDate', self.dueDate) returns a string
-            due_date_string = status_data.get('dueDate') or str(self.dueDate)
+            due_date_string = status_data.get("dueDate") or str(self.dueDate)
 
             # Handle the project when due_date_string is an empty string
             if due_date_string:
                 # Convert the string to a date object
-                self.dueDate = datetime.strptime(due_date_string, '%Y-%m-%d %H:%M:%S.%f').date()
+                self.dueDate = datetime.strptime(
+                    due_date_string, "%Y-%m-%d %H:%M:%S.%f"
+                ).date()
             else:
                 self.dueDate = None  # or set it to an appropriate default value
 
             # Set the budgetApproved attribute
-            self.budgetApproved = status_data.get('approvedFunding')
+            self.budgetApproved = status_data.get("approvedFunding")
 
             # Commit changes to the database
             db.session.commit()
@@ -142,150 +348,236 @@ class ProjectsData(db.Model):
         # Save the new status data
         new_status_data.save()
 
+
 class ActStatus(Enum):
-    PENDING = 'PENDING'
-    APPROVED = 'APPROVED'
-    REJECTED = 'REJECTED'
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
 
     def to_dict(self):
-        return {'status': self.value}
+        return {"status": self.value}
+
 
 class Activities(db.Model):
-    __tablename__ = 'activities'
-    
+    __tablename__ = "activities"
+
     activityID = db.Column(db.Integer, primary_key=True)
     activityName = db.Column(db.String, nullable=False)
-    regionID = db.Column(db.Integer, db.ForeignKey('regions.regionID'), nullable=False)
-    programID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), nullable=True)
+    regionID = db.Column(db.Integer, db.ForeignKey("regions.regionID"), nullable=False)
+    programID = db.Column(
+        db.Integer,
+        db.ForeignKey("projects_data.projectID", ondelete="CASCADE"),
+        nullable=True,
+    )
     description = db.Column(db.Text, nullable=False)
     costRequired = db.Column(db.Float, nullable=False)
     duration = db.Column(db.String, nullable=False)
     deadline = db.Column(db.Date, nullable=True)
-    activityStatus = db.Column(db.Enum(ActStatus), default=ActStatus.PENDING, nullable=False)
-    assignedTo = db.relationship('Users', secondary='activity_users', backref='assigned_activities', lazy='dynamic', single_parent=True)
+    activityStatus = db.Column(
+        db.Enum(ActStatus), default=ActStatus.PENDING, nullable=False
+    )
+    assignedTo = db.relationship(
+        "Users",
+        secondary="activity_users",
+        backref="assigned_activities",
+        lazy="dynamic",
+        single_parent=True,
+    )
     createdAt = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    createdBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
+    createdBy = db.Column(db.Integer, db.ForeignKey("users.userID"), nullable=False)
     statusData = db.Column(JSONB, nullable=True)
-    
+
     def save(self):
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         db.session.delete(self)
-        db.session.commit() 
-    
+        db.session.commit()
+
+    def serialize(self):
+        user = Users.query.get(self.createdBy)
+        if not user:
+            user_details = None
+        else:
+            user_details = {
+                "userID": user.userID,
+                "fullName": f"{user.firstName} {user.lastName}",
+                "username": user.username,
+                "email": user.email,
+            }
+        if not self.programID:
+            program_details = None
+        program = ProjectsData.query.get(self.programID)
+        if not program:
+            program_details = None
+        else:
+            program_details = {
+                "projectID": self.programID,
+                "projectName": program.projectName,
+                "createdAt": program.createdAt.strftime("%Y-%m-%d %H:%M:%S"),
+                "budgetRequired": program.budgetRequired,
+                "budgetApproved": program.budgetApproved,
+                "projectStatus": program.projectStatus.value,
+                "projectIdea": program.projectIdea,
+                "solution": program.solution,
+                "startDate": (
+                    program.startDate.strftime("%Y-%m-%d")
+                    if program.startDate
+                    else None
+                ),
+                "active": program.active,
+            }
+
+        assigned_users = [user.mini_user_details() for user in self.assignedTo]
+
+        return {
+            "activityID": self.activityID,
+            "activityName": self.activityName,
+            "region": {
+                "regionID": self.regionID,
+                "regionName": Regions.query.get(self.regionID).regionName,
+            },
+            "description": self.description,
+            "costRequired": self.costRequired,
+            "duration": self.duration,
+            "deadline": self.deadline.strftime("%Y-%m-%d") if self.deadline else None,
+            "activityStatus": self.activityStatus.value,
+            "assignedTo": assigned_users,
+            "assignedToIDs": [user.userID for user in self.assignedTo],
+            "createdAt": self.createdAt.strftime("%Y-%m-%d %H:%M:%S"),
+            "createdBy": user_details,
+            "statusData": self.statusData,
+            "program": program_details,
+        }
+
 
 class ActivityUsers(db.Model):
-    __tablename__ = 'activity_users'
+    __tablename__ = "activity_users"
     id = db.Column(db.Integer, primary_key=True)
-    activityID = db.Column(db.Integer, db.ForeignKey('activities.activityID', ondelete='CASCADE'), nullable=False)
-    userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
-    
+    activityID = db.Column(
+        db.Integer,
+        db.ForeignKey("activities.activityID", ondelete="CASCADE"),
+        nullable=False,
+    )
+    userID = db.Column(db.Integer, db.ForeignKey("users.userID"), nullable=False)
+
     def __repr__(self):
-        return f"<ActivityUser {self.id} userID: {self.userID} activityID: {self.taskID}>"
-    
+        return (
+            f"<ActivityUser {self.id} userID: {self.userID} activityID: {self.taskID}>"
+        )
+
     def save(self):
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         db.session.delete(self)
-        db.session.commit()  
-    
-    
-
+        db.session.commit()
 
 
 class Questions(db.Model):
-    _tablename_ = 'questions'
+    _tablename_ = "questions"
 
     questionID = db.Column(db.Integer, primary_key=True)
     order = db.Column(db.Integer)  # New "order" column
     questionText = db.Column(db.String, nullable=False)
-    questionType = db.Column(db.String, nullable=False)  # Text input, multiple choice, etc.
+    questionType = db.Column(
+        db.String, nullable=False
+    )  # Text input, multiple choice, etc.
     points = db.Column(db.Integer, nullable=False)
 
     # If the question is multiple choice, store choices in a separate table
-    choices = db.relationship('QuestionChoices', backref='question', lazy=True, uselist=True)
+    choices = db.relationship(
+        "QuestionChoices", backref="question", lazy=True, uselist=True
+    )
 
     def _repr_(self):
         return f"<Question {self.questionID} {self.questionText}>"
-    
+
     def save(self):
         # Set the order when saving a new question
         if not self.order:
             self.order = Questions.query.count() + 1
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         db.session.delete(self)
         db.session.commit()
-    
+
     @classmethod
     def get_by_id(cls, questionID):
         return cls.query.get_or_404(questionID)
-    
+
     def assign_choices(self, choices_with_points):
         # Assuming choices_with_points is a list of tuples, each containing (choice_text, points)
         for choice_text, points in choices_with_points:
-            new_choice = QuestionChoices(questionID=self.questionID, choiceText=choice_text, points=points)
+            new_choice = QuestionChoices(
+                questionID=self.questionID, choiceText=choice_text, points=points
+            )
             new_choice.save()
-    
+
     def add_choice(self, choice_text, points):
-        new_choice = QuestionChoices(questionID=self.questionID, choiceText=choice_text, points=points)
+        new_choice = QuestionChoices(
+            questionID=self.questionID, choiceText=choice_text, points=points
+        )
         new_choice.save()
-    
 
 
 class QuestionChoices(db.Model):
-    _tablename_ = 'question_choices'
+    _tablename_ = "question_choices"
 
     choiceID = db.Column(db.Integer, primary_key=True)
-    questionID = db.Column(db.Integer, db.ForeignKey('questions.questionID', ondelete='CASCADE'), nullable=False)
+    questionID = db.Column(
+        db.Integer,
+        db.ForeignKey("questions.questionID", ondelete="CASCADE"),
+        nullable=False,
+    )
     choiceText = db.Column(db.String, nullable=False)
     points = db.Column(db.Integer, nullable=False)
 
     def _repr_(self):
         return f"<Choice {self.choiceID} {self.choiceText}>"
-    
+
     def save(self):
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         db.session.delete(self)
         db.session.commit()
-    
+
     @classmethod
     def get_by_id(cls, choiceID):
         return cls.query.get_or_404(choiceID)
-    
-    
+
 
 class ProjectUser(db.Model):
-    __tablename__ = 'project_user'
+    __tablename__ = "project_user"
 
     id = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), nullable=False)
-    userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
+    projectID = db.Column(
+        db.Integer,
+        db.ForeignKey("projects_data.projectID", ondelete="CASCADE"),
+        nullable=False,
+    )
+    userID = db.Column(db.Integer, db.ForeignKey("users.userID"), nullable=False)
 
     def _repr_(self):
         return f"<ProjectUser {self.id} ProjectID: {self.projectID}, UserID: {self.userID}>"
-    
+
     def save(self):
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         db.session.delete(self)
         db.session.commit()
-    
 
 
 class Stage(db.Model):
-    _tablename_ = 'stages'
+    _tablename_ = "stages"
 
     stageID = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
@@ -293,76 +585,102 @@ class Stage(db.Model):
 
     def _repr_(self):
         return f"<Stage {self.stageID} {self.name}>"
-    
+
     def save(self):
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         db.session.delete(self)
         db.session.commit()
 
 
 class ProjectStage(db.Model):
-    _tablename_ = 'project_stages'
+    _tablename_ = "project_stages"
 
-    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), primary_key=True)
-    stageID = db.Column(db.Integer, db.ForeignKey('stage.stageID'), primary_key=True)
+    projectID = db.Column(
+        db.Integer,
+        db.ForeignKey("projects_data.projectID", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    stageID = db.Column(db.Integer, db.ForeignKey("stage.stageID"), primary_key=True)
     started = db.Column(db.Boolean, default=False)
     completed = db.Column(db.Boolean, default=False)
     completionDate = db.Column(db.Date, nullable=True)
 
-    project = db.relationship('ProjectsData', backref='project_stages', lazy=True)
-    stage = db.relationship('Stage', backref='project_stages', lazy=True)
-    
+    project = db.relationship("ProjectsData", backref="project_stages", lazy=True)
+    stage = db.relationship("Stage", backref="project_stages", lazy=True)
+
     def delete(self):
         db.session.delete(self)
         db.session.commit()
 
 
 class ProjectTask(db.Model):
-    __tablename__ = 'project_task'
+    __tablename__ = "project_task"
 
     taskID = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), nullable=False)
+    projectID = db.Column(
+        db.Integer,
+        db.ForeignKey("projects_data.projectID", ondelete="CASCADE"),
+        nullable=False,
+    )
     title = db.Column(db.String, nullable=False)
     deadline = db.Column(db.Date, nullable=False)
-    assignedTo = db.relationship('Users', secondary='project_task_assigned_to', backref='assigned_tasks', lazy='dynamic', single_parent=True)
-    cc = db.relationship('Users', secondary='project_task_cc', backref='cc_tasks', lazy='dynamic', single_parent=True)
+    assignedTo = db.relationship(
+        "Users",
+        secondary="project_task_assigned_to",
+        backref="assigned_tasks",
+        lazy="dynamic",
+        single_parent=True,
+    )
+    cc = db.relationship(
+        "Users",
+        secondary="project_task_cc",
+        backref="cc_tasks",
+        lazy="dynamic",
+        single_parent=True,
+    )
     description = db.Column(db.String, nullable=True)
-    createdBy = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
+    createdBy = db.Column(db.Integer, db.ForeignKey("users.userID"), nullable=False)
     attachedFiles = db.Column(db.String, nullable=True)
-    stageID = db.Column(db.Integer, db.ForeignKey('stage.stageID', ondelete='CASCADE'), nullable=False)
+    stageID = db.Column(
+        db.Integer, db.ForeignKey("stage.stageID", ondelete="CASCADE"), nullable=False
+    )
     status = db.Column(db.Enum(TaskStatus), nullable=False)
     completionDate = db.Column(db.Date, nullable=True)
     checklist = db.Column(JSONB, nullable=True)
     creationDate = db.Column(db.DateTime, default=func.now(), nullable=False)
     startDate = db.Column(db.Date, default=datetime.now().date())
 
-    stage = db.relationship('Stage', backref='tasks', lazy=True)
+    stage = db.relationship("Stage", backref="tasks", lazy=True)
 
     def is_overdue(self):
-        return self.deadline < datetime.today().date() if not self.status == TaskStatus.DONE else False
+        return (
+            self.deadline < datetime.today().date()
+            if not self.status == TaskStatus.DONE
+            else False
+        )
 
     def __repr__(self):
         return f"<ProjectTask {self.taskID} {self.title}>"
-    
+
     def save(self):
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         # Delete related TaskComments
         TaskComments.query.filter_by(taskID=self.taskID).delete()
 
         self.assignedTo = []
         self.cc = []
-        
+
         # Delete related entries in ProjectTaskAssignedTo and ProjectTaskCC
         ProjectTaskAssignedTo.query.filter_by(task_id=self.taskID).delete()
         ProjectTaskCC.query.filter_by(task_id=self.taskID).delete()
         db.session.commit()
-        
+
         db.session.delete(self)
         db.session.commit()
 
@@ -370,152 +688,194 @@ class ProjectTask(db.Model):
     def get_by_id(cls, taskID):
         return cls.query.get_or_404(taskID)
 
+
 class TaskComments(db.Model):
-    __tablename__ = 'task_comments'
-    
+    __tablename__ = "task_comments"
+
     id = db.Column(db.Integer, primary_key=True)
-    userID = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
-    taskID = db.Column(db.Integer, db.ForeignKey('project_task.taskID', ondelete='CASCADE'), nullable=False)
+    userID = db.Column(db.Integer, db.ForeignKey("users.userID"), nullable=False)
+    taskID = db.Column(
+        db.Integer,
+        db.ForeignKey("project_task.taskID", ondelete="CASCADE"),
+        nullable=False,
+    )
     comment = db.Column(db.String, nullable=False)
     date = db.Column(db.Date, nullable=False)
-    
+
     def __repr__(self):
         return f"<TaskComments {self.id} userID: {self.userID} taskID: {self.taskID} comment: {self.comment}>"
-    
+
     def save(self):
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         db.session.delete(self)
         db.session.commit()
-    
+
     @classmethod
     def get_by_id(cls, commentID):
         return cls.query.get_or_404(commentID)
 
+
 class ProjectTaskAssignedTo(db.Model):
-    __tablename__ = 'project_task_assigned_to'
+    __tablename__ = "project_task_assigned_to"
     id = db.Column(db.Integer, primary_key=True)
-    task_id = db.Column(db.Integer, db.ForeignKey('project_task.taskID', ondelete='CASCADE'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
-    
+    task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("project_task.taskID", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey("users.userID"), nullable=False)
+
     def __repr__(self):
         return f"<ProjectAssignedTo {self.id} userID: {self.user_id} taskID: {self.task_id}>"
-    
+
     def save(self):
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         db.session.delete(self)
         db.session.commit()
+
 
 class ProjectTaskCC(db.Model):
-    __tablename__ = 'project_task_cc'
+    __tablename__ = "project_task_cc"
     id = db.Column(db.Integer, primary_key=True)
-    task_id = db.Column(db.Integer, db.ForeignKey('project_task.taskID', ondelete='CASCADE'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.userID'), nullable=False)
-    
+    task_id = db.Column(
+        db.Integer,
+        db.ForeignKey("project_task.taskID", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey("users.userID"), nullable=False)
+
     def __repr__(self):
-        return f"<ProjectTaskCC {self.id} userID: {self.user_id} taskID: {self.task_id}>"
-    
+        return (
+            f"<ProjectTaskCC {self.id} userID: {self.user_id} taskID: {self.task_id}>"
+        )
+
     def save(self):
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         db.session.delete(self)
         db.session.commit()
-        
+
 
 class AssessmentQuestions(db.Model):
-    __tablename__ = 'assessment_questions'
+    __tablename__ = "assessment_questions"
     questionID = db.Column(db.Integer, primary_key=True)
     questionText = db.Column(db.String, nullable=True)
-    
+
     def __repr__(self):
         return f"<AssessmentQuestions {self.questionID} {self.questionText}>"
-    
+
     def save(self):
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         AssessmentAnswers.query.filter_by(questionID=self.questionID).delete()
         db.session.delete(self)
         db.session.commit()
-    
+
     @classmethod
     def get_by_id(cls, questionID):
         return cls.query.get_or_404(questionID)
 
+
 class AssessmentAnswers(db.Model):
-    __tablename__ = 'assessment_answers'
+    __tablename__ = "assessment_answers"
 
     answerID = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), nullable=False)
-    questionID = db.Column(db.Integer, db.ForeignKey('assessment_questions.questionID', ondelete='CASCADE'), nullable=False)
-    answerText = db.Column(db.String, nullable=True)  # Adjust based on the answer format
+    projectID = db.Column(
+        db.Integer,
+        db.ForeignKey("projects_data.projectID", ondelete="CASCADE"),
+        nullable=False,
+    )
+    questionID = db.Column(
+        db.Integer,
+        db.ForeignKey("assessment_questions.questionID", ondelete="CASCADE"),
+        nullable=False,
+    )
+    answerText = db.Column(
+        db.String, nullable=True
+    )  # Adjust based on the answer format
     notes = db.Column(db.String, nullable=True)
 
-     # Add a foreign key reference to the choices table
-    question = db.relationship('AssessmentQuestions', backref='assessment_answers', lazy=True)
-   
+    # Add a foreign key reference to the choices table
+    question = db.relationship(
+        "AssessmentQuestions", backref="assessment_answers", lazy=True
+    )
 
     def _repr_(self):
         return f"<AssessmentAnswer {self.answerID} {self.answerText}>"
-    
+
     def save(self):
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         db.session.delete(self)
         db.session.commit()
-    
+
     @classmethod
     def get_by_id(cls, answerID):
         return cls.query.get_or_404(answerID)
-    
+
+
 class RequirementSection(Enum):
-    FINANCIAL = 'Financial'
-    IMPLEMENTATION = 'Implementation'
-    MEDIA = 'Media'
+    FINANCIAL = "Financial"
+    IMPLEMENTATION = "Implementation"
+    MEDIA = "Media"
+
 
 class Requirements(db.Model):
-    __tablename__ = 'requirements'
-    
+    __tablename__ = "requirements"
+
     requirementID = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
     description = db.Column(db.String, nullable=False)
     section = db.Column(db.Enum(RequirementSection), nullable=False)
-    
+
     def __repr__(self):
         return f"<Requirement {self.projectID} {self.name} {self.description} {self.section.value}>"
-    
+
     def save(self):
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         db.session.delete(self)
         db.session.commit()
-    
+
     @classmethod
     def get_by_id(cls, projectID):
         return cls.query.get_or_404(projectID)
-    
+
 
 class ProjectStatusData(db.Model):
-    _tablename_ = 'project_status_data'
+    _tablename_ = "project_status_data"
 
     id = db.Column(db.Integer, primary_key=True)
-    projectID = db.Column(db.Integer, db.ForeignKey('projects_data.projectID', ondelete='CASCADE'), nullable=False)
+    projectID = db.Column(
+        db.Integer,
+        db.ForeignKey("projects_data.projectID", ondelete="CASCADE"),
+        nullable=False,
+    )
     status = db.Column(db.String, nullable=False)
-    data = db.Column(JSONB, nullable=True)  # You can adjust the type based on the data you want to store
+    data = db.Column(
+        JSONB, nullable=True
+    )  # You can adjust the type based on the data you want to store
 
-    project = db.relationship('ProjectsData', backref='project_status_data', lazy=True, overlaps='projects_data')
+    project = db.relationship(
+        "ProjectsData",
+        backref="project_status_data",
+        lazy=True,
+        overlaps="projects_data",
+    )
 
     def _repr_(self):
         return f"<ProjectStatusData {self.id} ProjectID: {self.projectID}, Status: {self.status}>"
@@ -523,16 +883,18 @@ class ProjectStatusData(db.Model):
     def save(self):
         db.session.add(self)
         db.session.commit()
-    
+
     def delete(self):
         db.session.delete(self)
         db.session.commit()
-    
+
     @staticmethod
     def get_status_data_by_project_id(project_id):
         try:
             # Retrieve the project status data based on the project ID
-            status_data = ProjectStatusData.query.filter_by(projectID=project_id).first()
+            status_data = ProjectStatusData.query.filter_by(
+                projectID=project_id
+            ).first()
 
             if status_data:
                 return status_data.data
@@ -541,5 +903,7 @@ class ProjectStatusData(db.Model):
 
         except Exception as e:
             # Handle exceptions (e.g., database errors) appropriately
-            print(f'Error retrieving project status data: {str(e)}')
-            return None  # or raise an exception, depending on your error handling strategy
+            print(f"Error retrieving project status data: {str(e)}")
+            return (
+                None  # or raise an exception, depending on your error handling strategy
+            )

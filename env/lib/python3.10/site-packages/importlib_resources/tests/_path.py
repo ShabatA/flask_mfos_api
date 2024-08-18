@@ -7,7 +7,7 @@ from typing import Dict, Union
 ####
 # from jaraco.path 3.4.1
 
-FilesSpec = Dict[str, Union[str, bytes, 'FilesSpec']]  # type: ignore
+FilesSpec = Dict[str, Union[str, bytes, "FilesSpec"]]  # type: ignore
 
 
 def build(spec: FilesSpec, prefix=pathlib.Path()):
@@ -49,7 +49,7 @@ def _(content: bytes, path):
 
 @create.register
 def _(content: str, path):
-    path.write_text(content, encoding='utf-8')
+    path.write_text(content, encoding="utf-8")
 
 
 # end from jaraco.path

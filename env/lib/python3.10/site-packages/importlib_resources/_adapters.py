@@ -29,10 +29,10 @@ class TraversableResourcesLoader:
         return CompatibilityFiles(self.spec)._native()
 
 
-def _io_wrapper(file, mode='r', *args, **kwargs):
-    if mode == 'r':
+def _io_wrapper(file, mode="r", *args, **kwargs):
+    if mode == "r":
         return TextIOWrapper(file, *args, **kwargs)
-    elif mode == 'rb':
+    elif mode == "rb":
         return file
     raise ValueError(f"Invalid mode value '{mode}', only 'r' and 'rb' are supported")
 
@@ -75,7 +75,7 @@ class CompatibilityFiles:
         def name(self):
             return self._spec.name
 
-        def open(self, mode='r', *args, **kwargs):
+        def open(self, mode="r", *args, **kwargs):
             return _io_wrapper(self._reader.open_resource(None), mode, *args, **kwargs)
 
     class ChildPath(abc.Traversable):
@@ -104,7 +104,7 @@ class CompatibilityFiles:
         def name(self):
             return self._name
 
-        def open(self, mode='r', *args, **kwargs):
+        def open(self, mode="r", *args, **kwargs):
             return _io_wrapper(
                 self._reader.open_resource(self.name), mode, *args, **kwargs
             )
@@ -117,7 +117,7 @@ class CompatibilityFiles:
 
         def __init__(self, *path_parts):
             if len(path_parts) < 1:
-                raise ValueError('Need at least one path part to construct a path')
+                raise ValueError("Need at least one path part to construct a path")
             self._path = path_parts
 
         def iterdir(self):
@@ -135,7 +135,7 @@ class CompatibilityFiles:
         def name(self):
             return self._path[-1]
 
-        def open(self, mode='r', *args, **kwargs):
+        def open(self, mode="r", *args, **kwargs):
             raise FileNotFoundError("Can't open orphan path")
 
     def __init__(self, spec):
@@ -151,7 +151,7 @@ class CompatibilityFiles:
         Return the native reader if it supports files().
         """
         reader = self._reader
-        return reader if hasattr(reader, 'files') else self
+        return reader if hasattr(reader, "files") else self
 
     def __getattr__(self, attr):
         return getattr(self._reader, attr)

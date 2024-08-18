@@ -66,7 +66,7 @@ def get_resource_reader(package: types.ModuleType) -> Optional[ResourceReader]:
     # zipimport.zipimporter does not support weak references, resulting in a
     # TypeError.  That seems terrible.
     spec = package.__spec__
-    reader = getattr(spec.loader, 'get_resource_reader', None)  # type: ignore
+    reader = getattr(spec.loader, "get_resource_reader", None)  # type: ignore
     if reader is None:
         return None
     return reader(spec.name)  # type: ignore
@@ -84,7 +84,7 @@ def _(cand: str) -> types.ModuleType:
 
 @resolve.register
 def _(cand: None) -> types.ModuleType:
-    return resolve(_infer_caller().f_globals['__name__'])
+    return resolve(_infer_caller().f_globals["__name__"])
 
 
 def _infer_caller():
@@ -96,7 +96,7 @@ def _infer_caller():
         return frame_info.filename == __file__
 
     def is_wrapper(frame_info):
-        return frame_info.function == 'wrapper'
+        return frame_info.function == "wrapper"
 
     not_this_file = itertools.filterfalse(is_this_file, inspect.stack())
     # also exclude 'wrapper' due to singledispatch in the call stack
@@ -117,7 +117,7 @@ def from_package(package: types.ModuleType):
 @contextlib.contextmanager
 def _tempfile(
     reader,
-    suffix='',
+    suffix="",
     # gh-93353: Keep a reference to call os.remove() in late Python
     # finalization.
     *,

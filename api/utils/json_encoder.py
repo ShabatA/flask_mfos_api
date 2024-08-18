@@ -1,6 +1,7 @@
 from json import JSONEncoder
 from decimal import Decimal
 
+
 class CustomJSONEncoder(JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Decimal):

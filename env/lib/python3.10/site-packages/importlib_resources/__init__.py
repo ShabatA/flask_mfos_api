@@ -10,8 +10,8 @@ from .abc import ResourceReader
 
 
 __all__ = [
-    'Package',
-    'ResourceReader',
-    'as_file',
-    'files',
+    "Package",
+    "ResourceReader",
+    "as_file",
+    "files",
 ]
