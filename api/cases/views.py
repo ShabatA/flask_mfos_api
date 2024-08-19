@@ -274,6 +274,7 @@ cases_data_model = case_namespace.model(
 beneficiary_data_model = case_namespace.model(
     "BeneficiaryData",
     {
+        "beneficiaryID": fields.Integer(required=False),
         "caseID": fields.Integer(required=True),
         "firstName": fields.String(required=True),
         "surName": fields.String(required=True),
@@ -709,11 +710,24 @@ class CaseBeneficiaryAddOrEditResource(Resource):
             existing_case = CasesData.query.get_or_404(case_id)
             if not existing_case:
                 return {"message": "Case not found"}, HTTPStatus.NOT_FOUND
+            
+            # for updating beneficiary details
+            update_ben = CaseBeneficiary.query.filter_by(
+                idNumber=beneficiary_data["idNumber"],
+                caseID=case_id
+            ).first()
+            
+            if update_ben:
+                self.update_beneficiary(beneficiary_data)
+                return {"message": "Beneficiary details for this case we updated successfully."}, HTTPStatus.OK
 
+            # continue normal execution
+            
             existing_ben = CaseBeneficiary.query.filter_by(
                 idNumber=beneficiary_data["idNumber"]
             ).first()
-
+            
+            
             if existing_ben:
                 existing_case.category = CaseCat.C
 
@@ -786,84 +800,7 @@ class CaseBeneficiaryAddOrEditResource(Resource):
 
             beneficiary_data = request.json
 
-            beneficiary_id = beneficiary_data.get("beneficiaryID")
-            if not beneficiary_id:
-                return {
-                    "message": "Beneficiary ID is required for updating a beneficiary"
-                }, HTTPStatus.BAD_REQUEST
-
-            existing_beneficiary = CaseBeneficiary.query.get_or_404(beneficiary_id)
-
-            # Update the beneficiary fields
-            existing_beneficiary.caseID = beneficiary_data["caseID"]
-            existing_beneficiary.firstName = beneficiary_data["firstName"]
-            existing_beneficiary.surName = beneficiary_data["surName"]
-            existing_beneficiary.gender = beneficiary_data["gender"]
-            existing_beneficiary.birthDate = beneficiary_data["birthDate"]
-            existing_beneficiary.birthPlace = beneficiary_data["birthPlace"]
-            existing_beneficiary.nationality = beneficiary_data["nationality"]
-            existing_beneficiary.idType = beneficiary_data["idType"]
-            existing_beneficiary.idNumber = beneficiary_data["idNumber"]
-            existing_beneficiary.regionId = beneficiary_data[
-                "regionId"
-            ]  # New field added
-            existing_beneficiary.otherRegion = beneficiary_data.get(
-                "otherRegion"
-            )  # New field added
-            existing_beneficiary.address = beneficiary_data["address"]
-            existing_beneficiary.phoneNumber = beneficiary_data["phoneNumber"]
-            existing_beneficiary.altPhoneNumber = beneficiary_data.get("altPhoneNumber")
-            existing_beneficiary.email = beneficiary_data["email"]
-            existing_beneficiary.serviceRequired = beneficiary_data["serviceRequired"]
-            existing_beneficiary.otherServiceRequired = beneficiary_data.get(
-                "otherServiceRequired"
-            )
-            existing_beneficiary.problemDescription = beneficiary_data.get(
-                "problemDescription"
-            )
-            existing_beneficiary.serviceDescription = beneficiary_data.get(
-                "serviceDescription"
-            )
-            existing_beneficiary.totalSupportCost = beneficiary_data.get(
-                "totalSupportCost"
-            )
-            existing_beneficiary.receiveFundDate = beneficiary_data.get(
-                "receiveFundDate"
-            )
-            existing_beneficiary.paymentMethod = beneficiary_data.get("paymentMethod")
-            existing_beneficiary.paymentsType = beneficiary_data.get("paymentsType")
-            existing_beneficiary.otherPaymentType = beneficiary_data.get(
-                "otherPaymentType"
-            )
-            existing_beneficiary.incomeType = beneficiary_data.get("incomeType")
-            existing_beneficiary.otherIncomeType = beneficiary_data.get(
-                "otherIncomeType"
-            )
-            existing_beneficiary.housing = beneficiary_data.get("housing")
-            existing_beneficiary.otherHousing = beneficiary_data.get("otherHousing")
-            existing_beneficiary.housingType = beneficiary_data.get("housingType")
-            existing_beneficiary.otherHousingType = beneficiary_data.get(
-                "otherHousingType"
-            )
-            existing_beneficiary.totalFamilyMembers = beneficiary_data.get(
-                "totalFamilyMembers"
-            )
-            existing_beneficiary.childrenUnder15 = beneficiary_data.get(
-                "childrenUnder15"
-            )
-            existing_beneficiary.isOldPeople = beneficiary_data.get("isOldPeople")
-            existing_beneficiary.isDisabledPeople = beneficiary_data.get(
-                "isDisabledPeople"
-            )
-            existing_beneficiary.isStudentsPeople = beneficiary_data.get(
-                "isStudentsPeople"
-            )
-            existing_beneficiary.serviceDate = beneficiary_data.get("serviceDate")
-            existing_beneficiary.numberOfPayments = beneficiary_data.get(
-                "numberOfPayments"
-            )
-
-            existing_beneficiary.save()
+            self.update_beneficiary(beneficiary_data)
 
             return {"message": "CaseBeneficiary updated successfully"}, HTTPStatus.OK
         except Exception as e:
@@ -872,6 +809,87 @@ class CaseBeneficiaryAddOrEditResource(Resource):
                 "message": f"Error updating CaseBeneficiary, please review inputs and try again.",
                 "error": f"Error adding beneficiary: {str(e)}",
             }, HTTPStatus.INTERNAL_SERVER_ERROR
+            
+    def update_beneficiary(self, beneficiary_data):
+        beneficiary_id = beneficiary_data.get("beneficiaryID")
+        if not beneficiary_id:
+            return {
+                "message": "Beneficiary ID is required for updating a beneficiary"
+            }, HTTPStatus.BAD_REQUEST
+
+        existing_beneficiary = CaseBeneficiary.query.get_or_404(beneficiary_id)
+
+        # Update the beneficiary fields
+        existing_beneficiary.caseID = beneficiary_data["caseID"]
+        existing_beneficiary.firstName = beneficiary_data["firstName"]
+        existing_beneficiary.surName = beneficiary_data["surName"]
+        existing_beneficiary.gender = beneficiary_data["gender"]
+        existing_beneficiary.birthDate = beneficiary_data["birthDate"]
+        existing_beneficiary.birthPlace = beneficiary_data["birthPlace"]
+        existing_beneficiary.nationality = beneficiary_data["nationality"]
+        existing_beneficiary.idType = beneficiary_data["idType"]
+        existing_beneficiary.idNumber = beneficiary_data["idNumber"]
+        existing_beneficiary.regionId = beneficiary_data[
+            "regionId"
+        ]  # New field added
+        existing_beneficiary.otherRegion = beneficiary_data.get(
+            "otherRegion"
+        )  # New field added
+        existing_beneficiary.address = beneficiary_data["address"]
+        existing_beneficiary.phoneNumber = beneficiary_data["phoneNumber"]
+        existing_beneficiary.altPhoneNumber = beneficiary_data.get("altPhoneNumber")
+        existing_beneficiary.email = beneficiary_data["email"]
+        existing_beneficiary.serviceRequired = beneficiary_data["serviceRequired"]
+        existing_beneficiary.otherServiceRequired = beneficiary_data.get(
+            "otherServiceRequired"
+        )
+        existing_beneficiary.problemDescription = beneficiary_data.get(
+            "problemDescription"
+        )
+        existing_beneficiary.serviceDescription = beneficiary_data.get(
+            "serviceDescription"
+        )
+        existing_beneficiary.totalSupportCost = beneficiary_data.get(
+            "totalSupportCost"
+        )
+        existing_beneficiary.receiveFundDate = beneficiary_data.get(
+            "receiveFundDate"
+        )
+        existing_beneficiary.paymentMethod = beneficiary_data.get("paymentMethod")
+        existing_beneficiary.paymentsType = beneficiary_data.get("paymentsType")
+        existing_beneficiary.otherPaymentType = beneficiary_data.get(
+            "otherPaymentType"
+        )
+        existing_beneficiary.incomeType = beneficiary_data.get("incomeType")
+        existing_beneficiary.otherIncomeType = beneficiary_data.get(
+            "otherIncomeType"
+        )
+        existing_beneficiary.housing = beneficiary_data.get("housing")
+        existing_beneficiary.otherHousing = beneficiary_data.get("otherHousing")
+        existing_beneficiary.housingType = beneficiary_data.get("housingType")
+        existing_beneficiary.otherHousingType = beneficiary_data.get(
+            "otherHousingType"
+        )
+        existing_beneficiary.totalFamilyMembers = beneficiary_data.get(
+            "totalFamilyMembers"
+        )
+        existing_beneficiary.childrenUnder15 = beneficiary_data.get(
+            "childrenUnder15"
+        )
+        existing_beneficiary.isOldPeople = beneficiary_data.get("isOldPeople")
+        existing_beneficiary.isDisabledPeople = beneficiary_data.get(
+            "isDisabledPeople"
+        )
+        existing_beneficiary.isStudentsPeople = beneficiary_data.get(
+            "isStudentsPeople"
+        )
+        existing_beneficiary.serviceDate = beneficiary_data.get("serviceDate")
+        existing_beneficiary.numberOfPayments = beneficiary_data.get(
+            "numberOfPayments"
+        )
+
+        existing_beneficiary.save()
+        
 
 
 @case_namespace.route("/get/beneficiaries/<int:case_id>")
@@ -2326,4 +2344,59 @@ class GetAllAssignedTasksResource(Resource):
             )
             return {
                 "message": "Internal Server Error"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@case_namespace.route('/get_all_case_forms', methods=['GET'])
+class GetAllCaseFormsResource(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            user = Users.query.filter_by(username=get_jwt_identity()).first()
+            
+            cases = CasesData.query.all()
+            case_forms = []
+            for case in cases:
+                form = BeneficiaryForm.query.filter_by(caseID=case.caseID).first()
+                beneficiary = CaseBeneficiary.query.filter_by(caseID=case.caseID).first()
+                form_details = {
+                    'caseID': case.caseID,
+                    'caseName': case.caseName,
+                    'caseStatus': case.caseStatus.value,
+                    'formID': form.formID,
+                    'formLink': form.url,
+                    'used': form.used,
+                    'beneficiaryEmail': beneficiary.email if beneficiary else 'N/A',
+                    'beneficiaryPhone': beneficiary.phoneNumber if beneficiary else 'N/A'
+                }
+                case_forms.append(form_details)
+            
+            return case_forms, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(
+                f"Error getting case forms: {str(e)}"
+            )
+            return {
+                "message": "Internal Server Error",
+                "error": str(e)
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@case_namespace.route('/reactivate_form/<int:formID>', methods=['PUT'])
+class ReactivateFormResource(Resource):
+    @jwt_required()
+    def put(self, formID):
+        try:
+            form = BeneficiaryForm.query.get(formID)
+            form.used = False
+            db.session.commit()
+            return {"message": "Form reactivated successfully"}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(
+                f"Error reactivating form: {str(e)}"
+            )
+            return {
+                "message": "Internal Server Error",
+                "error": str(e)
             }, HTTPStatus.INTERNAL_SERVER_ERROR
