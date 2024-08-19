@@ -167,6 +167,8 @@ class RegionAccount(db.Model):
         currency = Currencies.query.get(currencyID)
         if not currency:
             raise ValueError("Invalid currencyID")
+        
+        amount_decimal = Decimal(amount)
 
         amount_in_default_currency = currency.convert_to_default(
             amount, self.defaultCurrencyID
@@ -184,12 +186,12 @@ class RegionAccount(db.Model):
                 usedFund=0,
             )
 
-        balance.totalFund += amount
-        balance.availableFund += amount
+        balance.totalFund += amount_decimal
+        balance.availableFund += amount_decimal
         balance.save()
 
-        self.totalFund += amount_in_default_currency
-        self.availableFund += amount_in_default_currency
+        self.totalFund += Decimal(amount_in_default_currency)
+        self.availableFund += Decimal(amount_in_default_currency)
 
         # Reverse the category_names dictionary to map from human-readable names to short names
         category_short_names = {v.lower(): k for k, v in category_names.items()}
@@ -205,7 +207,7 @@ class RegionAccount(db.Model):
                 category_fund = CategoryFund(
                     accountID=self.accountID, category=category_key, amount=0
                 )
-            category_fund.amount += amount_in_default_currency
+            category_fund.amount += Decimal(amount_in_default_currency)
             category_fund.save()
 
         self.save()
