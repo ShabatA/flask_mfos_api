@@ -65,10 +65,14 @@ class CasesData(db.Model):
     users = db.relationship(
         "Users", secondary="case_users", backref="cases_data", lazy="dynamic"
     )
-    beneficaries = db.relationship("CaseBeneficiary", backref="cases_data", lazy=True)
+    beneficaries = db.relationship("CaseBeneficiary", backref="cases_data", uselist=False,lazy=True)
     tasks = db.relationship("CaseTask", backref="cases_data", lazy=True)
     status_data = db.relationship(
         "CaseStatusData", backref="cases_data", uselist=False, lazy=True
+    )
+    
+    beneficiary_form = db.relationship(
+        "BeneficiaryForm", backref="case", uselist=False, lazy=True
     )
 
     def __repr__(self):
@@ -352,7 +356,8 @@ class CaseBeneficiary(db.Model):
 
     beneficiaryID = db.Column(db.Integer, primary_key=True)
     caseID = db.Column(
-        db.Integer, db.ForeignKey("cases_data.caseID", ondelete="CASCADE")
+        db.Integer, db.ForeignKey("cases_data.caseID", ondelete="CASCADE"),
+        unique=True
     )
     # Personal Information
     firstName = db.Column(db.String, nullable=False)
@@ -473,6 +478,7 @@ class BeneficiaryForm(db.Model):
         db.Integer,
         db.ForeignKey("cases_data.caseID", ondelete="CASCADE"),
         nullable=False,
+        unique=True
     )
     url = db.Column(db.String, nullable=False)
     used = db.Column(db.Boolean, nullable=False, default=False)

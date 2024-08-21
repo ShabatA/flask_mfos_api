@@ -30,6 +30,7 @@ from flask import jsonify, current_app
 from flask import request
 from sqlalchemy import func
 from sqlalchemy import asc, desc
+from sqlalchemy.orm import joinedload
 
 
 def parse_date(date_str):
@@ -2351,13 +2352,43 @@ class GetAllCaseFormsResource(Resource):
     @jwt_required()
     def get(self):
         try:
-            user = Users.query.filter_by(username=get_jwt_identity()).first()
+            
             
             cases = CasesData.query.all()
+            critical_fields = ['firstName', 'surName', 'gender', 'birthDate', 'birthPlace', 
+                               'nationality', 'idType', 'idNumber', 'phoneNumber', 'email', 
+                               'serviceRequired', 'serviceDate']
+            
             case_forms = []
+            
             for case in cases:
-                form = BeneficiaryForm.query.filter_by(caseID=case.caseID).first()
-                beneficiary = CaseBeneficiary.query.filter_by(caseID=case.caseID).first()
+                user = Users.query.get(case.userID)
+                form = case.beneficiary_form
+                # beneficiary = case.beneficaries[0] if case.beneficaries else None
+                beneficiary = case.beneficaries
+                beneficiary_dict = beneficiary.serialize() if beneficiary else {}
+                
+                # Determine if reCheck is needed and collect problematic fields
+                reCheck = False
+                problematic_fields = []
+                
+                # Check conditions for each key
+                if not beneficiary_dict.get('numberOfPayments') or beneficiary_dict.get('numberOfPayments') in ['0', '1', '']:
+                    reCheck = True
+                    problematic_fields.append('numberOfPayments')
+                
+                if beneficiary_dict.get('address') in [None, 'N/A', '']:
+                    reCheck = True
+                    problematic_fields.append('address')
+                
+                if beneficiary_dict.get('regionId') in [None, '']:
+                    reCheck = True
+                    problematic_fields.append('regionId')
+                
+                # Check other fields that are critical
+                problematic_fields.extend([field for field in critical_fields if beneficiary_dict.get(field) in [None, '']])
+                reCheck = reCheck or bool(problematic_fields)
+                
                 form_details = {
                     'caseID': case.caseID,
                     'caseName': case.caseName,
@@ -2366,7 +2397,10 @@ class GetAllCaseFormsResource(Resource):
                     'formLink': form.url,
                     'used': form.used,
                     'beneficiaryEmail': beneficiary.email if beneficiary else 'N/A',
-                    'beneficiaryPhone': beneficiary.phoneNumber if beneficiary else 'N/A'
+                    'beneficiaryPhone': beneficiary.phoneNumber if beneficiary else 'N/A',
+                    'reCheck': reCheck,  # Add reCheck field to form details
+                    'problematicFields': problematic_fields,  # List of problematic fields
+                    'referringPerson': f"{user.firstName} {user.lastName}"
                 }
                 case_forms.append(form_details)
             

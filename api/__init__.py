@@ -20,6 +20,7 @@ from .projects.views import (
     activity_namespace,
 )
 from .finances.views import finance_namespace
+from .summary.views import summary_ns
 
 # from .questions.views import questions_namespace
 from flask_cors import CORS
@@ -79,6 +80,7 @@ def create_app(config=config_dict["development"]):
     api.add_namespace(case_assessment_namespace)
     api.add_namespace(finance_namespace)
     api.add_namespace(activity_namespace)
+    api.add_namespace(summary_ns)
 
     @app.shell_context_processor
     def make_shell_context():
