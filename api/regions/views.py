@@ -57,19 +57,10 @@ class Region(Resource):
 @region_namespace.route("/region/<int:regionID>")
 class GetUpdateDelete(Resource):
     @region_namespace.marshal_with(region_model)
-    @jwt_required()
     def get(self, regionID):
         """
         Get a region by ID
         """
-        current_admin = Users.query.filter_by(username=get_jwt_identity()).first()
-
-        if not current_admin.is_admin:
-            print("Access forbidden. Only administrators can create regions.")
-            return {
-                "message": "Access forbidden. Only administrators can create regions."
-            }, HTTPStatus.FORBIDDEN
-
         region = Regions.get_by_id(regionID)
         return region, HTTPStatus.OK
 
