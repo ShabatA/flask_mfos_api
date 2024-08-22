@@ -1396,7 +1396,7 @@ class GetAllFundReleaseRequests(Resource):
                     "category": case_data.category.value,
                     "status": case_data.caseStatus.value,
                 }
-                region_acc = RegionAccount.query.get(case_data.regionID)
+                region_acc = RegionAccount.query.filter_by(regionID=case_data.regionID).first()
                 region_acc_details = {
                     "accountName": region_acc.accountName,
                     "availableFund": float(region_acc.availableFund),

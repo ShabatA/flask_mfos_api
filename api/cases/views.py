@@ -902,9 +902,7 @@ class CaseBeneficiaryByCaseIDResource(Resource):
 
             beneficiaries = CaseBeneficiary.query.filter_by(caseID=case_id).all()
             if not beneficiaries:
-                return {
-                    "message": "No beneficiaries found for the given case ID"
-                }, HTTPStatus.NOT_FOUND
+                return [], HTTPStatus.OK
 
             return {
                 "beneficiaries": [
