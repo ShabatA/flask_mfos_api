@@ -260,12 +260,12 @@ cases_data_model = case_namespace.model(
         "question1": fields.Raw(required=True, description="Question 1"),
         "question2": fields.Raw(required=True, description="Question 2"),
         "question3": fields.Raw(required=True, description="Question 3"),
-        "question4": fields.Raw(description="Question 4 (JSONB)"),
-        "question5": fields.Raw(description="Question 5 (JSONB)"),
-        "question6": fields.Raw(description="Question 6 (JSONB)"),
-        "question7": fields.Raw(description="Question 7 (JSONB)"),
-        "question8": fields.Raw(description="Question 8 (JSONB)"),
-        "question9": fields.Raw(description="Question 9 (JSONB)"),
+        "question4": fields.Raw(required=True,description="Question 4 (JSONB)"),
+        "question5": fields.Raw(required=True,description="Question 5 (JSONB)"),
+        "question6": fields.Raw(required=True,description="Question 6 (JSONB)"),
+        "question7": fields.Raw(required=True,description="Question 7 (JSONB)"),
+        "question8": fields.Raw(required=True,description="Question 8 (JSONB)"),
+        "question9": fields.Raw(required=True,description="Question 9 (JSONB)"),
         "question10": fields.Raw(required=True, description="Question 10"),
         "question11": fields.Float(required=True, description="Question 11"),
         "question12": fields.Integer(required=True, description="Question 12"),
@@ -2429,6 +2429,26 @@ class ReactivateFormResource(Resource):
         except Exception as e:
             current_app.logger.error(
                 f"Error reactivating form: {str(e)}"
+            )
+            return {
+                "message": "Internal Server Error",
+                "error": str(e)
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+            
+@case_namespace.route('/get_beneficiary/id/<int:beneficiaryID>', methods=['GET'])
+class GetBeneficiaryResource(Resource):
+    @jwt_required()
+    def get(self, beneficiaryID):
+        try:
+            beneficiary = CaseBeneficiary.query.get(beneficiaryID)
+            if not beneficiary:
+                return {"message": "Beneficiary not found"}, HTTPStatus.NOT_FOUND
+            
+            return beneficiary.serialize(), HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(
+                f"Error getting beneficiary: {str(e)}"
             )
             return {
                 "message": "Internal Server Error",
