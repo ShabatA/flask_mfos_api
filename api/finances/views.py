@@ -382,6 +382,13 @@ class CreateCurrency(Resource):
                     "message": "Forbidden, only admins can add currencies"
                 }, HTTPStatus.FORBIDDEN
 
+            # Check if currencyCode already exists
+            existing_currency = Currencies.query.filter_by(currencyCode=currency_data["currencyCode"]).first()
+            if existing_currency:
+                return {
+                    "message": "Currency code already exists. Please choose a different currency code."
+                }, HTTPStatus.BAD_REQUEST
+
             currency = Currencies(
                 currencyCode=currency_data["currencyCode"],
                 currencyName=currency_data["currencyName"],
@@ -406,8 +413,15 @@ class CreateCurrency(Resource):
             currency_data = request.json
             if not current_user.is_admin():
                 return {
-                    "message": "Forbidden, only admins can add currencies"
+                    "message": "Forbidden, only admins can update currencies"
                 }, HTTPStatus.FORBIDDEN
+
+            # Check if currencyCode already exists
+            existing_currency = Currencies.query.filter(Currencies.currencyID != currency_data["currencyID"], Currencies.currencyCode == currency_data["currencyCode"]).first()
+            if existing_currency:
+                return {
+                    "message": "Currency code already exists. Please choose a different currency code."
+                }, HTTPStatus.BAD_REQUEST
 
             currency = Currencies.query.get_or_404(currency_data["currencyID"])
             currency.currencyCode = currency_data["currencyCode"]
@@ -1038,6 +1052,7 @@ class RequestProjectFundReleaseResource(Resource):
             request_data = request.json
 
             project_id = request_data.get("projectID")
+            payment_count = request_data.get("paymentCount")
 
             if not project_id:
                 return {
@@ -1045,6 +1060,15 @@ class RequestProjectFundReleaseResource(Resource):
                 }, HTTPStatus.BAD_REQUEST
 
             project = ProjectsData.query.get_or_404(project_id)
+            
+            existing_request = ProjectFundReleaseRequests.query.filter_by(
+                caseID=project_id, paymentCount=payment_count
+            ).first()
+
+            if existing_request:
+                return {
+                    "message": "A request with the same payment count already exists for this case."
+                }, HTTPStatus.BAD_REQUEST
 
             release = ProjectFundReleaseRequests(
                 projectID=project_id,
@@ -1074,6 +1098,7 @@ class RequestCaseFundReleaseResource(Resource):
             request_data = request.json
 
             case_id = request_data.get("caseID")
+            payment_count = request_data.get("paymentCount")
 
             if not case_id:
                 return {
@@ -1082,11 +1107,20 @@ class RequestCaseFundReleaseResource(Resource):
 
             case = CasesData.query.get_or_404(case_id)
 
+            existing_request = CaseFundReleaseRequests.query.filter_by(
+                caseID=case_id, paymentCount=payment_count
+            ).first()
+
+            if existing_request:
+                return {
+                    "message": "A request with the same payment count already exists for this case."
+                }, HTTPStatus.BAD_REQUEST
+
             release = CaseFundReleaseRequests(
                 caseID=case_id,
                 fundsRequested=request_data["fundsRequested"],
                 requestedBy=current_user.userID,
-                paymentCount=request_data["paymentCount"],
+                paymentCount=payment_count,
                 notes=request_data["notes"],
             )
 
