@@ -2393,9 +2393,9 @@ class GetAllCaseFormsResource(Resource):
                     'caseID': case.caseID,
                     'caseName': case.caseName,
                     'caseStatus': case.caseStatus.value,
-                    'formID': form.formID,
-                    'formLink': form.url,
-                    'used': form.used,
+                    'formID': form.formID if form else 0,
+                    'formLink': form.url if form else '',
+                    'used': form.used if form else False,
                     'beneficiaryEmail': beneficiary.email if beneficiary else 'N/A',
                     'beneficiaryPhone': beneficiary.phoneNumber if beneficiary else 'N/A',
                     'reCheck': reCheck,  # Add reCheck field to form details
