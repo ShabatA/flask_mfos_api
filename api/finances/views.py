@@ -1062,12 +1062,12 @@ class RequestProjectFundReleaseResource(Resource):
             project = ProjectsData.query.get_or_404(project_id)
             
             existing_request = ProjectFundReleaseRequests.query.filter_by(
-                caseID=project_id, paymentCount=payment_count
+                projectID=project_id, paymentCount=payment_count
             ).first()
 
-            if existing_request:
+            if existing_request and existing_request.status.lower() != 'rejected':
                 return {
-                    "message": "A request with the same payment count already exists for this case."
+                    "message": "A request with the same payment count already exists for this project."
                 }, HTTPStatus.BAD_REQUEST
 
             release = ProjectFundReleaseRequests(
@@ -1111,7 +1111,8 @@ class RequestCaseFundReleaseResource(Resource):
                 caseID=case_id, paymentCount=payment_count
             ).first()
 
-            if existing_request:
+            if existing_request and existing_request.status.lower() != 'rejected':
+                
                 return {
                     "message": "A request with the same payment count already exists for this case."
                 }, HTTPStatus.BAD_REQUEST
