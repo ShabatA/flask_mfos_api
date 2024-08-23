@@ -60,6 +60,7 @@ class CasesData(db.Model):
     startDate = db.Column(db.Date, nullable=True)
     dueDate = db.Column(db.Date, nullable=True)
     total_points = db.Column(db.Integer, nullable=True)
+    approvedPayments = db.Column(db.Float, nullable=True, default=0)
 
     region = db.relationship("Regions", backref="cases_data", foreign_keys=[regionID])
     users = db.relationship(

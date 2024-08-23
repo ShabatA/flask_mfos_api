@@ -1,5 +1,6 @@
 from api.models.cases import CasesData
 from api.models.projects import ProjectsData
+from api.models.users import Users
 from ..utils.db import db
 from enum import Enum
 from datetime import datetime
@@ -1391,6 +1392,31 @@ class ProjectFundReleaseApproval(db.Model):
     def delete(self):
         db.session.delete(self)
         db.session.commit()
+    
+    def fund_serialize(self, currencyID):
+        request = ProjectFundReleaseRequests.query.get(self.requestID)
+        project = ProjectsData.query.get(request.projectID)
+        user = Users.query.get(self.approvedBy)
+        user_details = {
+            "userID": user.userID,
+            "userFullName": f"{user.firstName} {user.lastName}",
+            "username": user.username,
+        }
+        return {
+            "approvalID": self.approvalID,
+            "issuedBy": user_details["userFullName"],
+            "project_details": {
+                "projectID": project.projectID,
+                "projectName": project.projectName,
+                "projectStatus": project.projectStatus.value,
+            },
+            "approvedAmount": f'{self.approvedAmount}',
+            "approvedAt": self.approvedAt.isoformat(),
+            "status": self.status,
+            "notes": self.notes,
+            "closed": self.closed,
+            "transactionType": "Credit"
+        }
 
 
 class CaseFundReleaseApproval(db.Model):
@@ -1428,6 +1454,31 @@ class CaseFundReleaseApproval(db.Model):
     def delete(self):
         db.session.delete(self)
         db.session.commit()
+    
+    def fund_serialize(self, currencyID):
+        request = CaseFundReleaseRequests.query.get(self.requestID)
+        case = CasesData.query.get(request.caseID)
+        user = Users.query.get(self.approvedBy)
+        user_details = {
+            "userID": user.userID,
+            "userFullName": f"{user.firstName} {user.lastName}",
+            "username": user.username,
+        }
+        return {
+            "approvalID": self.approvalID,
+            "issuedBy": user_details["userFullName"],
+            "case_details": {
+                "caseID": case.caseID,
+                "caseName": case.caseName,
+                "caseStatus": case.caseStatus.value,
+            },
+            "approvedAmount": f'${self.approvedAmount}',
+            "approvedAt": self.approvedAt.isoformat(),
+            "status": self.status,
+            "notes": self.notes,
+            "closed": self.closed,
+            "transactionType": "Credit"
+        }
 
 
 class TransferStage(Enum):
@@ -1474,6 +1525,42 @@ class FundTransfers(db.Model):
     def delete(self):
         db.session.delete(self)
         db.session.commit()
+        
+    def out_transfer_serialize(self, currencyID):
+        to_fund = FinancialFund.query.get(self.to_fund)
+        return {
+            "transferID": self.transferID,
+            "to_fund": {
+                "fundID": to_fund.fundID,
+                "fundName": to_fund.fundName,
+                "balances": to_fund.get_fund_balance(currencyID),
+            },
+            "transferAmount": self.transferAmount,
+            "transferType": self.transferType.value,
+            "notes": self.notes,
+            "createdAt": self.createdAt.isoformat(),
+            "status": self.status,
+            "closed": self.closed,
+            "transactionType": "Credit"
+        }
+    
+    def in_transfer_serialize(self, currencyID):
+        from_fund = FinancialFund.query.get(self.from_fund)
+        return {
+            "transferID": self.transferID,
+            "from_fund": {
+                "fundID": from_fund.fundID,
+                "fundName": from_fund.fundName,
+                "balances": from_fund.get_fund_balance(currencyID),
+            },
+            "transferAmount": self.transferAmount,
+            "transferType": self.transferType.value,
+            "notes": self.notes,
+            "createdAt": self.createdAt.isoformat(),
+            "status": self.status,
+            "closed": self.closed,
+            "transactionType": "Debit"
+        }
 
 
 # class PaymentFor(Enum):

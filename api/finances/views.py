@@ -1024,6 +1024,10 @@ class SingleFinancialFundSummaryResource(Resource):
     def get(self, fund_id, currency_conversion):
         try:
             fund = FinancialFund.query.get_or_404(fund_id)
+            transfers_out = FundTransfers.query.filter_by(from_fund=fund.fundID, closed=True).all()
+            transfers_in = FundTransfers.query.filter_by(to_fund=fund.fundID, closed=True).all()
+            case_payments = CaseFundReleaseApproval.query.filter_by(fundID=fund.fundID, closed=True).all()
+            project_payments = ProjectFundReleaseApproval.query.filter_by(fundID=fund.fundID, closed=True).all()
             fund_data = {
                 "fundID": fund.fundID,
                 "fundName": fund.fundName,
@@ -1031,6 +1035,12 @@ class SingleFinancialFundSummaryResource(Resource):
                 "availableCurrencies": fund.get_available_currencies(),
                 "subFunds": fund.get_all_sub_funds(),
                 "donations": fund.get_all_donations(),
+                "transfers_out": [transfer.out_transfer_serialize() for transfer in transfers_out],
+                "transfers_in": [transfer.in_transfer_serialize() for transfer in transfers_in],
+                "cases_and_projects_paid":{
+                    "cases": [case_payment.fund_serialize(currency_conversion) for case_payment in case_payments],
+                    "projects": [project_payment.fund_serialize(currency_conversion) for project_payment in project_payments]
+                },
             }
             # get balances based on the currency conversion
             balances = fund.get_fund_balance(currency_conversion)
@@ -1458,7 +1468,7 @@ class GetAllFundReleaseRequests(Resource):
                     "receivedAmount": f"{request.approvedAmount}/{request.fundsRequested}",
                     "regionName": Regions.query.get(case_data.regionID).regionName,
                     "region_account_details": region_acc_details,
-                    "approved_funding": f"${case_data.status_data.data.get('approvedFunding', 0)}/${beneficiary.totalSupportCost}",
+                    "approved_funding": f"${case_data.approvedPayments}/${case_data.status_data.data.get('approvedFunding', 0)}",
                     "paymentCount": f"{request.paymentCount}/{case_data.status_data.data.get('paymentCount', 0)}",
                     "bulkName": "-",
                     "paymentDueDate": f"{case_data.dueDate}",
@@ -1511,7 +1521,7 @@ class GetAllFundReleaseRequests(Resource):
                     "receivedAmount": f"{request.approvedAmount}/{request.fundsRequested}",
                     "regionName": Regions.query.get(project_data.regionID).regionName,
                     "region_account_details": region_acc_details,
-                    "approved_funding": f"${project_data.status_data.data.get('approvedFunding', 0)} / ${project_data.budgetRequired}",
+                    "approved_funding": f"${project_data.approvedPayments}/${project_data.status_data.data.get('approvedFunding', 0)}",
                     "paymentCount": f"{request.paymentCount}/{project_data.status_data.data.get('paymentCount', 0)}",
                     "bulkName": "-",
                     "paymentDueDate": f"{project_data.dueDate}",
@@ -1909,6 +1919,9 @@ class CloseCFundReleaseApproval(Resource):
                 request.paymentCount,
                 None,
             )
+            
+            case.approvedPayments += approval.approvedAmount
+            db.session.commit()
 
             return {"message": "Approval closed successfully."}, HTTPStatus.OK
         except Exception as e:
@@ -1952,6 +1965,9 @@ class ClosePFundReleaseApproval(Resource):
                 request.paymentCount,
                 scope,
             )
+            
+            project.approvedPayments += approval.approvedAmount
+            db.session.commit()
 
             return {"message": "Approval closed successfully."}, HTTPStatus.OK
         except Exception as e:

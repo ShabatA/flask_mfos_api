@@ -84,6 +84,7 @@ class ProjectsData(db.Model):
     totalPoints = db.Column(db.Integer, default=0, nullable=True)
     project_type = db.Column(db.Enum(ProType), default=ProType.PROJECT)
     active = db.Column(db.Boolean, default=True)
+    approvedPayments = db.Column(db.Float, nullable=True, default=0)
 
     users = db.relationship(
         "Users", secondary="project_user", backref="projects_data", lazy="dynamic"
