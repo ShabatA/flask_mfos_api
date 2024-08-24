@@ -1035,8 +1035,8 @@ class SingleFinancialFundSummaryResource(Resource):
                 "availableCurrencies": fund.get_available_currencies(),
                 "subFunds": fund.get_all_sub_funds(),
                 "donations": fund.get_all_donations(),
-                "transfers_out": [transfer.out_transfer_serialize() for transfer in transfers_out],
-                "transfers_in": [transfer.in_transfer_serialize() for transfer in transfers_in],
+                "transfers_out": [transfer.out_transfer_serialize(currency_conversion) for transfer in transfers_out],
+                "transfers_in": [transfer.in_transfer_serialize(currency_conversion) for transfer in transfers_in],
                 "cases_and_projects_paid":{
                     "cases": [case_payment.fund_serialize(currency_conversion) for case_payment in case_payments],
                     "projects": [project_payment.fund_serialize(currency_conversion) for project_payment in project_payments]

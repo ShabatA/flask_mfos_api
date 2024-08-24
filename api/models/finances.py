@@ -1528,6 +1528,7 @@ class FundTransfers(db.Model):
         
     def out_transfer_serialize(self, currencyID):
         to_fund = FinancialFund.query.get(self.to_fund)
+        currency = Currencies.query.get(self.currencyID)
         return {
             "transferID": self.transferID,
             "to_fund": {
@@ -1536,6 +1537,7 @@ class FundTransfers(db.Model):
                 "balances": to_fund.get_fund_balance(currencyID),
             },
             "transferAmount": self.transferAmount,
+            "currencyName": currency.currencyName,
             "transferType": self.transferType.value,
             "notes": self.notes,
             "createdAt": self.createdAt.isoformat(),
@@ -1546,6 +1548,7 @@ class FundTransfers(db.Model):
     
     def in_transfer_serialize(self, currencyID):
         from_fund = FinancialFund.query.get(self.from_fund)
+        currency = Currencies.query.get(self.currencyID)
         return {
             "transferID": self.transferID,
             "from_fund": {
@@ -1554,6 +1557,7 @@ class FundTransfers(db.Model):
                 "balances": from_fund.get_fund_balance(currencyID),
             },
             "transferAmount": self.transferAmount,
+            "currencyName": currency.currencyName,
             "transferType": self.transferType.value,
             "notes": self.notes,
             "createdAt": self.createdAt.isoformat(),
