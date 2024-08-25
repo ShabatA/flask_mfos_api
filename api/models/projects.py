@@ -124,6 +124,7 @@ class ProjectsData(db.Model):
             "project_type": self.project_type.value,
             "active": self.active,
             "budgetRequired": self.budgetRequired,
+            "budgetApproved": self.budgetApproved,
             "projectScope": self.projectScope,
             "submittedBy": f"{user.firstName} {user.lastName}"
         }
