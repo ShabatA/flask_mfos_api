@@ -153,6 +153,23 @@ class CasesData(db.Model):
 
     def serialize(self):
         user = Users.query.get(self.userID)
+        users_assigned_to_case = (
+            Users.query.join(CaseUser, Users.userID == CaseUser.userID)
+            .filter(CaseUser.caseID == self.caseID)
+            .all()
+        )
+        stages = CaseToStage.query.filter_by(caseID=self.caseID).all()
+        completed_stages = [stage for stage in stages if stage.completed]
+
+        if completed_stages:
+            latest_completed_stage = max(
+                completed_stages, key=lambda stage: stage.stageID
+            )
+        else:
+            latest_completed_stage = (
+                min(stages, key=lambda stage: stage.stageID) if stages else None
+            )
+        
         return {
             "caseID": self.caseID,
             "caseName": f"Waiting Case {self.caseID}" if "New" in self.caseName else self.caseName,
@@ -166,7 +183,15 @@ class CasesData(db.Model):
             "serviceDate": self.beneficaries.serviceDate if self.beneficaries else None,
             "cost": self.question11,
             "referringPerson": f"{user.firstName} {user.lastName}",
-            "userID": user.userID
+            "userID": user.userID,
+            "assignedUsers": (
+                [user.userID for user in users_assigned_to_case]
+                if users_assigned_to_case
+                else []
+            ),
+            "stageName": (
+                latest_completed_stage.stage.name if latest_completed_stage else "N/A"
+            ),
         }
 
     def full_serialize(self):

@@ -628,7 +628,7 @@ class CaseGetAllResource(Resource):
             if not all_cases:
                 return [], HTTPStatus.OK  # Return an empty list
 
-            return [case.serialize() for case in all_cases], HTTPStatus.OK
+            return [case.full_serialize() for case in all_cases], HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error calculating category: {str(e)}")
             return {

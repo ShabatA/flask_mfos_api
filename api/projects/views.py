@@ -639,7 +639,7 @@ class ProjectGetAllResource(Resource):
             if not all_projects:
                 return [], HTTPStatus.OK  # Return an empty list
 
-            return [project.serialize() for project in all_projects], HTTPStatus.OK
+            return [project.full_serialize() for project in all_projects], HTTPStatus.OK
         except Exception as e:
             return {
                 "message": f"Error fetching projects: {str(e)}"
