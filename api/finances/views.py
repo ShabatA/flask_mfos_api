@@ -969,20 +969,13 @@ class SingleRegionAccountSummaryResource(Resource):
                 "accountName": account.accountName,
                 "lastUpdate": account.lastUpdate.isoformat(),
                 "availableCurrencies": account.get_available_currencies(),
+                "balances": account.get_fund_balance(currency_conversion),
                 "transactions": account.get_account_transactions(),
                 "scope_percentages": account.get_scope_percentages(),
-                "scope_balances": {
-                    key: float(value) if isinstance(value, Decimal) else value
-                    for key, value in account.get_category_balances().items()
-                },
+                "scope_balances": account.get_category_balances(),
             }
-            # get balances based on the currency conversion
-            balances = account.get_fund_balance(currency_conversion)
-            converted_balances = {
-                key: float(value) if isinstance(value, Decimal) else value
-                for key, value in balances.items()
-            }
-            return {"account": account_data | converted_balances}, HTTPStatus.OK
+           
+            return {"account": account_data}, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error getting account summary: {str(e)}")
             return {

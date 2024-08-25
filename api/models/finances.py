@@ -313,9 +313,9 @@ class RegionAccount(db.Model):
         ).first()
         if balance:
             return {
-                "totalFund": balance.totalFund,
-                "usedFund": balance.usedFund,
-                "availableFund": balance.availableFund,
+                "totalFund": float(balance.totalFund),
+                "usedFund": float(balance.usedFund),
+                "availableFund": float(balance.availableFund),
             }
 
         return {"totalFund": 0, "usedFund": 0, "availableFund": 0}
@@ -355,9 +355,8 @@ class RegionAccount(db.Model):
             percentage = (total_for_category / self.usedFund) * 100
             # Use the official name for the category
             official_name = category_names[category]
-            percentages[official_name] = round(
-                percentage, 2
-            )  # rounding to 2 decimal places for better readability
+            rounded_perc = round(percentage, 2)
+            percentages[official_name] = float(rounded_perc)  # rounding to 2 decimal places for better readability
 
         return percentages
 
