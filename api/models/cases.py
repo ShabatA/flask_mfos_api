@@ -165,7 +165,8 @@ class CasesData(db.Model):
             "serviceRequired": self.question1['questionChoice'],
             "serviceDate": self.beneficaries.serviceDate if self.beneficaries else None,
             "cost": self.question11,
-            "referringPerson": f"{user.firstName} {user.lastName}"
+            "referringPerson": f"{user.firstName} {user.lastName}",
+            "userID": user.userID
         }
 
     def full_serialize(self):

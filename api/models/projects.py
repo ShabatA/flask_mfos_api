@@ -126,7 +126,8 @@ class ProjectsData(db.Model):
             "budgetRequired": self.budgetRequired,
             "budgetApproved": self.budgetApproved,
             "projectScope": self.projectScope,
-            "submittedBy": f"{user.firstName} {user.lastName}"
+            "submittedBy": f"{user.firstName} {user.lastName}",
+            "userID": user.userID
         }
 
     def full_serialize(self):
