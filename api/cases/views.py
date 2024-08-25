@@ -468,6 +468,8 @@ class CasesAddResource(Resource):
 
             # Save the case to the database
             new_case.save()
+            
+            
 
             # Add the current user to the CaseUsers table for the new case
             case_user = CaseUser(caseID=new_case.caseID, userID=current_user.userID)
@@ -626,7 +628,7 @@ class CaseGetAllResource(Resource):
             if not all_cases:
                 return [], HTTPStatus.OK  # Return an empty list
 
-            return [case.full_serialize() for case in all_cases], HTTPStatus.OK
+            return [case.serialize() for case in all_cases], HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error calculating category: {str(e)}")
             return {
@@ -1231,7 +1233,7 @@ class CaseGetAllSortedResource(Resource):
                 return [], HTTPStatus.OK  # Return an empty list
 
             # Prepare the list of cases with additional details
-            cases_data = [case.full_serialize() for case in all_cases]
+            cases_data = [case.serialize() for case in all_cases]
 
             # Sorting cases in Python
             def get_sort_key(case):

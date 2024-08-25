@@ -152,15 +152,20 @@ class CasesData(db.Model):
         CaseStatusData.filter_by(caseID=self.caseID).delete()
 
     def serialize(self):
+        user = Users.query.get(self.userID)
         return {
             "caseID": self.caseID,
-            "caseName": self.caseName,
+            "caseName": f"Waiting Case {self.caseID}" if "New" in self.caseName else self.caseName,
             "caseStatus": self.caseStatus.value,
             "createdAt": self.createdAt.isoformat(),
             "category": self.category.value,
             "startDate": self.startDate.isoformat() if self.startDate else None,
             "dueDate": self.dueDate.isoformat() if self.dueDate else None,
             "regionName": Regions.query.get(self.regionID).regionName,
+            "serviceRequired": self.question3['questionChoice'],
+            "serviceDate": self.beneficaries.serviceDate if self.beneficaries else None,
+            "cost": self.question11,
+            "referringPerson": f"{user.firstName} {user.lastName}"
         }
 
     def full_serialize(self):
@@ -194,7 +199,7 @@ class CasesData(db.Model):
             )
         return {
             "caseID": self.caseID,
-            "caseName": self.caseName,
+            "caseName": f"Waiting Case {self.caseID}" if "New" in self.caseName else self.caseName,
             "region": region_details,
             "stageName": (
                 latest_completed_stage.stage.name if latest_completed_stage else "N/A"

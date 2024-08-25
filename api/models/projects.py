@@ -111,17 +111,21 @@ class ProjectsData(db.Model):
         db.session.commit()
 
     def serialize(self):
+        user = Users.query.get(self.createdBy)
         return {
             "projectID": self.projectID,
             "projectName": self.projectName,
             "projectStatus": self.projectStatus.value,
             "createdAt": self.createdAt.isoformat(),
-            "category": self.category.value,
+            "category": self.category.value if self.category else None,
             "startDate": self.startDate.isoformat() if self.startDate else None,
             "dueDate": self.dueDate.isoformat() if self.dueDate else None,
             "regionName": Regions.query.get(self.regionID).regionName,
             "project_type": self.project_type.value,
             "active": self.active,
+            "budgetRequired": self.budgetRequired,
+            "projectScope": self.projectScope,
+            "submittedBy": f"{user.firstName} {user.lastName}"
         }
 
     def full_serialize(self):
