@@ -42,7 +42,7 @@ class ProjectsAndCases(Resource):
             case_result = {status.value: count for status, count in case_status_counts}
             
             # Query to get the total count of cases
-            total_cases_count = db.session.query(func.count(ProjectsData.projectID)).scalar()
+            total_cases_count = db.session.query(func.count(CasesData.caseID)).scalar()
             
             # Add the total count to the result
             case_result['total'] = total_cases_count
