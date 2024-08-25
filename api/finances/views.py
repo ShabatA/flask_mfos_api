@@ -974,7 +974,7 @@ class SingleRegionAccountSummaryResource(Resource):
                 "scope_percentages": account.get_scope_percentages(),
                 "scope_balances": account.get_category_balances(),
             }
-           
+            
             return {"account": account_data}, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error getting account summary: {str(e)}")

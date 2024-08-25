@@ -374,6 +374,15 @@ class RegionAccount(db.Model):
         transactions = self.transactions
         transaction_list = []
         for transaction in transactions:
+            if transaction.projectID is not None:
+                project = ProjectsData.query.get(transaction.projectID)
+            else:
+                project = None
+            if transaction.caseID is not None:
+                case = CasesData.query.get(transaction.caseID)
+            else:
+                case = None
+            
             transaction_dict = {
                 "transactionID": transaction.transactionID,
                 "accountID": transaction.accountID,
@@ -382,7 +391,9 @@ class RegionAccount(db.Model):
                 "transactionType": transaction.transactionType,
                 "transactionSubtype": transaction.transactionSubtype,
                 "projectID": transaction.projectID,
+                "project": project.serialize() if project else None,
                 "caseID": transaction.caseID,
+                "case": case.serialize() if case else None,
                 "paymentNumber": transaction.paymentNumber,
                 "timestamp": transaction.timestamp.isoformat(),
             }
