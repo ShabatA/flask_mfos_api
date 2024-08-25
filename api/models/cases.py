@@ -162,7 +162,7 @@ class CasesData(db.Model):
             "startDate": self.startDate.isoformat() if self.startDate else None,
             "dueDate": self.dueDate.isoformat() if self.dueDate else None,
             "regionName": Regions.query.get(self.regionID).regionName,
-            "serviceRequired": self.question3['questionChoice'],
+            "serviceRequired": self.question1['questionChoice'],
             "serviceDate": self.beneficaries.serviceDate if self.beneficaries else None,
             "cost": self.question11,
             "referringPerson": f"{user.firstName} {user.lastName}"
