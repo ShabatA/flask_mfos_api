@@ -41,6 +41,7 @@ class ProjectCategoryCalculator:
             self.points_for_cat_a += 10
         else:
             self.points_for_cat_a += 0
+        
 
     def legalforA(self, legal_str):
         if legal_str.lower() == "registered":
@@ -59,6 +60,7 @@ class ProjectCategoryCalculator:
             self.points_for_c += 10
         else:
             self.points_for_c += 0
+        
 
     def calculateCategory(self):
         # 1. Budget
@@ -148,41 +150,54 @@ class ProjectCategoryCalculator:
 
         # look at each answer on the string list
         for answer in self.assessment_answers:
-            # Convert the answer to lowercase for case-insensitive matching
-            answer_lower = answer.lower()
-            self.budgetforA(answer_lower)
-            self.engagementforA(answer_lower)
-            self.legalforA(answer_lower)
-            self.controlforA(answer_lower)
+            if answer is not None:
+                # Convert the answer to lowercase for case-insensitive matching
+                answer_lower = answer.lower()
+                self.budgetforA(answer_lower)
+                self.engagementforA(answer_lower)
+                self.legalforA(answer_lower)
+                self.controlforA(answer_lower)
 
-            # Check each dictionary for points
-            for category_dict in [
-                budget_dict,
-                project_priority_dict,
-                importance_dict,
-                implementation_dict,
-                marketing_dict,
-            ]:
-                for section, options in category_dict.items():
-                    # Convert each option key to lowercase for case-insensitive matching
-                    options_lower = {
-                        key.lower(): value for key, value in options.items()
-                    }
+                # Check each dictionary for points
+                for category_dict in [
+                    budget_dict,
+                    project_priority_dict,
+                    importance_dict,
+                    implementation_dict,
+                    marketing_dict,
+                ]:
+                    
+                    for section, options in category_dict.items():
+                        # Convert each option key to lowercase for case-insensitive matching
+                        # print(section)
+                        # print(options)
+                        try:
+                            options_lower = {
+                                key.lower(): value for key, value in options.items() if key is not None
+                            }
+                            # print(options_lower)
 
-                    # Check if the lowercase answer is in the lowercase options
-                    if answer_lower in options_lower:
-                        points = options_lower.get(answer_lower, 0)
-                        total_points += points
-                        break  # Exit the inner loop once the answer is found in the current section's options
+                            # Check if the lowercase answer is in the lowercase options
+                            if answer_lower in options_lower:
+                                points = options_lower.get(answer_lower, 0)
+                                # print(f"Points: {points}")
+                                total_points += points
+                                break  # Exit the inner loop once the answer is found in the current section's options
+                        except:
+                            print(section)
+                            print(options)
+                            continue
 
         # now let's process the project data
         points = importance_dict["beneficiaryCategory"].get(
             str(self.project.beneficiaryCategory), 0
         )
+        # print(points)
         total_points += points
         points = project_priority_dict["projectNature"].get(
             str(self.project.projectNature), 0
         )
+        # print("test")
         total_points += points
         points = project_priority_dict["projectScope"].get(
             str(self.project.projectScope), 0
