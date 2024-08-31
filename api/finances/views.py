@@ -1444,10 +1444,12 @@ class GetAllFundReleaseRequests(Resource):
                 ).first()
 
                 paymentList = case_data.status_data.data.get("paymentsList", [])
+                # print(paymentList)
                 paymentsList_ = []
                 for index, item in enumerate(paymentList):
                     paymentsList_.append({"paymentNum": index + 1, "amount": item})
 
+                # print(paymentsList_)
                 request_details = {
                     "requestID": request.requestID,
                     "case": case_details,
@@ -1475,6 +1477,7 @@ class GetAllFundReleaseRequests(Resource):
             project_requests = ProjectFundReleaseRequests.query.order_by(
                 desc(ProjectFundReleaseRequests.createdAt)
             ).all()
+            print("Check Project Data")
             project_requests_data = []
             for request in project_requests:
                 user = Users.query.get(request.requestedBy)
@@ -1484,23 +1487,31 @@ class GetAllFundReleaseRequests(Resource):
                     "username": user.username,
                 }
                 project_data = ProjectsData.query.get(request.projectID)
+                print("Project Data: ", project_data.category)   
                 project_details = {
                     "projectID": project_data.projectID,
                     "projectName": project_data.projectName,
                     "category": project_data.category.value,
                     "status": project_data.projectStatus.value,
                 }
-                region_acc = RegionAccount.query.get(project_data.regionID)
+                print("===============")
+                print("region_id: ", project_data.regionID)
+                # region_acc = RegionAccount.query.filter_by(regionID=case_data.regionID).first()
+                region_acc = RegionAccount.query.filter_by(regionID=project_data.regionID).first()
+                print("Account Name: ", region_acc.accountName)
                 region_acc_details = {
                     "accountName": region_acc.accountName,
                     "availableFund": float(region_acc.availableFund),
                 }
-
+                # paymentList = case_data.status_data.data.get("paymentsList", [])
+                # print("print project status", project_data.status_data)
                 paymentList = project_data.status_data.data.get("paymentsList", [])
+                print(paymentList)
                 paymentsList_ = []
                 for index, item in enumerate(paymentList):
                     paymentsList_.append({"paymentNum": index + 1, "amount": item})
-
+                
+                print(paymentsList_)
                 request_details = {
                     "requestID": request.requestID,
                     "project": project_details,
