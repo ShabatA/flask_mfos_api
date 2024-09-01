@@ -847,7 +847,8 @@ class AddDonationResource(Resource):
                 caseID=case_id,
                 projectID=project_id,
                 projectScope=enum_project_scope.upper(),
-                allocationTags=donation_data.get("allocationTags", ""),
+                allocationTags=enum_project_scope.upper(),
+                # allocationTags=donation_data.get("allocationTags", ""),
             )
             new_donation.save()
 
