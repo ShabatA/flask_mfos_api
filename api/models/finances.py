@@ -92,6 +92,7 @@ category_names = {
     "relief": "Relief Aid",
     "shelter": "Housing",
     "sponsorship": "Sponsorship",
+    "general": "General"
 }
 
 
