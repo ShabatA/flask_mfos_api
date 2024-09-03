@@ -1939,7 +1939,7 @@ class EditTaskForStageResource(Resource):
             task.title = data.get("title", task.title)
             task.deadline = data.get("deadline", task.deadline)
             task.description = data.get("description", task.description)
-            task.startDate = data.get("startDate", func.now().date())
+            task.startDate = data.get("startDate", task.startDate)
             assigned_to_ids = data.get("assigned_to", [])
             cc_ids = data.get("cc", [])
             if task.attachedFiles.endswith(","):

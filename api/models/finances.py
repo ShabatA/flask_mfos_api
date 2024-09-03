@@ -330,6 +330,7 @@ class RegionAccount(db.Model):
                 "Relief Aid": 0,
                 "Housing": 0,
                 "Sponsorship": 0,
+                "General": 0
             }
 
         # Mapping from category code name to official name
@@ -339,9 +340,10 @@ class RegionAccount(db.Model):
             "relief": "Relief Aid",
             "shelter": "Housing",
             "sponsorship": "Sponsorship",
+            "general": "General"
         }
 
-        categories = ["health", "education", "relief", "shelter", "sponsorship"]
+        categories = ["health", "education", "relief", "shelter", "sponsorship", "general"]
         percentages = {}
 
         for category in categories:
@@ -404,7 +406,7 @@ class RegionAccount(db.Model):
     def get_category_balances(self):
         categories = CategoryFund.query.filter_by(accountID=self.accountID).all()
         category_balances = {}
-
+        
         # Mapping from category code name to official name
         category_names = {
             "health": "Healthcare",
@@ -412,7 +414,32 @@ class RegionAccount(db.Model):
             "relief": "Relief Aid",
             "shelter": "Housing",
             "sponsorship": "Sponsorship",
+            "general": "General",
         }
+        
+        standard_budget_perc = {
+            "health": 0.3,
+            "education": 0.2,
+            "relief": 0.2,
+            "shelter": 0.15,
+            "sponsorship": 0.1,
+            "general": 0.2,
+        }
+        
+        if len(categories) == 0:
+            categories = ["health", "education", "relief", "shelter", "sponsorship", "general"]
+            for category in categories:
+                # Convert category code to official name
+                official_name = category_names.get(category, "Unknown Category")
+                category_balances[official_name] = {
+                "availableFund": 0,
+                "totalFund": 0,
+                "usedFund": 0,
+                "latestDonation": "None",
+                "standard_budget": float(self.totalFund) * standard_budget_perc[category]
+            }
+            return category_balances
+
 
         for category_fund in categories:
             category_code = category_fund.category
@@ -425,15 +452,21 @@ class RegionAccount(db.Model):
                 "totalFund": 0,
                 "usedFund": 0,
                 "latestDonation": "None",
+                "standard_budget": float(self.totalFund) * standard_budget_perc[category_code]
             }
 
             # Transactions of type 'add' for this category
             add_transactions = RegionAccountTransaction.query.filter_by(
                 accountID=self.accountID, category=category_code, transactionType="add"
             ).all()
+            
+            use_transactions = RegionAccountTransaction.query.filter_by(
+                accountID=self.accountID, category=category_code, transactionType="use"
+            ).all()
 
             if add_transactions:
                 total_fund = sum(transaction.amount for transaction in add_transactions)
+                used_fund = sum(transaction.amount for transaction in use_transactions)
                 latest_donation = max(
                     transaction.timestamp for transaction in add_transactions
                 )
@@ -443,7 +476,7 @@ class RegionAccount(db.Model):
                     {
                         "totalFund": float(total_fund),
                         "usedFund": float(
-                            total_fund
+                            used_fund
                         ),  # Assuming usedFund is the same as totalFund for 'add' transactions
                         "latestDonation": latest_donation_formatted,
                     }

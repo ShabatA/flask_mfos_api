@@ -579,7 +579,7 @@ class AddEditFinancialFundResource(Resource):
                     for currency in fund_data["currencies"]:
                         if currency != 1:
                             balance = SubFundCurrencyBalance(
-                                subFundID=new_sub_fund.subFundID, currencyID=1
+                                subFundID=new_sub_fund.subFundID, currencyID=currency
                             )
                             balance.save()
 
@@ -847,8 +847,7 @@ class AddDonationResource(Resource):
                 caseID=case_id,
                 projectID=project_id,
                 projectScope=enum_project_scope.upper(),
-                allocationTags=enum_project_scope.upper(),
-                # allocationTags=donation_data.get("allocationTags", ""),
+                allocationTags=donation_data.get("allocationTags", enum_project_scope.upper()),
             )
             new_donation.save()
 

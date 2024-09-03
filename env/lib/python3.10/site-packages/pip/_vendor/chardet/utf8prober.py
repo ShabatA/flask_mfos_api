@@ -31,6 +31,7 @@ from .codingstatemachine import CodingStateMachine
 from .mbcssm import UTF8_SM_MODEL
 
 
+
 class UTF8Prober(CharSetProber):
     ONE_CHAR_PROB = 0.5
 
@@ -75,7 +76,7 @@ class UTF8Prober(CharSetProber):
     def get_confidence(self):
         unlike = 0.99
         if self._num_mb_chars < 6:
-            unlike *= self.ONE_CHAR_PROB**self._num_mb_chars
+            unlike *= self.ONE_CHAR_PROB ** self._num_mb_chars
             return 1.0 - unlike
         else:
             return unlike
