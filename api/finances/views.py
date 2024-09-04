@@ -303,18 +303,11 @@ fund_transfer_model = finance_namespace.model(
     },
 )
 
-# payments_model = finance_namespace.model('Payments', {
-#     'from_fund': fields.Integer(required=True, description= 'the actual bank account the money will come from'),
-#     'subFundID': fields.Integer(required=False, description='the sub fund of the main if applicable'),
-#     'paymentFor': fields.String(enum=[payment.value for payment in PaymentFor], description="What the payment is for"),
-#     'paymentName': fields.String(required=True, description='the name of the case/project is for, or something else'),
-#     'paymentMethod': fields.String(required=True, enum=[type.value for type in TransferType] , description='EFT, Cash, or Check'),
-#     'amount': fields.Float(required=True, description='The amount to be paid'),
-#     'currencyID': fields.Integer(required=True, description='The currency the payment is made in'),
-#     'transferExpenses': fields.Float(required=False, description='Transfer expenses if any.'),
-#     'projectScope': fields.String(required=False, enum=[scope.value for scope in ProjectScopes], description='In what scope or field will the money be spent on'),
-#     'notes': fields.String(required=False, description='any notes if applicable.')
-# })
+transfer_to_user_budget_model = finance_namespace.model('TransferToUserBudget', {
+    'userID': fields.Integer(required=True, description='The ID of the user'),
+    'currencyID': fields.Integer(required=True, description='The ID of the currency'),
+    'amount': fields.Float(required=True, description='The amount to transfer')
+})
 
 project_funds_model = finance_namespace.model(
     "ProjectFunds",
@@ -973,6 +966,7 @@ class SingleRegionAccountSummaryResource(Resource):
                 "transactions": account.get_account_transactions(),
                 "scope_percentages": account.get_scope_percentages(),
                 "scope_balances": account.get_category_balances(),
+                "donations": account.get_all_donations(),
             }
             
             return {"account": account_data}, HTTPStatus.OK
@@ -1422,10 +1416,17 @@ class GetAllFundReleaseRequests(Resource):
             case_requests_data = []
             for request in case_requests:
                 user = Users.query.get(request.requestedBy)
+                user_budget = UserBudget.query.filter_by(userID=user.userID).first()
                 user_details = {
                     "userID": user.userID,
                     "userFullName": f"{user.firstName} {user.lastName}",
                     "username": user.username,
+                }
+                default_budget = {
+                    "totalFund": 0,
+                    "usedFund": 0,
+                    "availableFund": 0,
+                    "currencyCode": '-',
                 }
                 case_data = CasesData.query.get(request.caseID)
                 case_details = {
@@ -1439,9 +1440,7 @@ class GetAllFundReleaseRequests(Resource):
                     "accountName": region_acc.accountName,
                     "availableFund": float(region_acc.availableFund),
                 }
-                beneficiary = CaseBeneficiary.query.filter_by(
-                    caseID=case_data.caseID
-                ).first()
+                
 
                 paymentList = case_data.status_data.data.get("paymentsList", [])
                 # print(paymentList)
@@ -1470,6 +1469,7 @@ class GetAllFundReleaseRequests(Resource):
                     "projectScope": "-",
                     "status": request.status,
                     "paymentList": paymentsList_,
+                    "user_budget": user_budget.get_fund_balance() if user_budget else default_budget,
                 }
 
                 case_requests_data.append(request_details)
@@ -1547,6 +1547,64 @@ class GetAllFundReleaseRequests(Resource):
                 "message": f"Error getting fund release requests: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@finance_namespace.route("/transfer_to_user_budget")
+class TransferToUserBudget(Resource):
+    @jwt_required()
+    @finance_namespace.expect(transfer_to_user_budget_model)
+    def post(self):
+        try:
+            
+            request_data = request.json
+
+            user = Users.query.get_or_404(request_data["userID"])
+            
+            existing_budget = UserBudget.query.filter_by(userID=user.userID).first()
+            if not existing_budget:
+                budget = UserBudget(
+                    userID=user.userID,
+                    currencyID= request_data["currencyID"]
+                )
+
+                budget.save()
+                budget.add_fund(request_data['amount'])
+            else:
+                existing_budget.add_fund(request_data['amount'])
+
+            return {
+                "message": "Transfer made successfully.",
+                "budget_details": budget.get_fund_balance(),
+            }, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error adding request: {str(e)}")
+            return {
+                "message": f"Error adding request: {str(e)}"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route("/get__all_users_budget")
+class GetAllUsersBudget(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            users = Users.query.all()
+            users_budget = []
+            for user in users:
+                user_budget = UserBudget.query.filter_by(userID=user.userID).first()
+                if user_budget:
+                    user_data = {
+                        "userID": user.userID,
+                        "userFullName": f"{user.firstName} {user.lastName}",
+                        "username": user.username,
+                        "budget": user_budget.get_fund_balance(),
+                    }
+                    users_budget.append(user_data)
+            return {"users_budget": users_budget}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting users budget: {str(e)}")
+            return {
+                "message": f"Error getting users budget: {str(e)}"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @finance_namespace.route("/release_project_fund_requested")
 class ReleaseProjectFundResource(Resource):

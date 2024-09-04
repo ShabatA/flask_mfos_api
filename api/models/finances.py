@@ -483,7 +483,94 @@ class RegionAccount(db.Model):
                 )
 
         return category_balances
+    
+    def get_all_donations(self):
+        donations = self.donations
+        donation_list = []
+        for donation in donations:
+            if donation.projectID is not None:
+                project = ProjectsData.query.get(donation.projectID)
+            else:
+                project = None
+            if donation.caseID is not None:
+                case = CasesData.query.get(donation.caseID)
+            else:
+                case = None
+            donation_dict = {
+                "donationID": donation.id,
+                "donor": {
+                    "donorID": donation.donor.donorID,
+                    "donorName": donation.donor.donorName,
+                    "donorEmail": donation.donor.email,
+                    # Add other donor information as needed
+                },
+                "amount": donation.amount,
+                "currencyName": donation.currency.currencyName,
+                "donationType": donation.donationType.value,
+                "createdAt": donation.createdAt.isoformat(),
+                "project": project.serialize() if project else None,
+                "case": case.serialize() if case else None,
+            }
+            donation_list.append(donation_dict)
+        return donation_list
 
+class UserBudget(db.Model):
+    __tablename__ = "user_budget"
+
+    budgetId = db.Column(db.Integer, primary_key=True)
+    userID = db.Column(
+        db.Integer,
+        db.ForeignKey("users.userID", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    currencyID = db.Column(
+        db.Integer,
+        db.ForeignKey("currencies.currencyID", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    totalFund = db.Column(db.Float, nullable=False, default=0)
+    usedFund = db.Column(db.Float, nullable=False, default=0)
+    availableFund = db.Column(db.Float, nullable=False, default=0)
+
+    currency = db.relationship("Currencies")
+
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+
+    def add_fund(self, amount):
+        self.totalFund += amount
+        self.availableFund += amount
+        db.session.commit()
+
+    def use_fund(self, amount):
+        if self.availableFund < amount:
+            raise ValueError("Insufficient funds")
+        self.usedFund += amount
+        self.availableFund -= amount
+        db.session.commit()
+
+    def get_fund_balance(self):
+        return {
+            "totalFund": self.totalFund,
+            "usedFund": self.usedFund,
+            "availableFund": self.availableFund,
+            "currencyCode": self.currency.currencyCode,
+        }
+
+    def get_available_currencies(self):
+        return {
+            "currencyID": self.currencyID,
+            "currencyCode": self.currency.currencyCode,
+            "currencyName": self.currency.currencyName,
+        }
 
 class RegionAccountCurrencyBalance(db.Model):
     __tablename__ = "region_account_currency_balances"
@@ -811,6 +898,14 @@ class FinancialFund(db.Model):
         donations = self.donations
         donation_list = []
         for donation in donations:
+            if donation.projectID is not None:
+                project = ProjectsData.query.get(donation.projectID)
+            else:
+                project = None
+            if donation.caseID is not None:
+                case = CasesData.query.get(donation.caseID)
+            else:
+                case = None
             donation_dict = {
                 "donationID": donation.id,
                 "donor": {
@@ -823,6 +918,8 @@ class FinancialFund(db.Model):
                 "currencyName": donation.currency.currencyName,
                 "donationType": donation.donationType.value,
                 "createdAt": donation.createdAt.isoformat(),
+                "project": project.serialize() if project else None,
+                "case": case.serialize() if case else None,
             }
             donation_list.append(donation_dict)
         return donation_list
@@ -1131,6 +1228,15 @@ class Donor(db.Model):
                 "accountName": account.accountName,
                 "totalFund": float(account.totalFund),
             }
+           
+            if donation.projectID is not None:
+                project = ProjectsData.query.get(donation.projectID)
+            else:
+                project = None
+            if donation.caseID is not None:
+                case = CasesData.query.get(donation.caseID)
+            else:
+                case = None
             donations_details = {
                 "donationID": donation.id,
                 "fund_account_details": fund_details,
@@ -1138,6 +1244,8 @@ class Donor(db.Model):
                 "details": donation.details,
                 "currency": Currencies.query.get(donation.currencyID).currencyCode,
                 "projectScope": donation.projectScope.value,
+                "project": project.serialize() if project else None,
+                "case": case.serialize() if case else None,
                 "donationType": donation.donationType.value,
                 "amount": donation.amount,
                 "allocationTags": donation.allocationTags,
