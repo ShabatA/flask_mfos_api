@@ -2070,6 +2070,14 @@ class GetAllDonorsResource(Resource):
                         "accountName": account.accountName,
                         "totalFund": float(account.totalFund),
                     }
+                    if donation.projectID is not None:
+                        project = ProjectsData.query.get(donation.projectID)
+                    else:
+                        project = None
+                    if donation.caseID is not None:
+                        case = CasesData.query.get(donation.caseID)
+                    else:
+                        case = None
                     donations_details = {
                         "donationID": donation.id,
                         "fund_account_details": fund_details,
@@ -2083,6 +2091,8 @@ class GetAllDonorsResource(Resource):
                         "amount": donation.amount,
                         "allocationTags": donation.allocationTags,
                         "createdAt": donation.createdAt.isoformat(),
+                        "project": project.serialize() if project else None,
+                        "case": case.serialize() if case else None,
                     }
                     donations_data.append(donations_details)
                     total_donation_amount += donation.amount
