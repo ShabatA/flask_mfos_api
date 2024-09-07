@@ -2,7 +2,7 @@ from decimal import Decimal
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
-
+from sqlalchemy.exc import SQLAlchemyError
 from api.models.accountfields import *
 from api.models.cases import *
 from api.models.projects import *
@@ -13,7 +13,7 @@ from datetime import datetime, date
 from flask import jsonify, current_app
 from flask import request
 from ..models.finances import *
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 
 finance_namespace = Namespace(
     "Finances", description="Namespace for Finances subsystem"
@@ -450,6 +450,111 @@ class GetAllCurrenciesResource(Resource):
             return {
                 "message": f"Error getting all currencies: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@finance_namespace.route("/funds_summary")
+class FundSummaryResource(Resource):
+    @jwt_required()
+    def get(self):
+        # Query to get the sum of totalFund, usedFund, and availableFund
+        fund_sums = db.session.query(
+            func.sum(FinancialFund.totalFund).label('total_fund_sum'),
+            func.sum(FinancialFund.usedFund).label('used_fund_sum'),
+            func.sum(FinancialFund.availableFund).label('available_fund_sum')
+        ).first()
+
+        # Check if the result is None, in case there are no records
+        if not fund_sums:
+            return jsonify({'message': 'No funds available'}), 404
+
+        # Prepare the response
+        response = {
+            'total_fund_sum': fund_sums.total_fund_sum if fund_sums.total_fund_sum else 0,
+            'used_fund_sum': fund_sums.used_fund_sum if fund_sums.used_fund_sum else 0,
+            'available_fund_sum': fund_sums.available_fund_sum if fund_sums.available_fund_sum else 0
+        }
+
+        # Return the response as JSON
+        return jsonify(response)
+
+
+@finance_namespace.route("/get_total_fund_pledged")
+class TotalFundPledgedResource(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            # Query to get the sum of fundsRequested where approved is NULL
+            total_pledged_cases = db.session.query(
+                func.sum(CaseFundReleaseRequests.fundsRequested).label('total_pledged')
+            ).filter(CaseFundReleaseRequests.approved == False).first()  # Checking where approved is NULL
+
+            total_pledged_projects = db.session.query(
+                func.sum(ProjectFundReleaseRequests.fundsRequested).label('total_pledged')
+            ).filter(ProjectFundReleaseRequests.approved == False).first()  # Checking where approved is NULL
+            
+            # print(total_pledged_projects.total_pledged)
+            # print(total_pledged_cases.total_pledged)
+
+            total_pledged = total_pledged_cases.total_pledged + total_pledged_projects.total_pledged
+
+            # If no records found, return 0
+            if total_pledged is None:
+                return jsonify({'total_pledged': 0}), 200
+            
+            # if total_pledged_projects is None or total_pledged_projects.total_pledged is None:
+            #     return jsonify({'total_pledged': 0}), 200
+
+            # Return the total pledged amount as JSON
+            return jsonify({
+                'total_pledged': total_pledged
+            })
+
+        except SQLAlchemyError as e:
+            # Log the exception (optional) and return an error response
+            print(f"Database error: {str(e)}")
+            return jsonify({'error': 'An error occurred while processing your request.'}), 500
+
+        except Exception as e:
+            # Handle any other general exceptions
+            print(f"Unexpected error: {str(e)}")
+            return jsonify({'error': 'An unexpected error occurred.'}), 500
+
+@finance_namespace.route("/get_region_accounts")
+class GetRegionAccountsResource(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            # Query to get the accountName, availableFund, totalFund, and usedFund
+            accounts = db.session.query(
+                RegionAccount.accountName,
+                RegionAccount.availableFund,
+                RegionAccount.totalFund,
+                RegionAccount.usedFund
+            ).all()
+
+            # Convert query results to a list of dictionaries
+            accounts_list = [
+                {
+                    'accountName': account.accountName,
+                    'availableFund': account.availableFund,
+                    'totalFund': account.totalFund,
+                    'usedFund': account.usedFund
+                }
+                for account in accounts
+            ]
+
+            # Return the results as JSON
+            return jsonify(accounts_list)
+
+        except SQLAlchemyError as e:
+            # Log the exception (optional) and return an error response
+            print(f"Database error: {str(e)}")
+            return jsonify({'error': 'An error occurred while processing your request.'}), 500
+
+        except Exception as e:
+            # Handle any other general exceptions
+            print(f"Unexpected error: {str(e)}")
+            return jsonify({'error': 'An unexpected error occurred.'}), 500
 
 
 @finance_namespace.route("/get_all_currencies_with_balances")
