@@ -923,14 +923,22 @@ class AddDonationResource(Resource):
                 sub_fund = SubFunds.query.get_or_404(sub_fund_id)
             else:
                 sub_fund = None
+            
+            # pr_map = {
+            #     'Helath',
+            #     'General and relief',
+            #     'Education',
+            #     'Sheleter',
+            #     'Sponsership'
+            # }
 
             project_scope_mapping = {
-                "Healthcare": "HEALTH",
-                "Education Support": "EDUCATION",
-                "Relief Aid": "RELIEF",
+                "Helath": "HEALTH",
+                "Education": "EDUCATION",
+                # "Relief Aid": "RELIEF",
                 "Sponsership": "SPONSERSHIP",
-                "General": "GENERAL",
-                "Housing": "SHELTER",
+                "General and Relief": "GENERAL",
+                "Sheleter": "SHELTER",
             }
 
             # Assuming donation_info is a dictionary that includes 'projectScope'
