@@ -13,7 +13,9 @@ from datetime import datetime, date
 from flask import jsonify, current_app
 from flask import request
 from ..models.finances import *
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, text
+import json
+from flask import make_response
 
 finance_namespace = Namespace(
     "Finances", description="Namespace for Finances subsystem"
@@ -282,6 +284,16 @@ approve_c_fund_release_request = finance_namespace.model(
         ),
     },
 )
+
+user_transfer_model = finance_namespace.model('Transfer', {
+    'fromType': fields.String(required=True, description='Source type: user or fund'),
+    'fromID': fields.Integer(required=True, description='ID of the source: userID or fundID'),
+    'toUserID': fields.Integer(required=True, description='Target userID'),
+    'amount': fields.Float(required=True, description='Amount to transfer'),
+    'currencyID': fields.Integer(required=True, description='Currency ID for the transfer'),
+    'transferType': fields.String(required=False, default='Transfer', description='Type of the transfer'),
+    'notes': fields.String(required=False, description='Additional notes')
+})
 
 fund_transfer_model = finance_namespace.model(
     "FundTransfer",
@@ -1348,6 +1360,63 @@ class CloseDonationResource(Resource):
                 "message": f"Error closing donation: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@finance_namespace.route("/project_cases_account_summary")
+class ProjectCasesAccountSummaryResource(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            # Execute the SQL query without computing availableFund in the query
+            result = db.session.execute(text('''
+                SELECT ra."regionID", ra."accountName", 
+                    SUM(cfa."approvedAmount") AS total_approved_cases,
+                    SUM(pfa."approvedAmount") AS total_approved_projects,
+                    ra."totalFund",
+                    ra."usedFund"
+                FROM region_account ra
+                LEFT JOIN case_fund_release_approval cfa ON cfa."accountID" = ra."accountID"
+                LEFT JOIN project_fund_release_approval pfa ON pfa."accountID" = ra."accountID"
+                GROUP BY ra."regionID", ra."accountName", ra."totalFund", ra."usedFund";
+            '''))
+
+            # Process the result into a list of dictionaries
+            data = []
+            for row in result:
+                totalFund = float(row.totalFund) if isinstance(row.totalFund, Decimal) else (row.totalFund if row.totalFund is not None else 0.0)
+                usedFund = float(row.usedFund) if isinstance(row.usedFund, Decimal) else (row.usedFund if row.usedFund is not None else 0.0)
+                
+                # Compute availableFund in Python
+                availableFund = totalFund - usedFund
+
+                data.append({
+                    'regionID': row.regionID if row.regionID is not None else "",
+                    'accountName': row.accountName if row.accountName is not None else "",
+                    'total_approved_cases': float(row.total_approved_cases) if row.total_approved_cases is not None else 0.0,
+                    'total_approved_projects': float(row.total_approved_projects) if row.total_approved_projects is not None else 0.0,
+                    'totalFund': totalFund,
+                    'usedFund': usedFund,
+                    'availableFund': availableFund
+                })
+
+            # Make the response object using Flask's make_response
+            response = make_response(json.dumps({'data': data}), 200)
+            response.headers["Content-Type"] = "application/json"
+            return response
+
+        except SQLAlchemyError as e:
+            # Handle SQLAlchemy errors
+            error_message = str(e.orig) if hasattr(e, 'orig') else str(e)
+            return make_response(json.dumps({'error': 'Database error', 'message': error_message}), 500)
+
+        except Exception as e:
+            # Catch all other exceptions and return JSON response
+            return make_response(json.dumps({'error': 'An unexpected error occurred', 'message': str(e)}), 500)
+    
+        
+
+
+
+
+
 
 @finance_namespace.route("/add_project_funds")
 class AddProjectFundsResource(Resource):
@@ -1652,6 +1721,8 @@ class GetAllFundReleaseRequests(Resource):
                 "message": f"Error getting fund release requests: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
+
+
 @finance_namespace.route("/transfer_to_user_budget")
 class TransferToUserBudget(Resource):
     @jwt_required()
@@ -1685,6 +1756,58 @@ class TransferToUserBudget(Resource):
             return {
                 "message": f"Error adding request: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+# @finance_namespace.route("/transfer_to_user_budget2")
+@finance_namespace.route('/transfer_to_user_budget2')
+class TransferToUserBudget2(Resource):
+    @jwt_required()
+    @finance_namespace.expect(user_transfer_model)
+    def post(self):
+        data = finance_namespace.payload
+
+        from_type = data.get('fromType')
+        from_id = data.get('fromID')
+        to_user_id = data.get('toUserID')
+        amount = data.get('amount')
+        currency_id = data.get('currencyID')
+        transfer_type = data.get('transferType', 'Transfer')
+        notes = data.get('notes', '')
+
+        # Validate request data
+        if from_type not in ['user', 'fund']:
+            return {'error': 'Invalid fromType'}, 400
+
+        try:
+            # Retrieve the recipient's UserBudget
+            to_budget = UserBudget.query.filter_by(userID=to_user_id, currencyID=currency_id).first()
+            if not to_budget:
+                return {'error': 'Target user budget not found'}, 404
+
+            if from_type == 'user':
+                # Transfer from another user's budget
+                from_budget = UserBudget.query.filter_by(userID=from_id, currencyID=currency_id).first()
+                if not from_budget:
+                    return {'error': 'Source user budget not found'}, 404
+
+                # Perform the transfer
+                from_budget.transfer_fund(to_budget, amount, currency_id, transfer_type, notes)
+
+            elif from_type == 'fund':
+                # Transfer from a FinancialFund
+                from_fund = FinancialFund.query.get(from_id)
+                if not from_fund:
+                    return {'error': 'Source fund not found'}, 404
+
+                # Perform the transfer from the fund
+                from_fund.transfer_to_user(to_budget, amount, currency_id, transfer_type, notes)
+
+            return {'message': 'Transfer successful'}, 200
+
+        except ValueError as ve:
+            return {'error': str(ve)}, 400
+        except Exception as e:
+            return {'error': f'An unexpected error occurred: {str(e)}'}, 500
 
 @finance_namespace.route("/get__all_users_budget")
 class GetAllUsersBudget(Resource):
