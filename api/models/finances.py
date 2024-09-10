@@ -571,6 +571,37 @@ class UserBudget(db.Model):
             "currencyCode": self.currency.currencyCode,
             "currencyName": self.currency.currencyName,
         }
+    
+    def transfer_fund(self, to_budget, amount, currencyID, transfer_type="Transfer", notes=""):
+        if self.availableFund < amount:
+            raise ValueError("Insufficient funds")
+
+        try:
+            # Deduct from the source budget
+            self.availableFund -= amount
+            self.usedFund += amount
+
+            # Add to the target budget
+            to_budget.availableFund += amount
+            to_budget.totalFund += amount
+
+            # Create a transaction record
+            transaction = UserBudgetTransaction(
+                fromBudgetID=self.budgetId,
+                toBudgetID=to_budget.budgetId,
+                transferAmount=amount,
+                transferType=transfer_type,
+                currencyID=currencyID,
+                notes=notes
+            )
+
+            db.session.add(transaction)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise ValueError(f"Transaction failed: {str(e)}")
+
+
 
 class RegionAccountCurrencyBalance(db.Model):
     __tablename__ = "region_account_currency_balances"
@@ -923,6 +954,35 @@ class FinancialFund(db.Model):
             }
             donation_list.append(donation_dict)
         return donation_list
+    
+    def transfer_to_user(self, user_budget, amount, currencyID, transfer_type="Transfer", notes=""):
+        if self.availableFund < amount:
+            raise ValueError("Insufficient funds in the fund")
+
+        try:
+            # Deduct from the fund
+            self.availableFund -= amount
+            self.usedFund += amount
+
+            # Add to the user's budget
+            user_budget.availableFund += amount
+            user_budget.totalFund += amount
+
+            # Create a transaction record
+            transaction = UserBudgetTransaction(
+                fromFundID=self.fundID,
+                toBudgetID=user_budget.budgetId,
+                transferAmount=amount,
+                transferType=transfer_type,
+                currencyID=currencyID,
+                notes=notes
+            )
+
+            db.session.add(transaction)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            raise ValueError(f"Transaction failed: {str(e)}")
 
 
 class FinancialFundCurrencyBalance(db.Model):
@@ -1770,3 +1830,40 @@ class Reports(db.Model):
     def delete(self):
         db.session.delete(self)
         db.session.commit()
+
+class UserBudgetTransaction(db.Model):
+    __tablename__ = "user_budget_transaction"
+
+    transactionID = db.Column(db.Integer, primary_key=True)
+    fromBudgetID = db.Column(
+        db.Integer, db.ForeignKey("user_budget.budgetId", ondelete="SET NULL"), nullable=True
+    )
+    toBudgetID = db.Column(
+        db.Integer, db.ForeignKey("user_budget.budgetId", ondelete="SET NULL"), nullable=True
+    )
+    fromFundID = db.Column(
+        db.Integer, db.ForeignKey("financial_fund.fundID", ondelete="SET NULL"), nullable=True
+    )
+    transferAmount = db.Column(db.Float, nullable=False)
+    transferType = db.Column(db.String(50), nullable=False)  # E.g., "Transfer", "Top-up", "Withdrawal"
+    currencyID = db.Column(
+        db.Integer, db.ForeignKey("currencies.currencyID", ondelete="CASCADE"),
+        nullable=False,
+    )
+    notes = db.Column(db.Text)
+    transferDate = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    from_budget = db.relationship("UserBudget", foreign_keys=[fromBudgetID])
+    to_budget = db.relationship("UserBudget", foreign_keys=[toBudgetID])
+    from_fund = db.relationship("FinancialFund", foreign_keys=[fromFundID])
+    currency = db.relationship("Currencies")
+
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+    
+    
