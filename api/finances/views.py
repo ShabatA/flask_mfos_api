@@ -9,7 +9,7 @@ from api.models.projects import *
 from ..models.users import Users
 from ..models.regions import Regions
 from ..utils.db import db
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from flask import jsonify, current_app
 from flask import request
 from ..models.finances import *
@@ -373,6 +373,130 @@ currencies_model = finance_namespace.model(
     },
 )
 
+@finance_namespace.route("/fund_distribution", methods=["GET"])
+class FundDistribution(Resource):
+    @jwt_required()
+    # @finance_namespace.expect(fund_distribution_model, validate=False)
+    def get(self):
+        # Query to sum the amount grouped by projectScope and accountName
+        results = (
+            db.session.query(
+                Donations.projectScope,
+                RegionAccount.accountName,
+                db.func.sum(Donations.amount).label('total_amount')
+            )
+            .join(RegionAccount, Donations.accountID == RegionAccount.accountID)
+            .group_by(Donations.projectScope, RegionAccount.accountName)
+            .all()
+        )
+
+        # Format the results into a list of dictionaries
+        data = [
+            {
+                'projectScope': result.projectScope.name,  # Convert enum to its name
+                'accountName': result.accountName,
+                'total_amount': float(result.total_amount)
+            }
+            for result in results
+        ]
+
+        return {'data': data}, 200
+    
+@finance_namespace.route("/status_amounts_by_region_account", methods=["GET"])
+class StatusAmountsByRegionAccount(Resource):
+    @jwt_required()
+    # @finance_namespace.expect(fund_distribution_model, validate=False)
+    def get(self):
+        # Query to sum the amounts by status and group by region account
+        results = (
+            db.session.query(
+                RegionAccount.accountName,  # Assuming the region account has 'accountName'
+                db.func.sum(
+                    db.case(
+                        (Donations.status.in_(['Approved', 'Closed']), Donations.amount),
+                        else_=0
+                    )
+                ).label('total_approved_closed'),
+                db.func.sum(
+                    db.case(
+                        (~Donations.status.in_(['Approved', 'Closed']), Donations.amount),
+                        else_=0
+                    )
+                ).label('total_other_statuses')
+            )
+            .join(RegionAccount, Donations.accountID == RegionAccount.accountID)
+            .group_by(RegionAccount.accountName)
+            .all()
+        )
+
+        # Format the results into a list of dictionaries
+        data = [
+            {
+                'accountName': result.accountName,
+                'total_approved_closed': float(result.total_approved_closed),
+                'total_other_statuses': float(result.total_other_statuses)
+            }
+            for result in results
+        ]
+
+        return {'data': data}, 200
+
+
+@finance_namespace.route("/unapproved_transactions_reminder", methods=["GET"])
+class UnapprovedTransactionsReminder(Resource):
+    @jwt_required()
+    def get(self):
+        # Calculate the cutoff date (20 days ago)
+        cutoff_date = datetime.now() - timedelta(days=20)
+
+        # Query for unapproved and non-rejected project fund release requests
+        unapproved_project_requests = (
+            db.session.query(ProjectFundReleaseRequests)
+            .filter(
+                ProjectFundReleaseRequests.approved == False,
+                ProjectFundReleaseRequests.createdAt <= cutoff_date,
+                ProjectFundReleaseRequests.status != "Rejected"
+            )
+            .all()
+        )
+
+        # Query for unapproved and non-rejected case fund release requests
+        unapproved_case_requests = (
+            db.session.query(CaseFundReleaseRequests)
+            .filter(
+                CaseFundReleaseRequests.approved == False,
+                CaseFundReleaseRequests.createdAt <= cutoff_date,
+                CaseFundReleaseRequests.status != "Rejected"
+            )
+            .all()
+        )
+
+        # Format the results into a list of dictionaries
+        reminders = []
+
+        for request in unapproved_project_requests:
+            reminders.append({
+                'type': 'Project',
+                'requestID': request.requestID,
+                'projectID': request.projectID,
+                'fundsRequested': request.fundsRequested,
+                'createdAt': request.createdAt.strftime('%Y-%m-%d %H:%M:%S'),
+                'requestedBy': request.requestedBy,
+                'status': request.status
+            })
+
+        for request in unapproved_case_requests:
+            reminders.append({
+                'type': 'Case',
+                'requestID': request.requestID,
+                'caseID': request.caseID,
+                'fundsRequested': request.fundsRequested,
+                'createdAt': request.createdAt.strftime('%Y-%m-%d %H:%M:%S'),
+                'requestedBy': request.requestedBy,
+                'status': request.status
+            })
+
+        return {'reminders': reminders}, 200
 
 @finance_namespace.route("/currencies/create", methods=["POST", "PUT"])
 class CreateCurrency(Resource):
