@@ -5,9 +5,10 @@ from http import HTTPStatus
 from sqlalchemy.exc import SQLAlchemyError
 from api.models.accountfields import *
 from api.models.cases import *
-from api.models.projects import *
 from ..models.users import Users
 from ..models.regions import Regions
+from ..models.projects import ProjectsData
+from ..models.cases import CasesData
 from ..utils.db import db
 from datetime import datetime, date, timedelta
 from flask import jsonify, current_app
@@ -16,6 +17,9 @@ from ..models.finances import *
 from sqlalchemy import desc, func, text
 import json
 from flask import make_response
+
+
+
 
 finance_namespace = Namespace(
     "Finances", description="Namespace for Finances subsystem"
@@ -376,8 +380,20 @@ currencies_model = finance_namespace.model(
 @finance_namespace.route("/fund_distribution", methods=["GET"])
 class FundDistribution(Resource):
     @jwt_required()
-    # @finance_namespace.expect(fund_distribution_model, validate=False)
     def get(self):
+        # Define all possible project scopes
+        all_project_scopes = ["HEALTH", "SHELTER", "GENERAL", "SPONSORSHIP", "EDUCATION"]
+
+        # Query to get all distinct account names
+        account_names = (
+            db.session.query(RegionAccount.accountName)
+            .distinct()
+            .all()
+        )
+
+        # Create a dictionary to hold the results
+        distribution = {account.accountName: {scope: 0 for scope in all_project_scopes} for account in account_names}
+
         # Query to sum the amount grouped by projectScope and accountName
         results = (
             db.session.query(
@@ -390,17 +406,22 @@ class FundDistribution(Resource):
             .all()
         )
 
+        # Populate the distribution dictionary with the results
+        for result in results:
+            distribution[result.accountName][result.projectScope.name] = float(result.total_amount)
+
         # Format the results into a list of dictionaries
         data = [
             {
-                'projectScope': result.projectScope.name,  # Convert enum to its name
-                'accountName': result.accountName,
-                'total_amount': float(result.total_amount)
+                'accountName': account_name,
+                **scopes
             }
-            for result in results
+            for account_name, scopes in distribution.items()
         ]
 
         return {'data': data}, 200
+
+
     
 @finance_namespace.route("/status_amounts_by_region_account", methods=["GET"])
 class StatusAmountsByRegionAccount(Resource):
@@ -442,12 +463,12 @@ class StatusAmountsByRegionAccount(Resource):
         return {'data': data}, 200
 
 
-@finance_namespace.route("/unapproved_transactions_reminder", methods=["GET"])
+@finance_namespace.route("/unapproved_transactions_reminder", methods=["GET"]) 
 class UnapprovedTransactionsReminder(Resource):
     @jwt_required()
     def get(self):
         # Calculate the cutoff date (20 days ago)
-        cutoff_date = datetime.now() - timedelta(days=20)
+        cutoff_date = datetime.now() - timedelta(days=7)
 
         # Query for unapproved and non-rejected project fund release requests
         unapproved_project_requests = (
@@ -471,32 +492,27 @@ class UnapprovedTransactionsReminder(Resource):
             .all()
         )
 
-        # Format the results into a list of dictionaries
+        # Format the results into reminder sentences
         reminders = []
 
         for request in unapproved_project_requests:
-            reminders.append({
-                'type': 'Project',
-                'requestID': request.requestID,
-                'projectID': request.projectID,
-                'fundsRequested': request.fundsRequested,
-                'createdAt': request.createdAt.strftime('%Y-%m-%d %H:%M:%S'),
-                'requestedBy': request.requestedBy,
-                'status': request.status
-            })
+            project = db.session.query(ProjectsData).filter_by(projectID=request.projectID).first()
+            if project:
+                reminders.append(
+                    f"Project '{project.projectName}' has requested funds on "
+                    f"{request.createdAt.strftime('%Y-%m-%d')} and has been pending for over 7 days."
+                )
 
         for request in unapproved_case_requests:
-            reminders.append({
-                'type': 'Case',
-                'requestID': request.requestID,
-                'caseID': request.caseID,
-                'fundsRequested': request.fundsRequested,
-                'createdAt': request.createdAt.strftime('%Y-%m-%d %H:%M:%S'),
-                'requestedBy': request.requestedBy,
-                'status': request.status
-            })
+            case = db.session.query(CasesData).filter_by(caseID=request.caseID).first()
+            if case:
+                reminders.append(
+                    f"Case '{case.caseName}' has requested funds on "
+                    f"{request.createdAt.strftime('%Y-%m-%d')} and has been pending for over 7 days."
+                )
 
         return {'reminders': reminders}, 200
+
 
 @finance_namespace.route("/currencies/create", methods=["POST", "PUT"])
 class CreateCurrency(Resource):
@@ -1048,29 +1064,23 @@ class AddDonationResource(Resource):
             else:
                 sub_fund = None
             
-            # pr_map = {
-            #     'Helath',
-            #     'General and relief',
-            #     'Education',
-            #     'Sheleter',
-            #     'Sponsership'
-            # }
-
             project_scope_mapping = {
-                "Helath": "HEALTH",
-                "Education": "EDUCATION",
-                # "Relief Aid": "RELIEF",
-                "Sponsership": "SPONSERSHIP",
-                "General and Relief": "GENERAL",
-                "Sheleter": "SHELTER",
+                "HEALTH": "HEALTH",
+                "EDUCATION": "EDUCATION",
+                "SPONSERSHIP": "SPONSORSHIP",
+                "GENERAL": "GENERAL",
+                "GENERAL AND RELIEF": "GENERAL",
+                "SHELTER": "SHELTER",
+                "RELIEF": "RELIEF"
             }
+            # This time, we'll keep it in title case to match the Enum values more closely
+            human_readable_scope = donation_data.get("project_scope", "").strip().upper()
+            print(human_readable_scope)
+            print(project_scope_mapping.get(human_readable_scope))
 
-            # Assuming donation_info is a dictionary that includes 'projectScope'
-            human_readable_scope = donation_data.get("project_scope")
-
-            # Step 3: Translate the human-readable project scope to the enum value
+            # Translate the human-readable project scope to the enum value
             enum_project_scope = project_scope_mapping.get(human_readable_scope)
-
+            
             if not enum_project_scope:
                 # Handle invalid project scope
                 return {
@@ -1088,8 +1098,8 @@ class AddDonationResource(Resource):
                 donationType=donation_data["donationType"].upper(),
                 caseID=case_id,
                 projectID=project_id,
-                projectScope=enum_project_scope.upper(),
-                allocationTags=donation_data.get("allocationTags", enum_project_scope.upper()),
+                projectScope=enum_project_scope,
+                allocationTags=donation_data.get("allocationTags", enum_project_scope),
             )
             new_donation.save()
 
@@ -1889,8 +1899,6 @@ class TransferToUserBudget(Resource):
                 "message": f"Error adding request: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
-
-# @finance_namespace.route("/transfer_to_user_budget2")
 @finance_namespace.route('/transfer_to_user_budget2')
 class TransferToUserBudget2(Resource):
     @jwt_required()
@@ -1916,6 +1924,8 @@ class TransferToUserBudget2(Resource):
             if not to_budget:
                 return {'error': 'Target user budget not found'}, 404
 
+            transfer_data = {}
+
             if from_type == 'user':
                 # Transfer from another user's budget
                 from_budget = UserBudget.query.filter_by(userID=from_id, currencyID=currency_id).first()
@@ -1924,6 +1934,24 @@ class TransferToUserBudget2(Resource):
 
                 # Perform the transfer
                 from_budget.transfer_fund(to_budget, amount, currency_id, transfer_type, notes)
+
+                transfer_data = {
+                    'from': {
+                        'type': 'user',
+                        'userID': from_id,
+                        'currencyID': currency_id,
+                        'amount': from_budget.amount,
+                    },
+                    'to': {
+                        'userID': to_user_id,
+                        'currencyID': currency_id,
+                        'amount': to_budget.amount,
+                    },
+                    'amount_transferred': amount,
+                    'currencyID': currency_id,
+                    'transfer_type': transfer_type,
+                    'notes': notes
+                }
 
             elif from_type == 'fund':
                 # Transfer from a FinancialFund
@@ -1934,12 +1962,81 @@ class TransferToUserBudget2(Resource):
                 # Perform the transfer from the fund
                 from_fund.transfer_to_user(to_budget, amount, currency_id, transfer_type, notes)
 
-            return {'message': 'Transfer successful'}, 200
+                transfer_data = {
+                    'from': {
+                        'type': 'fund',
+                        'fundID': from_id,
+                        'currencyID': currency_id,
+                        'amount': from_fund.amount,
+                    },
+                    'to': {
+                        'userID': to_user_id,
+                        'currencyID': currency_id,
+                        'amount': to_budget.amount,
+                    },
+                    'amount_transferred': amount,
+                    'currencyID': currency_id,
+                    'transfer_type': transfer_type,
+                    'notes': notes
+                }
+
+            return {'message': 'Transfer successful', 'transfer_data': transfer_data}, 200
 
         except ValueError as ve:
             return {'error': str(ve)}, 400
         except Exception as e:
             return {'error': f'An unexpected error occurred: {str(e)}'}, 500
+
+# @finance_namespace.route("/transfer_to_user_budget2")
+# @finance_namespace.route('/transfer_to_user_budget2')
+# class TransferToUserBudget2(Resource):
+#     @jwt_required()
+#     @finance_namespace.expect(user_transfer_model)
+#     def post(self):
+#         data = finance_namespace.payload
+
+#         from_type = data.get('fromType')
+#         from_id = data.get('fromID')
+#         to_user_id = data.get('toUserID')
+#         amount = data.get('amount')
+#         currency_id = data.get('currencyID')
+#         transfer_type = data.get('transferType', 'Transfer')
+#         notes = data.get('notes', '')
+
+#         # Validate request data
+#         if from_type not in ['user', 'fund']:
+#             return {'error': 'Invalid fromType'}, 400
+
+#         try:
+#             # Retrieve the recipient's UserBudget
+#             to_budget = UserBudget.query.filter_by(userID=to_user_id, currencyID=currency_id).first()
+#             if not to_budget:
+#                 return {'error': 'Target user budget not found'}, 404
+
+#             if from_type == 'user':
+#                 # Transfer from another user's budget
+#                 from_budget = UserBudget.query.filter_by(userID=from_id, currencyID=currency_id).first()
+#                 if not from_budget:
+#                     return {'error': 'Source user budget not found'}, 404
+
+#                 # Perform the transfer
+#                 from_budget.transfer_fund(to_budget, amount, currency_id, transfer_type, notes)
+
+#             elif from_type == 'fund':
+#                 # Transfer from a FinancialFund
+#                 from_fund = FinancialFund.query.get(from_id)
+#                 if not from_fund:
+#                     return {'error': 'Source fund not found'}, 404
+
+#                 # Perform the transfer from the fund
+#                 from_fund.transfer_to_user(to_budget, amount, currency_id, transfer_type, notes)
+
+#             return {'message': 'Transfer successful'}, 200
+
+#         except ValueError as ve:
+#             return {'error': str(ve)}, 400
+#         except Exception as e:
+#             return {'error': f'An unexpected error occurred: {str(e)}'}, 500
 
 @finance_namespace.route("/get__all_users_budget")
 class GetAllUsersBudget(Resource):
