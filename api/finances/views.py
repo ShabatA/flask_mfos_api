@@ -1,5 +1,6 @@
 from decimal import Decimal
 from flask_restx import Resource, Namespace, fields
+from flask_restx import reqparse
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from http import HTTPStatus
 from sqlalchemy.exc import SQLAlchemyError
@@ -377,10 +378,30 @@ currencies_model = finance_namespace.model(
     },
 )
 
+# Define the parser and expected arguments
+parser = reqparse.RequestParser()
+parser.add_argument('start_date', type=str, required=True, help='Start date in the format YYYY-MM-DD')
+parser.add_argument('end_date', type=str, required=True, help='End date in the format YYYY-MM-DD')
+
+
+
 @finance_namespace.route("/fund_distribution", methods=["GET"])
+@finance_namespace.expect(parser)
 class FundDistribution(Resource):
     @jwt_required()
     def get(self):
+        # Parse the arguments
+        args = parser.parse_args()
+        start_date_str = args['start_date']
+        end_date_str = args['end_date']
+
+        # Parse the dates
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+        except ValueError:
+            return {"message": "Invalid date format. Please use YYYY-MM-DD."}, 400
+
         # Define all possible project scopes
         all_project_scopes = ["HEALTH", "SHELTER", "GENERAL", "SPONSORSHIP", "EDUCATION"]
 
@@ -394,7 +415,7 @@ class FundDistribution(Resource):
         # Create a dictionary to hold the results
         distribution = {account.accountName: {scope: 0 for scope in all_project_scopes} for account in account_names}
 
-        # Query to sum the amount grouped by projectScope and accountName
+        # Query to sum the amount grouped by projectScope and accountName, filtered by date range
         results = (
             db.session.query(
                 Donations.projectScope,
@@ -402,6 +423,10 @@ class FundDistribution(Resource):
                 db.func.sum(Donations.amount).label('total_amount')
             )
             .join(RegionAccount, Donations.accountID == RegionAccount.accountID)
+            .filter(
+                Donations.createdAt >= start_date,
+                Donations.createdAt <= end_date
+            )
             .group_by(Donations.projectScope, RegionAccount.accountName)
             .all()
         )
@@ -422,16 +447,27 @@ class FundDistribution(Resource):
         return {'data': data}, 200
 
 
-    
 @finance_namespace.route("/status_amounts_by_region_account", methods=["GET"])
+@finance_namespace.expect(parser)
 class StatusAmountsByRegionAccount(Resource):
     @jwt_required()
-    # @finance_namespace.expect(fund_distribution_model, validate=False)
     def get(self):
-        # Query to sum the amounts by status and group by region account
+        # Parse the arguments
+        args = parser.parse_args()
+        start_date_str = args['start_date']
+        end_date_str = args['end_date']
+
+        # Parse the dates
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+        except ValueError:
+            return {"message": "Invalid date format. Please use YYYY-MM-DD."}, 400
+
+        # Query to sum the amounts by status and group by region account, filtered by date range
         results = (
             db.session.query(
-                RegionAccount.accountName,  # Assuming the region account has 'accountName'
+                RegionAccount.accountName,
                 db.func.sum(
                     db.case(
                         (Donations.status.in_(['Approved', 'Closed']), Donations.amount),
@@ -446,6 +482,10 @@ class StatusAmountsByRegionAccount(Resource):
                 ).label('total_other_statuses')
             )
             .join(RegionAccount, Donations.accountID == RegionAccount.accountID)
+            .filter(
+                Donations.createdAt >= start_date,
+                Donations.createdAt <= end_date
+            )
             .group_by(RegionAccount.accountName)
             .all()
         )
@@ -463,30 +503,42 @@ class StatusAmountsByRegionAccount(Resource):
         return {'data': data}, 200
 
 
-@finance_namespace.route("/unapproved_transactions_reminder", methods=["GET"]) 
+@finance_namespace.route("/unapproved_transactions_reminder", methods=["GET"])
+@finance_namespace.expect(parser)
 class UnapprovedTransactionsReminder(Resource):
     @jwt_required()
     def get(self):
-        # Calculate the cutoff date (20 days ago)
-        cutoff_date = datetime.now() - timedelta(days=7)
+         # Parse the arguments
+        args = parser.parse_args()
+        start_date_str = args['start_date']
+        end_date_str = args['end_date']
 
-        # Query for unapproved and non-rejected project fund release requests
+        # Parse the dates
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+        except ValueError:
+            return {"message": "Invalid date format. Please use YYYY-MM-DD."}, 400
+
+        # Query for unapproved and non-rejected project fund release requests within the date range
         unapproved_project_requests = (
             db.session.query(ProjectFundReleaseRequests)
             .filter(
                 ProjectFundReleaseRequests.approved == False,
-                ProjectFundReleaseRequests.createdAt <= cutoff_date,
+                ProjectFundReleaseRequests.createdAt >= start_date,
+                ProjectFundReleaseRequests.createdAt <= end_date,
                 ProjectFundReleaseRequests.status != "Rejected"
             )
             .all()
         )
 
-        # Query for unapproved and non-rejected case fund release requests
+        # Query for unapproved and non-rejected case fund release requests within the date range
         unapproved_case_requests = (
             db.session.query(CaseFundReleaseRequests)
             .filter(
                 CaseFundReleaseRequests.approved == False,
-                CaseFundReleaseRequests.createdAt <= cutoff_date,
+                CaseFundReleaseRequests.createdAt >= start_date,
+                CaseFundReleaseRequests.createdAt <= end_date,
                 CaseFundReleaseRequests.status != "Rejected"
             )
             .all()
@@ -498,17 +550,21 @@ class UnapprovedTransactionsReminder(Resource):
         for request in unapproved_project_requests:
             project = db.session.query(ProjectsData).filter_by(projectID=request.projectID).first()
             if project:
+                # Calculate days pending
+                days_pending = (end_date - request.createdAt).days
                 reminders.append(
                     f"Project '{project.projectName}' has requested funds on "
-                    f"{request.createdAt.strftime('%Y-%m-%d')} and has been pending for over 7 days."
+                    f"{request.createdAt.strftime('%Y-%m-%d')} and has been pending for {days_pending} days."
                 )
 
         for request in unapproved_case_requests:
             case = db.session.query(CasesData).filter_by(caseID=request.caseID).first()
             if case:
+                # Calculate days pending
+                days_pending = (end_date - request.createdAt).days
                 reminders.append(
                     f"Case '{case.caseName}' has requested funds on "
-                    f"{request.createdAt.strftime('%Y-%m-%d')} and has been pending for over 7 days."
+                    f"{request.createdAt.strftime('%Y-%m-%d')} and has been pending for {days_pending} days."
                 )
 
         return {'reminders': reminders}, 200
@@ -1502,23 +1558,87 @@ class CloseDonationResource(Resource):
                 "message": f"Error closing donation: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
+# @finance_namespace.route("/project_cases_account_summary")
+# class ProjectCasesAccountSummaryResource(Resource):
+#     @jwt_required()
+#     def get(self):
+#         try:
+#             # Execute the SQL query without computing availableFund in the query
+#             result = db.session.execute(text('''
+#                 SELECT ra."regionID", ra."accountName", 
+#                     SUM(cfa."approvedAmount") AS total_approved_cases,
+#                     SUM(pfa."approvedAmount") AS total_approved_projects,
+#                     ra."totalFund",
+#                     ra."usedFund"
+#                 FROM region_account ra
+#                 LEFT JOIN case_fund_release_approval cfa ON cfa."accountID" = ra."accountID"
+#                 LEFT JOIN project_fund_release_approval pfa ON pfa."accountID" = ra."accountID"
+#                 GROUP BY ra."regionID", ra."accountName", ra."totalFund", ra."usedFund";
+#             '''))
+
+#             # Process the result into a list of dictionaries
+#             data = []
+#             for row in result:
+#                 totalFund = float(row.totalFund) if isinstance(row.totalFund, Decimal) else (row.totalFund if row.totalFund is not None else 0.0)
+#                 usedFund = float(row.usedFund) if isinstance(row.usedFund, Decimal) else (row.usedFund if row.usedFund is not None else 0.0)
+                
+#                 # Compute availableFund in Python
+#                 availableFund = totalFund - usedFund
+
+#                 data.append({
+#                     'regionID': row.regionID if row.regionID is not None else "",
+#                     'accountName': row.accountName if row.accountName is not None else "",
+#                     'total_approved_cases': float(row.total_approved_cases) if row.total_approved_cases is not None else 0.0,
+#                     'total_approved_projects': float(row.total_approved_projects) if row.total_approved_projects is not None else 0.0,
+#                     'totalFund': totalFund,
+#                     'usedFund': usedFund,
+#                     'availableFund': availableFund
+#                 })
+
+#             # Make the response object using Flask's make_response
+#             response = make_response(json.dumps({'data': data}), 200)
+#             response.headers["Content-Type"] = "application/json"
+#             return response
+
+#         except SQLAlchemyError as e:
+#             # Handle SQLAlchemy errors
+#             error_message = str(e.orig) if hasattr(e, 'orig') else str(e)
+#             return make_response(json.dumps({'error': 'Database error', 'message': error_message}), 500)
+
+#         except Exception as e:
+#             # Catch all other exceptions and return JSON response
+#             return make_response(json.dumps({'error': 'An unexpected error occurred', 'message': str(e)}), 500)
+
 @finance_namespace.route("/project_cases_account_summary")
+@finance_namespace.expect(parser)
 class ProjectCasesAccountSummaryResource(Resource):
     @jwt_required()
     def get(self):
         try:
-            # Execute the SQL query without computing availableFund in the query
+            # Parse the arguments
+            args = parser.parse_args()
+            start_date_str = args['start_date']
+            end_date_str = args['end_date']
+
+            # Parse the dates
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+            except ValueError:
+                return make_response(json.dumps({'error': 'Invalid date format. Please use YYYY-MM-DD.'}), 400)
+
+            # Execute the SQL query with date filtering for case and project approvals
             result = db.session.execute(text('''
                 SELECT ra."regionID", ra."accountName", 
-                    SUM(cfa."approvedAmount") AS total_approved_cases,
-                    SUM(pfa."approvedAmount") AS total_approved_projects,
+                    SUM(CASE WHEN cfa."approvedAt" BETWEEN :start_date AND :end_date THEN cfa."approvedAmount" ELSE 0 END) AS total_approved_cases,
+                    SUM(CASE WHEN pfa."approvedAt" BETWEEN :start_date AND :end_date THEN pfa."approvedAmount" ELSE 0 END) AS total_approved_projects,
                     ra."totalFund",
                     ra."usedFund"
                 FROM region_account ra
                 LEFT JOIN case_fund_release_approval cfa ON cfa."accountID" = ra."accountID"
                 LEFT JOIN project_fund_release_approval pfa ON pfa."accountID" = ra."accountID"
                 GROUP BY ra."regionID", ra."accountName", ra."totalFund", ra."usedFund";
-            '''))
+            '''), {'start_date': start_date, 'end_date': end_date})
 
             # Process the result into a list of dictionaries
             data = []
@@ -1552,7 +1672,7 @@ class ProjectCasesAccountSummaryResource(Resource):
         except Exception as e:
             # Catch all other exceptions and return JSON response
             return make_response(json.dumps({'error': 'An unexpected error occurred', 'message': str(e)}), 500)
-    
+
         
 
 
