@@ -955,23 +955,50 @@ class FinancialFund(db.Model):
             donation_list.append(donation_dict)
         return donation_list
     
-    def transfer_to_user(self, user_budget, amount, currencyID, transfer_type="Transfer", notes=""):
+    # def transfer_to_user(self, user_budget, amount, currencyID, transfer_type="Transfer", notes=""):
+    #     if self.availableFund < amount:
+    #         raise ValueError("Insufficient funds in the fund")
+
+    #     try:
+    #         # Deduct from the fund
+    #         self.availableFund -= amount
+    #         self.usedFund += amount
+
+    #         # Add to the user's budget
+    #         user_budget.availableFund += amount
+    #         user_budget.totalFund += amount
+
+    #         # Create a transaction record
+    #         transaction = UserBudgetTransaction(
+    #             fromFundID=self.fundID,
+    #             toBudgetID=user_budget.budgetId,
+    #             transferAmount=amount,
+    #             transferType=transfer_type,
+    #             currencyID=currencyID,
+    #             notes=notes
+    #         )
+
+    #         db.session.add(transaction)
+    #         db.session.commit()
+    #     except Exception as e:
+    #         db.session.rollback()
+    #         raise ValueError(f"Transaction failed: {str(e)}")
+    def transfer_fund(self, to_budget, amount, currencyID, transfer_type="Transfer", notes=""):
         if self.availableFund < amount:
-            raise ValueError("Insufficient funds in the fund")
+            raise ValueError("Insufficient funds in the budget")
 
         try:
-            # Deduct from the fund
+            # Deduct from the current budget
             self.availableFund -= amount
-            self.usedFund += amount
 
-            # Add to the user's budget
-            user_budget.availableFund += amount
-            user_budget.totalFund += amount
+            # Add to the recipient's budget
+            to_budget.availableFund += amount
+            to_budget.totalFund += amount
 
             # Create a transaction record
             transaction = UserBudgetTransaction(
-                fromFundID=self.fundID,
-                toBudgetID=user_budget.budgetId,
+                fromBudgetID=self.budgetID,
+                toBudgetID=to_budget.budgetID,
                 transferAmount=amount,
                 transferType=transfer_type,
                 currencyID=currencyID,
@@ -980,10 +1007,13 @@ class FinancialFund(db.Model):
 
             db.session.add(transaction)
             db.session.commit()
+
+            # Return the transaction ID
+            return transaction.transactionID
+
         except Exception as e:
             db.session.rollback()
             raise ValueError(f"Transaction failed: {str(e)}")
-
 
 class FinancialFundCurrencyBalance(db.Model):
     __tablename__ = "financial_fund_currency_balances"

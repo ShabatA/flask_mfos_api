@@ -1933,7 +1933,7 @@ class TransferToUserBudget2(Resource):
                     return {'error': 'Source user budget not found'}, 404
 
                 # Perform the transfer
-                from_budget.transfer_fund(to_budget, amount, currency_id, transfer_type, notes)
+                transaction_id = from_budget.transfer_fund(to_budget, amount, currency_id, transfer_type, notes)
 
                 transfer_data = {
                     'from': {
@@ -1950,7 +1950,9 @@ class TransferToUserBudget2(Resource):
                     'amount_transferred': amount,
                     'currencyID': currency_id,
                     'transfer_type': transfer_type,
-                    'notes': notes
+                    'notes': notes,
+                    'budgetID':from_budget.budgetID,
+                    'transferID':transaction_id
                 }
 
             elif from_type == 'fund':
@@ -1977,7 +1979,8 @@ class TransferToUserBudget2(Resource):
                     'amount_transferred': amount,
                     'currencyID': currency_id,
                     'transfer_type': transfer_type,
-                    'notes': notes
+                    'notes': notes,
+                    'transferID':from_fund.transferID
                 }
 
             return {'message': 'Transfer successful', 'transfer_data': transfer_data}, 200
