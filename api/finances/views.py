@@ -292,8 +292,9 @@ approve_c_fund_release_request = finance_namespace.model(
 
 user_transfer_model = finance_namespace.model('Transfer', {
     'fromType': fields.String(required=True, description='Source type: user or fund'),
-    'fromID': fields.Integer(required=True, description='ID of the source: userID or fundID'),
+    'fromID': fields.Integer(required=True, description='ID of the source: fundID'),
     'toUserID': fields.Integer(required=True, description='Target userID'),
+    'toFundID': fields.Integer(required=True, description='Target fundID'),
     'amount': fields.Float(required=True, description='Amount to transfer'),
     'currencyID': fields.Integer(required=True, description='Currency ID for the transfer'),
     'transferType': fields.String(required=False, default='Transfer', description='Type of the transfer'),
@@ -2029,40 +2030,48 @@ class TransferToUserBudget2(Resource):
         from_type = data.get('fromType')
         from_id = data.get('fromID')
         to_user_id = data.get('toUserID')
+        to_fund_id = data.get('toFundID')  # New field for transferring to a fund
         amount = data.get('amount')
         currency_id = data.get('currencyID')
-        transfer_type = data.get('transferType', 'Transfer')
+        transfer_type = data.get('transferType')
         notes = data.get('notes', '')
+
+        # get the current user
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
         # Validate request data
         if from_type not in ['user', 'fund']:
             return {'error': 'Invalid fromType'}, 400
 
         try:
-            # Retrieve the recipient's UserBudget
-            to_budget = UserBudget.query.filter_by(userID=to_user_id, currencyID=currency_id).first()
-            if not to_budget:
-                return {'error': 'Target user budget not found'}, 404
-
             transfer_data = {}
 
-            if from_type == 'user':
-                # Transfer from another user's budget
-                from_budget = UserBudget.query.filter_by(userID=from_id, currencyID=currency_id).first()
-                if not from_budget:
-                    return {'error': 'Source user budget not found'}, 404
+            # Transfer from Fund to User Budget
+            if from_type == 'fund' and to_user_id:
+                from_fund = FinancialFund.query.get(from_id)
+                if not from_fund:
+                    return {'error': 'Source fund not found'}, 404
 
-                # Perform the transfer
-                transaction_id = from_budget.transfer_fund(to_budget, amount, currency_id, transfer_type, notes)
+                to_budget = UserBudget.query.filter_by(userID=to_user_id, currencyID=currency_id).first()
+                if not to_budget:
+                    # Create the UserBudget if it does not exist
+                    to_budget = UserBudget(userID=to_user_id, currencyID=currency_id, totalFund=0, usedFund=0, availableFund=0)
+                    db.session.add(to_budget)
 
+                # Perform the transfer from the fund to the user budget
+                transfer_id = from_fund.transfer_to_user(to_budget, amount, currency_id, current_user.userID,  transfer_type, notes)
+
+                # Check after transfer
+                db.session.refresh(to_budget)  # Refresh to see the latest state from the DB
                 transfer_data = {
                     'from': {
-                        'type': 'user',
-                        'userID': from_id,
+                        'type': 'fund',
+                        'fundID': from_id,
                         'currencyID': currency_id,
-                        'amount': from_budget.availableFund,
+                        'amount': from_fund.availableFund,
                     },
                     'to': {
+                        'type': 'user',
                         'userID': to_user_id,
                         'currencyID': currency_id,
                         'amount': to_budget.availableFund,
@@ -2071,18 +2080,25 @@ class TransferToUserBudget2(Resource):
                     'currencyID': currency_id,
                     'transfer_type': transfer_type,
                     'notes': notes,
-                    'budgetID':from_budget.budgetID,
-                    'transferID':transaction_id
+                    'transferID': transfer_id,
                 }
 
-            elif from_type == 'fund':
-                # Transfer from a FinancialFund
+            # Transfer from Fund to another Fund
+            elif from_type == 'fund' and to_fund_id:
                 from_fund = FinancialFund.query.get(from_id)
                 if not from_fund:
                     return {'error': 'Source fund not found'}, 404
 
-                # Perform the transfer from the fund
-                from_fund.transfer_to_user(to_budget, amount, currency_id, transfer_type, notes)
+                to_fund = FinancialFund.query.get(to_fund_id)
+                if not to_fund:
+                    return {'error': 'Destination fund not found'}, 404
+
+                # Perform the transfer from the fund to another fund
+                transaction_id = from_fund.transfer_to_fund(to_fund, amount, currency_id, current_user.userID, transfer_type, notes)
+
+                # Refresh to check the updated balances
+                db.session.refresh(from_fund)
+                db.session.refresh(to_fund)
 
                 transfer_data = {
                     'from': {
@@ -2092,15 +2108,16 @@ class TransferToUserBudget2(Resource):
                         'amount': from_fund.availableFund,
                     },
                     'to': {
-                        'userID': to_user_id,
+                        'type': 'fund',
+                        'fundID': to_fund_id,
                         'currencyID': currency_id,
-                        'amount': to_budget.availableFund,
+                        'amount': to_fund.availableFund,
                     },
                     'amount_transferred': amount,
                     'currencyID': currency_id,
                     'transfer_type': transfer_type,
                     'notes': notes,
-                    'transferID':from_fund.transferID
+                    'transferID': transaction_id,
                 }
 
             return {'message': 'Transfer successful', 'transfer_data': transfer_data}, 200
@@ -2109,6 +2126,12 @@ class TransferToUserBudget2(Resource):
             return {'error': str(ve)}, 400
         except Exception as e:
             return {'error': f'An unexpected error occurred: {str(e)}'}, 500
+
+
+        # except ValueError as ve:
+        #     return {'error': str(ve)}, 400
+        # except Exception as e:
+        #     return {'error': f'An unexpected error occurred: {str(e)}'}, 500
 
 # @finance_namespace.route("/transfer_to_user_budget2")
 # @finance_namespace.route('/transfer_to_user_budget2')

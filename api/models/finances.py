@@ -997,7 +997,7 @@ class FinancialFund(db.Model):
 
             # Create a transaction record
             transaction = UserBudgetTransaction(
-                fromBudgetID=self.budgetID,
+                fromBudgetID=self.fundID,
                 toBudgetID=to_budget.budgetID,
                 transferAmount=amount,
                 transferType=transfer_type,
@@ -1014,6 +1014,75 @@ class FinancialFund(db.Model):
         except Exception as e:
             db.session.rollback()
             raise ValueError(f"Transaction failed: {str(e)}")
+    
+    def transfer_to_fund(self, to_fund, amount, currencyID, user_id, transfer_type="Transfer", notes=""):
+        if self.availableFund < amount:
+            raise ValueError("Insufficient funds in the fund")
+
+        try:
+            # Deduct from the current fund
+            self.availableFund -= amount
+
+            # Add to the destination fund
+            to_fund.availableFund += amount
+            to_fund.totalFund += amount
+
+            # Create a transaction record
+            transaction = FundTransfers(
+                from_fund=self.fundID,
+                to_fund=to_fund.fundID,
+                transferAmount=amount,
+                transferType=transfer_type,
+                currencyID=currencyID,
+                notes=notes,
+                createdAt=datetime.utcnow(),
+                createdBy=user_id
+            )
+
+            db.session.add(transaction)
+            db.session.commit()
+
+            # Return the transaction ID
+            return transaction.transferID
+
+        except Exception as e:
+            db.session.rollback()
+            raise ValueError(f"Transaction failed: {str(e)}")
+    
+    def transfer_to_user(self, to_budget, amount, currencyID, user_id, transfer_type="Transfer", notes=""):
+        if self.availableFund < amount:
+            raise ValueError("Insufficient funds in the fund")
+
+        try:
+            # Deduct from the current fund
+            self.availableFund -= amount
+
+            # Add to the recipient's user budget
+            to_budget.availableFund += amount
+            to_budget.totalFund += amount
+
+            # Create a transaction record
+            transaction = FundTransfers(
+                from_fund=self.fundID,
+                to_user_budget=to_budget.budgetId,  # Assuming `to_user_budget` is the correct field
+                transferAmount=amount,
+                transferType=transfer_type,
+                currencyID=currencyID,
+                notes=notes,
+                createdAt=datetime.utcnow(),
+                createdBy=user_id
+            )
+
+            db.session.add(transaction)
+            db.session.commit()
+
+            # Return the transaction ID
+            return transaction.transferID
+
+        except Exception as e:
+            db.session.rollback()
+            raise ValueError(f"Transaction failed: {str(e)}")
+
 
 class FinancialFundCurrencyBalance(db.Model):
     __tablename__ = "financial_fund_currency_balances"
@@ -1745,6 +1814,9 @@ class FundTransfers(db.Model):
     to_fund = db.Column(
         db.Integer, db.ForeignKey("financial_fund.fundID", ondelete="CASCADE")
     )
+    to_user_budget = db.Column(
+        db.Integer, db.ForeignKey("user_budget.budgetId", ondelete="CASCADE"), nullable=True
+    )  # Field to support fund to user budget transfers
     transferAmount = db.Column(db.Float, nullable=False)
     createdBy = db.Column(
         db.Integer, db.ForeignKey("users.userID", ondelete="CASCADE"), nullable=False
@@ -1769,15 +1841,24 @@ class FundTransfers(db.Model):
         db.session.commit()
         
     def out_transfer_serialize(self, currencyID):
-        to_fund = FinancialFund.query.get(self.to_fund)
-        currency = Currencies.query.get(self.currencyID)
-        return {
-            "transferID": self.transferID,
-            "to_fund": {
+        if self.to_fund:
+            to_fund = FinancialFund.query.get(self.to_fund)
+            fund_data = {
                 "fundID": to_fund.fundID,
                 "fundName": to_fund.fundName,
                 "balances": to_fund.get_fund_balance(currencyID),
-            },
+            }
+        else:
+            to_user_budget = UserBudget.query.get(self.to_user_budget)
+            fund_data = {
+                "userBudgetID": to_user_budget.budgetId,
+                "userID": to_user_budget.userID,
+                "balances": to_user_budget.get_fund_balance(),
+            }
+        currency = Currencies.query.get(self.currencyID)
+        return {
+            "transferID": self.transferID,
+            "to": fund_data,
             "transferAmount": self.transferAmount,
             "currencyName": currency.currencyName,
             "transferType": self.transferType.value,
