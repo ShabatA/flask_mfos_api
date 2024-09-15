@@ -1803,9 +1803,12 @@ class GetAllFundTransfers(Resource):
                     }
                 elif transfer.to_user_budget:
                     to_user_budget = UserBudget.query.get(transfer.to_user_budget)
+                    # get username of the user
+                    username = Users.query.get(to_user_budget.userID).username
                     to_fund_data = {
                         "userBudgetID": to_user_budget.budgetId,
                         "userID": to_user_budget.userID,
+                        "username": username,
                         "balances": to_user_budget.get_fund_balance(),
                     }
 
