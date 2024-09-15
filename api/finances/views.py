@@ -1789,20 +1789,31 @@ class GetAllFundTransfers(Resource):
             for transfer in transfers:
                 user = Users.query.get(transfer.createdBy)
                 from_fund = FinancialFund.query.get(transfer.from_fund)
-                to_fund = FinancialFund.query.get(transfer.to_fund)
+
+                # Check if the transfer is to a fund or to a user budget
+                if transfer.to_fund:
+                    to_fund = FinancialFund.query.get(transfer.to_fund)
+                    to_fund_data = {
+                        "fundID": to_fund.fundID,
+                        "fundName": to_fund.fundName,
+                        "balances": to_fund.get_fund_balance(1),
+                    }
+                else:
+                    to_user_budget = UserBudget.query.get(transfer.to_user_budget)
+                    to_fund_data = {
+                        "userBudgetID": to_user_budget.budgetId,
+                        "userID": to_user_budget.userID,
+                        "balances": to_user_budget.get_fund_balance(),
+                    }
 
                 transfer_details = {
                     "transferID": transfer.transferID,
                     "from_fund": {
                         "fundID": from_fund.fundID,
                         "fundName": from_fund.fundName,
-                        "balances": to_fund.get_fund_balance(1),
+                        "balances": from_fund.get_fund_balance(1),
                     },
-                    "to_fund": {
-                        "fundID": to_fund.fundID,
-                        "fundName": to_fund.fundName,
-                        "balances": to_fund.get_fund_balance(1),
-                    },
+                    "to": to_fund_data,
                     "createdBy": {
                         "userID": user.userID,
                         "userFullName": f"{user.firstName} {user.lastName}",
@@ -1824,6 +1835,55 @@ class GetAllFundTransfers(Resource):
             return {
                 "message": f"Error getting fund transfers: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+# @finance_namespace.route("/get_all_fund_transfers")
+# class GetAllFundTransfers(Resource):
+#     @jwt_required()
+#     def get(self):
+#         try:
+#             transfers = FundTransfers.query.order_by(
+#                 desc(FundTransfers.createdAt)
+#             ).all()
+#             transfers_data = []
+#             for transfer in transfers:
+#                 user = Users.query.get(transfer.createdBy)
+#                 from_fund = FinancialFund.query.get(transfer.from_fund)
+#                 to_fund = FinancialFund.query.get(transfer.to_fund)
+
+#                 transfer_details = {
+#                     "transferID": transfer.transferID,
+#                     "from_fund": {
+#                         "fundID": from_fund.fundID,
+#                         "fundName": from_fund.fundName,
+#                         "balances": to_fund.get_fund_balance(1),
+#                     },
+#                     "to_fund": {
+#                         "fundID": to_fund.fundID,
+#                         "fundName": to_fund.fundName,
+#                         "balances": to_fund.get_fund_balance(1),
+#                     },
+#                     "createdBy": {
+#                         "userID": user.userID,
+#                         "userFullName": f"{user.firstName} {user.lastName}",
+#                         "username": user.username,
+#                     },
+#                     "transferAmount": transfer.transferAmount,
+#                     "createdAt": transfer.createdAt.isoformat(),
+#                     "notes": transfer.notes,
+#                     "status": transfer.status,
+#                     "closed": transfer.closed,
+#                 }
+
+#                 transfers_data.append(transfer_details)
+
+#             return {"all_transfers": transfers_data}, HTTPStatus.OK
+
+#         except Exception as e:
+#             current_app.logger.error(f"Error getting fund transfers: {str(e)}")
+#             return {
+#                 "message": f"Error getting fund transfers: {str(e)}"
+#             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 @finance_namespace.route("/get_all_donations")
