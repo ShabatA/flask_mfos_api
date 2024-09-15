@@ -1790,6 +1790,9 @@ class GetAllFundTransfers(Resource):
                 user = Users.query.get(transfer.createdBy)
                 from_fund = FinancialFund.query.get(transfer.from_fund)
 
+                # Initialize `to_fund_data` to None
+                to_fund_data = None
+
                 # Check if the transfer is to a fund or to a user budget
                 if transfer.to_fund:
                     to_fund = FinancialFund.query.get(transfer.to_fund)
@@ -1798,7 +1801,7 @@ class GetAllFundTransfers(Resource):
                         "fundName": to_fund.fundName,
                         "balances": to_fund.get_fund_balance(1),
                     }
-                else:
+                elif transfer.to_user_budget:
                     to_user_budget = UserBudget.query.get(transfer.to_user_budget)
                     to_fund_data = {
                         "userBudgetID": to_user_budget.budgetId,
@@ -1806,6 +1809,7 @@ class GetAllFundTransfers(Resource):
                         "balances": to_user_budget.get_fund_balance(),
                     }
 
+                # Prepare the transfer details dictionary
                 transfer_details = {
                     "transferID": transfer.transferID,
                     "from_fund": {
@@ -1813,7 +1817,7 @@ class GetAllFundTransfers(Resource):
                         "fundName": from_fund.fundName,
                         "balances": from_fund.get_fund_balance(1),
                     },
-                    "to": to_fund_data,
+                    "to": to_fund_data,  # This will be None if both are null
                     "createdBy": {
                         "userID": user.userID,
                         "userFullName": f"{user.firstName} {user.lastName}",
@@ -1835,6 +1839,7 @@ class GetAllFundTransfers(Resource):
             return {
                 "message": f"Error getting fund transfers: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 
 # @finance_namespace.route("/get_all_fund_transfers")
