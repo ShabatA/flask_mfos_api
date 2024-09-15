@@ -2101,6 +2101,8 @@ class TransferToUserBudget2(Resource):
         transfer_type = data.get('transferType')
         notes = data.get('notes', '')
 
+
+
         # get the current user
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
 
@@ -2118,6 +2120,9 @@ class TransferToUserBudget2(Resource):
                     return {'error': 'Source fund not found'}, 404
 
                 to_budget = UserBudget.query.filter_by(userID=to_user_id, currencyID=currency_id).first()
+                # get username of the user
+                username = Users.query.get(to_user_id).username
+
                 if not to_budget:
                     # Create the UserBudget if it does not exist
                     to_budget = UserBudget(userID=to_user_id, currencyID=currency_id, totalFund=0, usedFund=0, availableFund=0)
@@ -2138,6 +2143,7 @@ class TransferToUserBudget2(Resource):
                     'to': {
                         'type': 'user',
                         'userID': to_user_id,
+                        'username': username,
                         'currencyID': currency_id,
                         'amount': to_budget.availableFund,
                     },
