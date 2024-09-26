@@ -1157,12 +1157,16 @@ class AddDonationResource(Resource):
                 projectID=project_id,
                 projectScope=enum_project_scope,
                 allocationTags=donation_data.get("allocationTags", enum_project_scope),
+
             )
             new_donation.save()
 
             db.session.commit()
 
-            return {"message": "Donation added successfully."}, HTTPStatus.OK
+            return {
+                "message": "Donation added successfully.",
+                "donationID": new_donation.id  # Include the donationID in the response
+            }, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error adding donation: {str(e)}")
             return {
