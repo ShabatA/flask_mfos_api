@@ -797,10 +797,10 @@ class CaseBeneficiaryAddOrEditResource(Resource):
                 "error": f"Error adding beneficiary: {str(e)}",
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
+    # @case_namespace.expect(edit_beneficiary_data_model)
     @case_namespace.expect(edit_beneficiary_data_model)
     def put(self):
         try:
-
             beneficiary_data = request.json
 
             self.update_beneficiary(beneficiary_data)
@@ -809,10 +809,111 @@ class CaseBeneficiaryAddOrEditResource(Resource):
         except Exception as e:
             current_app.logger.error(f"Error updating beneficiary: {str(e)}")
             return {
-                "message": f"Error updating CaseBeneficiary, please review inputs and try again.",
+                "message": "Error updating CaseBeneficiary, please review inputs and try again.",
                 "error": f"Error adding beneficiary: {str(e)}",
             }, HTTPStatus.INTERNAL_SERVER_ERROR
-            
+
+
+    def update_beneficiary(self, beneficiary_data):
+        beneficiary_id = beneficiary_data.get("beneficiaryID")
+        if not beneficiary_id:
+            return {
+                "message": "Beneficiary ID is required for updating a beneficiary"
+            }, HTTPStatus.BAD_REQUEST
+
+        existing_beneficiary = CaseBeneficiary.query.get_or_404(beneficiary_id)
+
+        # Ensure caseID is only updated if needed and does not violate constraints
+        if beneficiary_data.get("caseID") and beneficiary_data["caseID"] != existing_beneficiary.caseID:
+            # Check if the new caseID already exists and violates the constraint
+            duplicate_beneficiary = CaseBeneficiary.query.filter_by(caseID=beneficiary_data["caseID"]).first()
+            if duplicate_beneficiary:
+                return {
+                    "message": "The provided caseID is already in use."
+                }, HTTPStatus.BAD_REQUEST
+            existing_beneficiary.caseID = beneficiary_data["caseID"]
+
+        # Update the beneficiary fields using .get() to handle missing fields
+        # existing_beneficiary.caseID = beneficiary_data.get("caseID", existing_beneficiary.caseID)
+        existing_beneficiary.firstName = beneficiary_data.get("firstName", existing_beneficiary.firstName)
+        existing_beneficiary.surName = beneficiary_data.get("surName", existing_beneficiary.surName)
+        existing_beneficiary.gender = beneficiary_data.get("gender", existing_beneficiary.gender)
+        existing_beneficiary.birthDate = beneficiary_data.get("birthDate", existing_beneficiary.birthDate)
+        existing_beneficiary.birthPlace = beneficiary_data.get("birthPlace", existing_beneficiary.birthPlace)
+        existing_beneficiary.nationality = beneficiary_data.get("nationality", existing_beneficiary.nationality)
+        existing_beneficiary.idType = beneficiary_data.get("idType", existing_beneficiary.idType)
+        existing_beneficiary.idNumber = beneficiary_data.get("idNumber", existing_beneficiary.idNumber)
+        existing_beneficiary.regionId = beneficiary_data.get("regionId", existing_beneficiary.regionId)  # New field
+        existing_beneficiary.otherRegion = beneficiary_data.get("otherRegion", existing_beneficiary.otherRegion)  # New field
+        existing_beneficiary.address = beneficiary_data.get("address", existing_beneficiary.address)
+        existing_beneficiary.phoneNumber = beneficiary_data.get("phoneNumber", existing_beneficiary.phoneNumber)
+        existing_beneficiary.altPhoneNumber = beneficiary_data.get("altPhoneNumber", existing_beneficiary.altPhoneNumber)
+        existing_beneficiary.email = beneficiary_data.get("email", existing_beneficiary.email)
+        existing_beneficiary.serviceRequired = beneficiary_data.get("serviceRequired", existing_beneficiary.serviceRequired)
+        existing_beneficiary.otherServiceRequired = beneficiary_data.get("otherServiceRequired", existing_beneficiary.otherServiceRequired)
+        existing_beneficiary.problemDescription = beneficiary_data.get("problemDescription", existing_beneficiary.problemDescription)
+        existing_beneficiary.serviceDescription = beneficiary_data.get("serviceDescription", existing_beneficiary.serviceDescription)
+        existing_beneficiary.totalSupportCost = beneficiary_data.get("totalSupportCost", existing_beneficiary.totalSupportCost)
+        existing_beneficiary.receiveFundDate = beneficiary_data.get("receiveFundDate", existing_beneficiary.receiveFundDate)
+        existing_beneficiary.paymentMethod = beneficiary_data.get("paymentMethod", existing_beneficiary.paymentMethod)
+        existing_beneficiary.paymentsType = beneficiary_data.get("paymentsType", existing_beneficiary.paymentsType)
+        existing_beneficiary.otherPaymentType = beneficiary_data.get("otherPaymentType", existing_beneficiary.otherPaymentType)
+        existing_beneficiary.incomeType = beneficiary_data.get("incomeType", existing_beneficiary.incomeType)
+        existing_beneficiary.otherIncomeType = beneficiary_data.get("otherIncomeType", existing_beneficiary.otherIncomeType)
+        existing_beneficiary.housing = beneficiary_data.get("housing", existing_beneficiary.housing)
+        existing_beneficiary.otherHousing = beneficiary_data.get("otherHousing", existing_beneficiary.otherHousing)
+        existing_beneficiary.housingType = beneficiary_data.get("housingType", existing_beneficiary.housingType)
+        existing_beneficiary.otherHousingType = beneficiary_data.get("otherHousingType", existing_beneficiary.otherHousingType)
+        existing_beneficiary.totalFamilyMembers = beneficiary_data.get("totalFamilyMembers", existing_beneficiary.totalFamilyMembers)
+        existing_beneficiary.childrenUnder15 = beneficiary_data.get("childrenUnder15", existing_beneficiary.childrenUnder15)
+        existing_beneficiary.isOldPeople = beneficiary_data.get("isOldPeople", existing_beneficiary.isOldPeople)
+        existing_beneficiary.isDisabledPeople = beneficiary_data.get("isDisabledPeople", existing_beneficiary.isDisabledPeople)
+        existing_beneficiary.isStudentsPeople = beneficiary_data.get("isStudentsPeople", existing_beneficiary.isStudentsPeople)
+        existing_beneficiary.serviceDate = beneficiary_data.get("serviceDate", existing_beneficiary.serviceDate)
+        existing_beneficiary.numberOfPayments = beneficiary_data.get("numberOfPayments", existing_beneficiary.numberOfPayments)
+
+        # Save the changes
+        existing_beneficiary.save()
+
+
+@case_namespace.route("/get/beneficiaries/<int:case_id>")
+class CaseBeneficiaryByCaseIDResource(Resource):
+    def get(self, case_id):
+        try:
+            case_data = CasesData.query.get_or_404(case_id)
+
+            beneficiaries = CaseBeneficiary.query.filter_by(caseID=case_id).all()
+            if not beneficiaries:
+                return [], HTTPStatus.OK
+
+            return {
+                "beneficiaries": [
+                    beneficiary.serialize() for beneficiary in beneficiaries
+                ]
+            }, HTTPStatus.OK
+        except Exception as e:
+            current_app.logger.error(f"Error getting beneficiaries: {str(e)}")
+            return {
+                "message": f"Error getting beneficiaries: {str(e)}"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+    # def put(self):
+    #     try:
+
+    #         beneficiary_data = request.json
+
+    #         self.update_beneficiary(beneficiary_data)
+
+    #         return {"message": "CaseBeneficiary updated successfully"}, HTTPStatus.OK
+    #     except Exception as e:
+    #         current_app.logger.error(f"Error updating beneficiary: {str(e)}")
+    #         return {
+    #             "message": f"Error updating CaseBeneficiary, please review inputs and try again.",
+    #             "error": f"Error adding beneficiary: {str(e)}",
+    #         }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+
     def update_beneficiary(self, beneficiary_data):
         beneficiary_id = beneficiary_data.get("beneficiaryID")
         if not beneficiary_id:
