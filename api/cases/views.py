@@ -1694,7 +1694,8 @@ class AddTaskForStageResource(Resource):
             db.session.commit()
 
             return {
-                "message": "Task added for the linked stage successfully"
+                "message": "Task added for the linked stage successfully",
+                "task_id": new_task.taskID
             }, HTTPStatus.OK
 
         except Exception as e:
