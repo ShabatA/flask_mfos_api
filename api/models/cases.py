@@ -161,14 +161,33 @@ class CasesData(db.Model):
         stages = CaseToStage.query.filter_by(caseID=self.caseID).all()
         completed_stages = [stage for stage in stages if stage.completed]
 
-        if completed_stages:
-            latest_completed_stage = max(
-                completed_stages, key=lambda stage: stage.stageID
-            )
+        # if completed_stages:
+        #     latest_completed_stage = max(
+        #         completed_stages, key=lambda stage: stage.stageID
+        #     )
+        # else:
+        #     latest_completed_stage = (
+        #         min(stages, key=lambda stage: stage.stageID) if stages else None
+        #     )
+        latest_completed_stage = (
+            max(completed_stages, key=lambda stage: stage.stageID)
+            if completed_stages else None
+        )
+
+        if latest_completed_stage:
+            next_stage = CaseToStage.query.filter_by(
+                caseID=self.caseID,
+                stageID=latest_completed_stage.stageID + 1
+            ).first()
         else:
-            latest_completed_stage = (
-                min(stages, key=lambda stage: stage.stageID) if stages else None
-            )
+            next_stage = CaseToStage.query.filter_by(caseID=self.caseID, stageID=1).first()
+
+        if next_stage and not next_stage.started:
+            next_stage_name = f"{next_stage.stage.name} (Not started yet)"
+        elif next_stage:
+            next_stage_name = next_stage.stage.name
+        else:
+            next_stage_name = "Not Started Yet"
         
         return {
             "caseID": self.caseID,
@@ -189,9 +208,7 @@ class CasesData(db.Model):
                 if users_assigned_to_case
                 else []
             ),
-            "stageName": (
-                latest_completed_stage.stage.name if latest_completed_stage else "N/A"
-            ),
+            "stageName": next_stage_name,
         }
 
     def full_serialize(self):
@@ -215,21 +232,45 @@ class CasesData(db.Model):
         stages = CaseToStage.query.filter_by(caseID=self.caseID).all()
         completed_stages = [stage for stage in stages if stage.completed]
 
-        if completed_stages:
-            latest_completed_stage = max(
-                completed_stages, key=lambda stage: stage.stageID
-            )
+        # if completed_stages:
+        #     latest_completed_stage = max(
+        #         completed_stages, key=lambda stage: stage.stageID
+        #     )
+        # else:
+        #     latest_completed_stage = (
+        #         min(stages, key=lambda stage: stage.stageID) if stages else None
+        #     )
+
+        # Get the latest completed stage
+        latest_completed_stage = (
+            max(completed_stages, key=lambda stage: stage.stageID)
+            if completed_stages else None
+        )
+
+        # Find the next stage after the latest completed stage
+        if latest_completed_stage:
+            next_stage = CaseToStage.query.filter_by(
+                caseID=self.caseID,
+                stageID=latest_completed_stage.stageID + 1
+            ).first()
         else:
-            latest_completed_stage = (
-                min(stages, key=lambda stage: stage.stageID) if stages else None
-            )
+            # If no stages are completed yet, the first stage is the "next" stage
+            next_stage = CaseToStage.query.filter_by(caseID=self.caseID, stageID=1).first()
+
+        # Handle the case where the next stage is not started yet
+        if next_stage and not next_stage.started:
+            next_stage_name = f"{next_stage.stage.name} (Not started yet)"
+        elif next_stage:
+            next_stage_name = next_stage.stage.name
+        else:
+            next_stage_name = "Not Started Yet"
+
+
         return {
             "caseID": self.caseID,
             "caseName": f"Waiting Case {self.caseID}" if "New" in self.caseName else self.caseName,
             "region": region_details,
-            "stageName": (
-                latest_completed_stage.stage.name if latest_completed_stage else "N/A"
-            ),
+            "stageName": next_stage_name,
             "user": user_details,
             "budgetApproved": self.budgetApproved,
             "sponsorAvailable": self.sponsorAvailable,
@@ -288,14 +329,38 @@ class CasesData(db.Model):
         stages = CaseToStage.query.filter_by(caseID=self.caseID).all()
         completed_stages = [stage for stage in stages if stage.completed]
 
-        if completed_stages:
-            latest_completed_stage = max(
-                completed_stages, key=lambda stage: stage.stageID
-            )
+        # if completed_stages:
+        #     latest_completed_stage = max(
+        #         completed_stages, key=lambda stage: stage.stageID
+        #     )
+        # else:
+        #     latest_completed_stage = (
+        #         min(stages, key=lambda stage: stage.stageID) if stages else None
+        #     )
+
+        # Get the latest completed stage
+        latest_completed_stage = (
+            max(completed_stages, key=lambda stage: stage.stageID)
+            if completed_stages else None
+        )
+
+        # Find the next stage after the latest completed stage
+        if latest_completed_stage:
+            next_stage = CaseToStage.query.filter_by(
+                caseID=self.caseID,
+                stageID=latest_completed_stage.stageID + 1
+            ).first()
         else:
-            latest_completed_stage = (
-                min(stages, key=lambda stage: stage.stageID) if stages else None
-            )
+            # If no stages are completed yet, the first stage is the "next" stage
+            next_stage = CaseToStage.query.filter_by(caseID=self.caseID, stageID=1).first()
+
+        # Handle the case where the next stage is not started yet
+        if next_stage and not next_stage.started:
+            next_stage_name = f"{next_stage.stage.name} (Pending Start)"
+        elif next_stage:
+            next_stage_name = next_stage.stage.name
+        else:
+            next_stage_name = "Not Started Yet"
         stages_data = []
         for stage in stages:
             # Fetch all tasks for the linked stage
@@ -341,9 +406,7 @@ class CasesData(db.Model):
             "caseID": self.caseID,
             "caseName": self.caseName,
             "region": region_details,
-            "stageName": (
-                latest_completed_stage.stage.name if latest_completed_stage else "N/A"
-            ),
+            "stageName": next_stage_name,
             "user": user_details,
             "budgetApproved": self.budgetApproved,
             "sponsorAvailable": self.sponsorAvailable,
