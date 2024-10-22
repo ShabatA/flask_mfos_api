@@ -255,6 +255,7 @@ cases_data_model = case_namespace.model(
     "CasesDataInput",
     {
         "regionID": fields.Integer(required=True, description="ID of the region"),
+        "caseID": fields.Integer(description="ID of the case"),
         "caseName": fields.String(required=True, description="Name of the case"),
         "sponsorAvailable": fields.String(required=True),
         "question1": fields.Raw(required=True, description="Question 1"),
@@ -550,11 +551,11 @@ class CasesAddResource(Resource):
             # update the case name
             existing_case.caseName = case_data.get("caseName", existing_case.caseName)
             existing_case.userID = case_data.get("userID", existing_case.userID)
-            existing_case.regionID = case_data.get("regionID")
-            existing_case.sponsorAvailable = case_data["sponsorAvailable"]
-            existing_case.question1 = case_data["question1"]
-            existing_case.question2 = case_data["question2"]
-            existing_case.question3 = case_data["question3"]
+            existing_case.regionID = case_data.get("regionID", existing_case.regionID)
+            existing_case.sponsorAvailable = case_data.get("sponsorAvailable", existing_case.sponsorAvailable)
+            existing_case.question1 = case_data.get("question1", existing_case.question1)
+            existing_case.question2 = case_data.get("question2", existing_case.question2)
+            existing_case.question3 = case_data.get("question3", existing_case.question3)
             existing_case.question4 = case_data.get("question4", {})
             existing_case.question5 = case_data.get("question5", {})
             existing_case.question6 = case_data.get("question6", {})
