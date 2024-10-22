@@ -547,6 +547,8 @@ class CasesAddResource(Resource):
             existing_case = CasesData.query.get_or_404(case_id)
 
             # Update the case fields
+            # update the case name
+            existing_case.caseName = case_data.get("caseName", existing_case.caseName)
             existing_case.userID = case_data.get("userID", existing_case.userID)
             existing_case.regionID = case_data.get("regionID")
             existing_case.sponsorAvailable = case_data["sponsorAvailable"]
