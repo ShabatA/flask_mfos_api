@@ -909,6 +909,47 @@ class ProjectRequirementResource(Resource):
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
+@project_namespace.route("/get/requirements_list")
+class ProjectRequirementListResource(Resource):
+
+    @jwt_required()
+    @project_namespace.doc(params={'project_ids': 'Comma-separated list of project IDs to retrieve requirements for'})
+    def get(self):
+        try:
+            # Retrieve project_ids from the query parameters
+            project_ids_str = request.args.get('project_ids')
+            if not project_ids_str:
+                return {
+                    "message": "No project_ids provided"
+                }, HTTPStatus.BAD_REQUEST
+
+            # Split the comma-separated project_ids into a list of integers
+            project_ids = [int(project_id) for project_id in project_ids_str.split(",")]
+
+            # Retrieve status data for each project ID
+            status_data_list = []
+            for project_id in project_ids:
+                status_data = ProjectStatusData.get_status_data_by_project_id(project_id)
+                if status_data is not None:
+                    status_data_list.append({
+                        "project_id": project_id,
+                        "status_data": status_data
+                    })
+                else:
+                    status_data_list.append({
+                        "project_id": project_id,
+                        "message": "No status data found for the project"
+                    })
+
+            return {"status_data_list": status_data_list}, HTTPStatus.OK
+
+        except Exception as e:
+            # Handle exceptions (e.g., database errors) appropriately
+            return {
+                "message": f"Error retrieving status data: {str(e)}"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
 @requirements_namespace.route("/add", methods=["POST"])
 class AddRequirementsResource(Resource):
     @jwt_required()
