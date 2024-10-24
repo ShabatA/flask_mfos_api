@@ -174,13 +174,25 @@ class CasesData(db.Model):
             if completed_stages else None
         )
 
-        if latest_completed_stage:
+        # Ensure the latest_completed_stage remains seven if its stageID is already seven
+        if latest_completed_stage and latest_completed_stage.stageID == 7:
+            next_stage = latest_completed_stage
+        elif latest_completed_stage:
             next_stage = CaseToStage.query.filter_by(
                 caseID=self.caseID,
                 stageID=latest_completed_stage.stageID + 1
             ).first()
         else:
             next_stage = CaseToStage.query.filter_by(caseID=self.caseID, stageID=1).first()
+
+
+        # if latest_completed_stage:
+        #     next_stage = CaseToStage.query.filter_by(
+        #         caseID=self.caseID,
+        #         stageID=latest_completed_stage.stageID + 1
+        #     ).first()
+        # else:
+        #     next_stage = CaseToStage.query.filter_by(caseID=self.caseID, stageID=1).first()
 
         if next_stage and not next_stage.started:
             next_stage_name = f"{next_stage.stage.name} (Not started yet)"
@@ -247,15 +259,27 @@ class CasesData(db.Model):
             if completed_stages else None
         )
 
-        # Find the next stage after the latest completed stage
-        if latest_completed_stage:
+        # Ensure the latest_completed_stage remains seven if its stageID is already seven
+        if latest_completed_stage and latest_completed_stage.stageID == 7:
+            next_stage = latest_completed_stage
+        elif latest_completed_stage:
             next_stage = CaseToStage.query.filter_by(
                 caseID=self.caseID,
                 stageID=latest_completed_stage.stageID + 1
             ).first()
         else:
-            # If no stages are completed yet, the first stage is the "next" stage
             next_stage = CaseToStage.query.filter_by(caseID=self.caseID, stageID=1).first()
+
+
+        # Find the next stage after the latest completed stage
+        # if latest_completed_stage:
+        #     next_stage = CaseToStage.query.filter_by(
+        #         caseID=self.caseID,
+        #         stageID=latest_completed_stage.stageID + 1
+        #     ).first()
+        # else:
+        #     # If no stages are completed yet, the first stage is the "next" stage
+        #     next_stage = CaseToStage.query.filter_by(caseID=self.caseID, stageID=1).first()
 
         # Handle the case where the next stage is not started yet
         if next_stage and not next_stage.started:
@@ -344,15 +368,27 @@ class CasesData(db.Model):
             if completed_stages else None
         )
 
-        # Find the next stage after the latest completed stage
-        if latest_completed_stage:
+        # Ensure the latest_completed_stage remains seven if its stageID is already seven
+        if latest_completed_stage and latest_completed_stage.stageID == 7:
+            next_stage = latest_completed_stage
+        elif latest_completed_stage:
             next_stage = CaseToStage.query.filter_by(
                 caseID=self.caseID,
                 stageID=latest_completed_stage.stageID + 1
             ).first()
         else:
-            # If no stages are completed yet, the first stage is the "next" stage
             next_stage = CaseToStage.query.filter_by(caseID=self.caseID, stageID=1).first()
+
+
+        # Find the next stage after the latest completed stage
+        # if latest_completed_stage:
+        #     next_stage = CaseToStage.query.filter_by(
+        #         caseID=self.caseID,
+        #         stageID=latest_completed_stage.stageID + 1
+        #     ).first()
+        # else:
+        #     # If no stages are completed yet, the first stage is the "next" stage
+        #     next_stage = CaseToStage.query.filter_by(caseID=self.caseID, stageID=1).first()
 
         # Handle the case where the next stage is not started yet
         if next_stage and not next_stage.started:
