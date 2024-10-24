@@ -113,6 +113,18 @@ case_update_status_model = case_namespace.model(
     },
 )
 
+# Define the model for the expected input format
+case_ids_model = case_namespace.model(
+    "CaseIDs",
+    {
+        "case_ids": fields.List(
+            fields.Integer, 
+            required=True, 
+            description="List of case IDs to retrieve requirements for"
+        )
+    }
+)
+
 case_status_data = case_namespace.model(
     "CaseStatusData",
     {
@@ -1121,6 +1133,49 @@ class CaseRequirementResource(Resource):
             return {
                 "message": f"Error retrieving status data: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@case_namespace.route("/get/requirements_list")
+class CaseRequirementListResource(Resource):
+
+    @jwt_required()
+    @case_namespace.doc(params={'case_ids': 'Comma-separated list of case IDs to retrieve requirements for'})
+    def get(self):
+        try:
+            # Retrieve case_ids from the query parameters
+            case_ids_str = request.args.get('case_ids')
+            if not case_ids_str:
+                return {
+                    "message": "No case_ids provided"
+                }, HTTPStatus.BAD_REQUEST
+
+            # Split the comma-separated case_ids into a list of integers
+            case_ids = [int(case_id) for case_id in case_ids_str.split(",")]
+
+            # Retrieve status data for each case ID
+            status_data_list = []
+            for case_id in case_ids:
+                status_data = CaseStatusData.get_status_data_by_case_id(case_id)
+                if status_data is not None:
+                    status_data_list.append({
+                        "case_id": case_id,
+                        "status_data": status_data
+                    })
+                else:
+                    status_data_list.append({
+                        "case_id": case_id,
+                        "message": "No status data found for the case"
+                    })
+
+            return {"status_data_list": status_data_list}, HTTPStatus.OK
+
+        except Exception as e:
+            # Handle exceptions (e.g., database errors) appropriately
+            return {
+                "message": f"Error retrieving status data: {str(e)}"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
 
 
 @case_namespace.route("/change_status/<int:case_id>", methods=["PUT"])
