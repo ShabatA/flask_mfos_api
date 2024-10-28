@@ -7,309 +7,163 @@ class CaseRequirementProcessor:
         self.case = case
         self.user_id = user_id
 
-    def requirement_1(self):
+    def create_task(self, title, description, stage_id=6):
+        """Helper method to create and save a CaseTask."""
         task = CaseTask(
             caseID=self.case.caseID,
-            title="Media Requirement - Images",
-            description="Upload a link for images taken as evidence for this case.",
+            title=title,
+            description=description,
             assignedTo=[],
             cc=[],
             createdBy=self.user_id,
             attachedFiles="N/A",
             status=CaseTaskStatus.TODO,
-            stageID=6,
+            stageID=stage_id,
             startDate=self.case.startDate,
             deadline=self.case.dueDate,
         )
         task.save()
+
+    def requirement_1(self):
+        self.create_task(
+            title="Media Requirement - Images",
+            description="Upload a link for images taken as evidence for this case."
+        )
 
     def requirement_2(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Media Requirement - Videos",
-            description="Upload a link for videos taken as evidence for this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload a link for videos taken as evidence for this case."
         )
-        task.save()
 
     def requirement_3(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Media Requirement - Stories",
-            description="Upload a link for stories recorded as evidence for this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload a link for stories recorded as evidence for this case."
         )
-        task.save()
 
     def requirement_4(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Media Requirement - Media/Press Reports",
-            description="Upload a link for media/press reports about this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload a link for media/press reports about this case."
         )
-        task.save()
 
     def requirement_5(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Media Requirement - Recorded Video Interview",
-            description="Upload a link for a recorded video interview as evidence for this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload a link for a recorded video interview as evidence for this case."
         )
-        task.save()
 
     def requirement_6(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Media Requirement - Live Video Interview",
-            description="Make arrangements to have a live video interview.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Make arrangements to have a live video interview."
         )
-        task.save()
 
     def requirement_7(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Media Requirement - Photo Thank You Letter",
-            description="Upload a link for a photo Thank You letter taken as evidence for this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload a link for a photo Thank You letter taken as evidence for this case."
         )
-        task.save()
 
     def requirement_8(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Media Requirement - Written Thank You Letter",
-            description="Upload a document or upload text of the Thank You Letter.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload a document or upload text of the Thank You Letter."
         )
-        task.save()
 
     def requirement_9(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Media Requirement - Live Broadcast",
-            description="Make arrangements to have a live broadcast showcasing the case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Make arrangements to have a live broadcast showcasing the case."
         )
-        task.save()
 
     def requirement_10(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Media Requirement - Promotional Video",
-            description="Upload a link for images taken as evidence for this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload a link for images taken as evidence for this case."
         )
-        task.save()
 
     def requirement_11(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Financial Requirement - Invoices",
-            description="Upload all invoices for transactions involving this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload all invoices for transactions involving this case."
         )
-        task.save()
 
     def requirement_12(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Financial Requirement - Bank Notices (transfer/receipt)",
-            description="Upload all bank notices for transactions involving this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload all bank notices for transactions involving this case."
         )
-        task.save()
 
     def requirement_13(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Financial Requirement - Securities",
-            description="Upload all securities involving this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload all securities involving this case."
         )
-        task.save()
 
     def requirement_14(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Financial Requirement - Receipts (receipt/disbursement)",
-            description="Upload all receipts for transactions involving this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload all receipts for transactions involving this case."
         )
-        task.save()
 
     def requirement_15(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Implementation Requirement - Memorandum of Understanding",
-            description="Upload an memorandum of understanding file for this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=2,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload a memorandum of understanding file for this case.",
+            stage_id=2
         )
-        task.save()
 
     def requirement_16(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Implementation Requirement - Implementation Agreement",
             description="Upload an implementation agreement file for this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=2,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            stage_id=2
         )
-        task.save()
 
     def requirement_17(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Implementation Requirement - Signed Statements",
-            description="Upload signed statement files for this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload signed statement files for this case."
         )
-        task.save()
 
     def requirement_18(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Implementation Requirement - Receipts Records",
-            description="Upload receipts record files for this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload receipts record files for this case."
         )
-        task.save()
 
     def requirement_19(self):
-        task = CaseTask(
-            caseID=self.case.caseID,
+        self.create_task(
             title="Implementation Requirement - Completion Records",
-            description="Upload completion records files for this case.",
-            assignedTo=[],
-            cc=[],
-            createdBy=self.user_id,
-            attachedFiles="N/A",
-            status=CaseTaskStatus.TODO,
-            stageID=6,
-            startDate=self.case.startDate,
-            deadline=self.case.dueDate,
+            description="Upload completion records files for this case."
         )
-        task.save()
+    
+    def requirement_20(self):
+        self.create_task(
+            title="Describe the service provided",
+            description="Describe the service provided."
+        )
+    
+    def requirement_21(self):
+        self.create_task(
+            title="Describe the Attached Documents",
+            description="Describe the Attached Documents"
+        )
+    
+    def requirement_22(self):
+        self.create_task(
+            title="Notes & Recommendations",
+            description="Notes & Recommendations."
+        )
+    
+    def requirement_23(self):
+        self.create_task(
+            title="Write a Credit for the Sponsoring party",
+            description="Write a Credit for the Sponsoring party."
+        )
+    
 
     def default_case(self):
         pass
