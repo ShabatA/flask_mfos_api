@@ -1451,6 +1451,130 @@ class AddTaskForStageResource(Resource):
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
+
+
+@task_namespace.route(
+    "/add_task_to_program/<int:project_id>", methods=["POST"]
+)
+class AddTaskToProgramResource(Resource):
+    @task_namespace.expect(new_task_model, validate=True)
+    @jwt_required()
+    def post(self, project_id):
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+        
+        try:
+            # Retrieve the project to confirm it exists and is a program
+            project = ProjectsData.query.filter_by(projectID=project_id).first()
+            
+            if not project:
+                return {
+                    "message": "Project not found"
+                }, HTTPStatus.NOT_FOUND
+            
+            print(project.project_type)
+
+            if project.project_type != ProType.PROGRAM:
+                return {
+                    "message": "This endpoint is only for adding tasks to programs"
+                }, HTTPStatus.BAD_REQUEST
+
+            # Extract task data from the request payload
+            data = task_namespace.payload
+            title = data.get("title")
+            deadline = data.get("deadline")
+            description = data.get("description")
+            assigned_to_ids = data.get("assigned_to", [])
+            cc_ids = data.get("cc", [])
+            created_by = current_user.userID
+            attached_files = data.get("attached_files")
+            checklist = data.get("checklist", {})
+
+            # Fetch user instances based on IDs
+            assigned_to_users = Users.query.filter(
+                Users.userID.in_(assigned_to_ids)
+            ).all()
+            cc_users = Users.query.filter(Users.userID.in_(cc_ids)).all()
+
+            # Create a new task for the program without a stageID
+            new_task = ProjectTask(
+                projectID=project_id,
+                title=title,
+                deadline=deadline,
+                description=description,
+                assignedTo=assigned_to_users,
+                cc=cc_users,
+                createdBy=created_by,
+                attachedFiles=attached_files,
+                stageID=None,  # No stage for program tasks
+                status=TaskStatus.TODO,
+                checklist=checklist,
+                startDate=data.get("startDate", datetime.now().date()),
+            )
+
+            # Save the new task to the database
+            db.session.add(new_task)
+            db.session.commit()
+
+            return {
+                "message": "Task added to program successfully",
+                "task_id": new_task.taskID,
+            }, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error adding task to program: {str(e)}")
+            return {
+                "message": "Internal Server Error"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@task_namespace.route("/get_program_tasks/<int:project_id>", methods=["GET"])
+class GetTasksForProgramResource(Resource):
+    @jwt_required()
+    def get(self, project_id):
+        try:
+            # Retrieve the project to confirm it exists and is of type PROGRAM
+            project = ProjectsData.query.filter_by(projectID=project_id, project_type=ProType.PROGRAM).first()
+
+            print(project)
+            
+            if not project:
+                return {
+                    "message": "Program not found or the project is not of type PROGRAM"
+                }, HTTPStatus.NOT_FOUND
+
+            # Query to get all tasks linked to the specific program project
+            program_tasks = ProjectTask.query.filter_by(projectID=project_id).all()
+            
+            # Serialize the tasks for response, formatting date fields as strings
+            tasks_data = [
+                {
+                    "task_id": task.taskID,
+                    "title": task.title,
+                    "description": task.description,
+                    "createdBy": task.createdBy,
+                    "assignedTo": [user.userID for user in task.assignedTo],
+                    "cc": [user.userID for user in task.cc],
+                    "status": task.status.value,
+                    "deadline": task.deadline.isoformat() if task.deadline else None,
+                    "startDate": task.startDate.isoformat() if task.startDate else None,
+                    "attachedFiles": task.attachedFiles,
+                    "checklist": task.checklist,
+                }
+                for task in program_tasks
+            ]
+            
+            return {
+                "message": "Tasks retrieved successfully",
+                "tasks": tasks_data,
+            }, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error retrieving tasks for program: {str(e)}")
+            return {
+                "message": "Internal Server Error"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
 @task_namespace.route("/edit_task/<int:task_id>", methods=["PUT"])
 class EditTaskForStageResource(Resource):
     @task_namespace.expect(edit_task_model, validate=True)
@@ -2136,6 +2260,93 @@ class GetTasksForStageResource(Resource):
                 "message": "Internal Server Error"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
+
+
+@task_namespace.route("/check_specific_tasks/<int:project_id>", methods=["GET"])
+class CheckSpecificTasksForProjectResource(Resource):
+    @jwt_required()
+    def get(self, project_id):
+        try:
+            # Titles to check for
+            required_titles = [
+                "Describe the service provided",
+                "Describe the Attached Documents",
+                "Notes & Recommendations",
+                "Write a Credit for the Sponsoring party",
+                "Media Requirement - Written Thank You Letter"
+            ]
+
+            # Fetch all tasks for the specified project across all stages
+            tasks = ProjectTask.query.filter(
+                ProjectTask.projectID == project_id,
+                ProjectTask.title.in_(required_titles)
+            ).all()
+
+            # Check if any of the required titles are missing
+            found_titles = [task.title for task in tasks]
+            missing_titles = [title for title in required_titles if title not in found_titles]
+
+            # Prepare task details for found tasks
+            found_tasks_details = [
+                {
+                    "taskID": task.taskID,
+                    "title": task.title,
+                    "deadline": str(task.deadline),
+                    "description": task.description,
+                    "assignedTo": [user.username for user in task.assignedTo],
+                    "assignedTo_ids": [user.userID for user in task.assignedTo],
+                    "cc": [user.username for user in task.cc],
+                    "cc_ids": [user.userID for user in task.cc],
+                    "createdBy": task.createdBy,
+                    "attachedFiles": task.attachedFiles,
+                    "status": task.status.value,
+                    "completionDate": (
+                        str(task.completionDate) if task.completionDate else None
+                    ),
+                    "comments": [
+                        {
+                            "user": (
+                                Users.query.get(comment.userID).username
+                                if Users.query.get(comment.userID)
+                                else "Unknown User"
+                            ),
+                            "comment": comment.comment,
+                            "date": (
+                                comment.date.strftime("%Y-%m-%d") if comment.date else None
+                            ),
+                        }
+                        for comment in TaskComments.query.filter_by(taskID=task.taskID)
+                        .order_by(TaskComments.date.desc())
+                        .limit(5)
+                        .all()
+                    ],
+                    "checklist": task.checklist,
+                    "creationDate": task.creationDate.isoformat(),
+                    "startDate": (
+                        task.startDate.strftime("%Y-%m-%d") if task.startDate else None
+                    ),
+                }
+                for task in tasks
+            ]
+
+            # Prepare the response
+            response = {
+                "found_tasks": found_tasks_details,
+                "found_titles": found_titles,
+            }
+            if missing_titles:
+                response["message"] = "Some tasks are missing."
+                response["missing_titles"] = missing_titles
+                return response, HTTPStatus.PARTIAL_CONTENT
+            else:
+                response["message"] = "All specified tasks are present."
+                return response, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error checking specific tasks for project: {str(e)}")
+            return {
+                "message": "Internal Server Error"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @task_namespace.route("/get_all_project_tasks/<int:project_id>", methods=["GET"])
 class GetTasksForProjectResource(Resource):
