@@ -2626,7 +2626,7 @@ class CheckSpecificTasksForCaseResource(Resource):
                 "Describe the service provided",
                 "Describe the Attached Documents",
                 "Notes & Recommendations",
-                "Credit for the Sponsoring party"
+                "Write a Credit for the Sponsoring party."
             ]
 
             # Fetch all tasks for the specified case across all stages
