@@ -2614,3 +2614,87 @@ class GetBeneficiaryResource(Resource):
                 "message": "Internal Server Error",
                 "error": str(e)
             }, HTTPStatus.INTERNAL_SERVER_ERROR
+        
+
+@case_task_namespace.route("/check_specific_tasks/<int:case_id>", methods=["GET"])
+class CheckSpecificTasksForCaseResource(Resource):
+    @jwt_required()
+    def get(self, case_id):
+        try:
+            # Titles to check for
+            required_titles = [
+                "Describe the service provided",
+                "Describe the Attached Documents",
+                "Notes & Recommendations",
+                "Credit for the Sponsoring party"
+            ]
+
+            # Fetch all tasks for the specified case across all stages
+            tasks = CaseTask.query.filter_by(caseID=case_id).all()
+
+            # Filter to find tasks that match required titles
+            found_tasks = [task for task in tasks if task.title in required_titles]
+            found_titles = [task.title for task in found_tasks]
+            missing_titles = [title for title in required_titles if title not in found_titles]
+
+            # Prepare task details for found tasks
+            found_tasks_details = [
+                {
+                    "taskID": task.taskID,
+                    "title": task.title,
+                    "deadline": str(task.deadline),
+                    "description": task.description,
+                    "assignedTo": [user.username for user in task.assignedTo],
+                    "assignedTo_ids": [user.userID for user in task.assignedTo],
+                    "cc": [user.username for user in task.cc],
+                    "cc_ids": [user.userID for user in task.cc],
+                    "createdBy": task.createdBy,
+                    "attachedFiles": task.attachedFiles,
+                    "status": task.status.value,
+                    "completionDate": (
+                        str(task.completionDate) if task.completionDate else None
+                    ),
+                    "comments": [
+                        {
+                            "user": (
+                                Users.query.get(comment.userID).username
+                                if Users.query.get(comment.userID)
+                                else "Unknown User"
+                            ),
+                            "comment": comment.comment,
+                            "date": (
+                                comment.date.strftime("%Y-%m-%d") if comment.date else None
+                            ),
+                        }
+                        for comment in CaseTaskComments.query.filter_by(taskID=task.taskID)
+                        .order_by(CaseTaskComments.date.desc())
+                        .limit(5)
+                        .all()
+                    ],
+                    "checklist": task.checklist,
+                    "creationDate": task.creationDate.isoformat(),
+                    "startDate": (
+                        task.startDate.strftime("%Y-%m-%d") if task.startDate else None
+                    ),
+                }
+                for task in found_tasks
+            ]
+
+            # Prepare the response
+            response = {
+                "found_tasks": found_tasks_details,
+                "found_titles": found_titles,
+            }
+            if missing_titles:
+                response["message"] = "Some tasks are missing."
+                response["missing_titles"] = missing_titles
+                return response, HTTPStatus.PARTIAL_CONTENT
+            else:
+                response["message"] = "All specified tasks are present."
+                return response, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error checking specific tasks for case: {str(e)}")
+            return {
+                "message": "Internal Server Error"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR

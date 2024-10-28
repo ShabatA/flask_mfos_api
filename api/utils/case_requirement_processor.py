@@ -160,7 +160,7 @@ class CaseRequirementProcessor:
     
     def requirement_23(self):
         self.create_task(
-            title="Write a Credit for the Sponsoring party",
+            title="Credit for the Sponsoring party",
             description="Write a Credit for the Sponsoring party."
         )
     
