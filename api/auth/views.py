@@ -890,7 +890,7 @@ class AllUsers(Resource):
                         "description": task.description,
                         "status": task.status.value,
                         "checklist": task.checklist,
-                        "stageName": task.stage.name,
+                        "stageName": task.stage.name if task.stage else None,
                         "projectName": ProjectsData.query.get(
                             task.projectID
                         ).projectName,
@@ -921,7 +921,7 @@ class AllUsers(Resource):
                         "description": task.description,
                         "status": task.status.value,
                         "checklist": task.checklist,
-                        "stageName": task.stage.name,
+                        "stageName": task.stage.name if task.stage else None,
                         "caseName": CasesData.query.get(task.caseID).caseName,
                         "caseID": task.caseID,
                         "completionDate": (

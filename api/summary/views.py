@@ -47,9 +47,30 @@ class ProjectsAndCases(Resource):
             # Add the total count to the result
             case_result['total'] = total_cases_count
 
+            # Query to get the count of activities grouped by their status
+            activity_status_counts = db.session.query(
+                Activities.activityStatus, func.count(Activities.activityID)
+            ).group_by(Activities.activityStatus).all()
+
+            # Format the result as a dictionary
+            activity_result = {status.value: count for status, count in activity_status_counts}
+            
+            
+            # Query to get the count of programs grouped by active status
+            program_status_counts = db.session.query(
+                ProjectsData.active, func.count(ProjectsData.projectID)
+            ).filter(ProjectsData.project_type == ProType.PROGRAM).group_by(ProjectsData.active).all()
+
+            # Format the result for active/inactive programs
+            program_result = {
+                "active": sum(count for active, count in program_status_counts if active),
+                "inactive": sum(count for active, count in program_status_counts if not active)
+            }
             return {
                 'projects': project_result,
-                'cases': case_result
+                'cases': case_result,
+                'total_activities': activity_result,
+                'total_programs': program_result
             }, HTTPStatus.OK
         except Exception as e:
             current_app.logger.error(f"Error fetching project and case status breakdown: {str(e)}")

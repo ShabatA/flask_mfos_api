@@ -2079,6 +2079,95 @@ class GetTasksForStageResource(Resource):
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
+@case_task_namespace.route("/get_tasks_for_user/<int:case_id>", methods=["GET"])
+class GetTasksForCurrentUserResource(Resource):
+    @jwt_required()
+    def get(self, case_id):
+        try:
+            # Get the current user from the JWT token
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+            if not current_user:
+                return {
+                    "message": "User not found"
+                }, HTTPStatus.NOT_FOUND
+
+            # Check if the current user is assigned to the case
+            user_assigned = CaseUser.query.filter_by(caseID=case_id, userID=current_user.userID).first()
+
+            if user_assigned is None:
+                return {
+                    "message": "User not assigned to the specified case"
+                }, HTTPStatus.NOT_FOUND
+
+            # Fetch all tasks assigned to the current user for the specified case
+            tasks = CaseTask.query.filter_by(caseID=case_id).filter(
+                CaseTask.assignedTo.any(userID=current_user.userID)
+            ).all()
+
+            # Convert tasks to a list of dictionaries for response
+            tasks_list = []
+
+            for task in tasks:
+                # Fetch the first 5 comments for each task
+                comments = (
+                    CaseTaskComments.query.filter_by(taskID=task.taskID)
+                    .order_by(CaseTaskComments.date.desc())
+                    .limit(5)
+                    .all()
+                )
+
+                comments_list = [
+                    {
+                        "user": (
+                            Users.query.get(comment.userID).username
+                            if Users.query.get(comment.userID)
+                            else "Unknown User"
+                        ),
+                        "comment": comment.comment,
+                        "date": (
+                            comment.date.strftime("%Y-%m-%d") if comment.date else None
+                        ),
+                    }
+                    for comment in comments
+                ]
+
+                tasks_list.append(
+                    {
+                        "taskID": task.taskID,
+                        "title": task.title,
+                        "deadline": str(task.deadline),
+                        "description": task.description,
+                        "assignedTo": [user.username for user in task.assignedTo],
+                        "assignedTo_ids": [user.userID for user in task.assignedTo],
+                        "cc": [user.username for user in task.cc],
+                        "cc_ids": [user.userID for user in task.cc],
+                        "createdBy": task.createdBy,
+                        "attachedFiles": task.attachedFiles,
+                        "status": task.status.value,
+                        "completionDate": (
+                            str(task.completionDate) if task.completionDate else None
+                        ),
+                        "comments": comments_list,
+                        "checklist": task.checklist,
+                        "creationDate": task.creationDate.isoformat(),
+                        "startDate": (
+                            task.startDate.strftime("%Y-%m-%d")
+                            if task.startDate
+                            else None
+                        ),
+                    }
+                )
+
+            return {"tasks": tasks_list}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting tasks for current user in case: {str(e)}")
+            return {
+                "message": "Internal Server Error"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
 @case_task_namespace.route("/edit_task/<int:task_id>", methods=["PUT"])
 class EditTaskForStageResource(Resource):
     @case_task_namespace.expect(edit_task_model, validate=True)
