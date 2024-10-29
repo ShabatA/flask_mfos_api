@@ -2564,7 +2564,7 @@ class GetAllAssignedTasksResource(Resource):
                             "description": task.description,
                             "status": task.status.value,
                             "checklist": task.checklist,
-                            "stageName": task.stage.name,
+                            "stageName": task.stage.name if task.stage else None,
                             "caseName": CasesData.query.get(task.caseID).caseName,
                             "completionDate": (
                                 task.completionDate.isoformat()

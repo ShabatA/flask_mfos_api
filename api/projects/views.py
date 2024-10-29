@@ -2475,7 +2475,7 @@ class GetTasksForProjectResource(Resource):
                     {
                         "taskID": task.taskID,
                         "stageID": task.stageID,
-                        "stageName": task.stage.name,
+                        "stageName": task.stage.name if task.stage else None,
                         "title": task.title,
                         "deadline": str(task.deadline),
                         "description": task.description,
@@ -2548,7 +2548,7 @@ class GetAllAssignedTasksResource(Resource):
                             "description": task.description,
                             "status": task.status.value,
                             "checklist": task.checklist,
-                            "stageName": task.stage.name,
+                            "stageName": task.stage.name if task.stage else None,
                             "projectName": ProjectsData.query.get(
                                 task.projectID
                             ).projectName,
