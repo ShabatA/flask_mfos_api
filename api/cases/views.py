@@ -2626,7 +2626,7 @@ class CheckSpecificTasksForCaseResource(Resource):
                 "Describe the service provided",
                 "Describe the Attached Documents",
                 "Notes & Recommendations",
-                "Write a Credit for the Sponsoring party",
+                "Credit for the Sponsoring party",
                 "Media Requirement - Written Thank You Letter"
             ]
 
