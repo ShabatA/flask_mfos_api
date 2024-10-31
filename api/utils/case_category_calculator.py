@@ -17,16 +17,30 @@ class CaseCategoryCalculator:
             "shelter",
             "living support"
         ]
-
-        if self.case.question1["questionChoice"].lower() in priority_nature:
+        
+        # Question 1
+        question1_choice = self.case.question1["questionChoice"].strip().lower()
+        # print("Question 1:", question1_choice)
+        if question1_choice == "yes":
             points += 10
+            # print("Matched priority nature, added 10 points for Question 1")
 
-        if self.case.question2["questionChoice"].lower() == "yes":
+        # Question 2
+        question2_choice = self.case.question2["questionChoice"].strip().lower()
+        # print("Question 2:", question2_choice)
+        if question2_choice == "yes":
             points += 10
+            # print("Question 2 is 'yes', added 10 points")
 
-        if self.case.question3["questionChoice"].lower() == "yes":
+        # Question 3
+        question3_choice = self.case.question3["questionChoice"].strip().lower()
+
+        # Check the condition with priority_nature
+        if question3_choice in priority_nature:
             points += 10
+            # print("Question 3 matches criteria, added 10 points")
 
+        # print("Total main question points:", points)
         return points
 
     def sub_questions_points(self) -> int:
@@ -40,6 +54,7 @@ class CaseCategoryCalculator:
                 attr_value = getattr(self.case, attr_name)
                 if attr_value.get("questionChoice", "").lower() == "yes":
                     points += 5
+        print(points)
         return points
 
     def calculate_category(self) -> str:
