@@ -75,4 +75,91 @@ class ProjectsAndCases(Resource):
         except Exception as e:
             current_app.logger.error(f"Error fetching project and case status breakdown: {str(e)}")
             return {"message": f"Error fetching project and case status breakdown: {str(e)}"}, HTTPStatus.INTERNAL_SERVER_ERROR
-        
+
+@summary_ns.route("/get_all_tasks/current_user", methods=["GET"])
+class GetAllAssignedTasksResource(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            # Get the current user from the JWT token
+            user = Users.query.filter_by(username=get_jwt_identity()).first()
+            
+            # Fetch all ProjectTasks and CaseTasks assigned to the user
+            project_tasks = (
+                ProjectTask.query.join(Users.assigned_tasks)
+                .filter(Users.userID == user.userID)
+                .all()
+            )
+            case_tasks = (
+                CaseTask.query.join(Users.case_assigned_tasks)
+                .filter(Users.userID == user.userID)
+                .all()
+            )
+
+            # Project Tasks summary counts
+            total_p_tasks = len(project_tasks)
+            completed_p_tasks = sum(1 for task in project_tasks if task.status == TaskStatus.DONE)
+            overdue_p_tasks = sum(1 for task in project_tasks if task.status == TaskStatus.OVERDUE)
+            inprogress_p_tasks = sum(1 for task in project_tasks if task.status == TaskStatus.INPROGRESS)
+            not_started_p_tasks = sum(1 for task in project_tasks if task.status == TaskStatus.TODO)
+
+            # Case Tasks summary counts
+            total_c_tasks = len(case_tasks)
+            completed_c_tasks = sum(1 for task in case_tasks if task.status == CaseTaskStatus.DONE)
+            overdue_c_tasks = sum(1 for task in case_tasks if task.status == CaseTaskStatus.OVERDUE)
+            inprogress_c_tasks = sum(1 for task in case_tasks if task.status == CaseTaskStatus.INPROGRESS)
+            not_started_c_tasks = sum(1 for task in case_tasks if task.status == CaseTaskStatus.TODO)
+
+            # Format project and case tasks details
+            all_tasks = {
+                "project_tasks": [
+                    {
+                        "taskID": task.taskID,
+                        "title": task.title,
+                        "description": task.description,
+                        "status": task.status.value,
+                        "checklist": task.checklist,
+                        "stageName": task.stage.name if task.stage else None,
+                        "projectName": ProjectsData.query.get(task.projectID).projectName,
+                        "startDate": task.startDate.strftime("%Y-%m-%d") if task.startDate else None,
+                        "deadline": task.deadline.strftime("%Y-%m-%d") if task.deadline else None,
+                        "completionDate": task.completionDate.isoformat() if task.completionDate else None,
+                    }
+                    for task in project_tasks
+                ],
+                "case_tasks": [
+                    {
+                        "taskID": task.taskID,
+                        "title": task.title,
+                        "description": task.description,
+                        "status": task.status.value,
+                        "checklist": task.checklist,
+                        "stageName": task.stage.name if task.stage else None,
+                        "caseName": CasesData.query.get(task.caseID).caseName,
+                        "completionDate": task.completionDate.isoformat() if task.completionDate else None,
+                    }
+                    for task in case_tasks
+                ],
+                "summary": {
+                    "project_tasks_summary": {
+                        "total_p_tasks": total_p_tasks,
+                        "completed_p_tasks": completed_p_tasks,
+                        "overdue_p_tasks": overdue_p_tasks,
+                        "not_started_p_tasks": not_started_p_tasks,
+                        "inprogress_p_tasks": inprogress_p_tasks,
+                    },
+                    "case_task_summary": {
+                        "total_c_tasks": total_c_tasks,
+                        "completed_c_tasks": completed_c_tasks,
+                        "overdue_c_tasks": overdue_c_tasks,
+                        "not_started_c_tasks": not_started_c_tasks,
+                        "inprogress_c_tasks": inprogress_c_tasks,
+                    },
+                },
+            }
+
+            return all_tasks, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error getting all assigned tasks: {str(e)}")
+            return {"message": "Internal Server Error"}, HTTPStatus.INTERNAL_SERVER_ERROR
