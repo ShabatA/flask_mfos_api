@@ -565,16 +565,16 @@ class CasesAddResource(Resource):
             existing_case.userID = case_data.get("userID", existing_case.userID)
             existing_case.regionID = case_data.get("regionID", existing_case.regionID)
             existing_case.sponsorAvailable = case_data.get("sponsorAvailable", existing_case.sponsorAvailable)
-            existing_case.question1 = case_data.get("question1", existing_case.question1)
-            existing_case.question2 = case_data.get("question2", existing_case.question2)
-            existing_case.question3 = case_data.get("question3", existing_case.question3)
+            existing_case.question1 = case_data["question3"]
+            existing_case.question2 = case_data["question2"]
+            existing_case.question3 = case_data["question1"]
             existing_case.question4 = case_data.get("question4", {})
             existing_case.question5 = case_data.get("question5", {})
             existing_case.question6 = case_data.get("question6", {})
             existing_case.question7 = case_data.get("question7", {})
             existing_case.question8 = case_data.get("question8", {})
             existing_case.question9 = case_data.get("question9", {})
-            existing_case.question10 = case_data["question10"]
+            existing_case.question10 = case_data.get("question10", {})
             existing_case.question11 = case_data["question11"]
             existing_case.question12 = case_data["question12"]
             existing_case.startDate = case_data.get(
@@ -583,6 +583,7 @@ class CasesAddResource(Resource):
             existing_case.dueDate = case_data.get("dueDate", existing_case.dueDate)
 
             existing_case.save()
+            print(existing_case)
             categoryCalculator = CaseCategoryCalculator(existing_case)
             categoryCalculator.calculate_category()
 
