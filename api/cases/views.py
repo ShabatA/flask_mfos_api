@@ -1088,6 +1088,21 @@ class CaseAddRequirementsResource(Resource):
             )
             task.save()
 
+            task = CaseTask(
+                caseID=case.caseID,
+                title="Case Details",
+                description=f"https://gog-web-13346.web.app/#/caseDetails/{case.caseID}",
+                assignedTo=[],
+                cc=[],
+                createdBy=current_user.userID,
+                attachedFiles="N/A",
+                status=CaseTaskStatus.TODO,
+                stageID=1,
+                startDate=case.startDate,
+                deadline=case.dueDate,
+            )
+            task.save()
+
             approvedAmount = status_data.get("approvedAmount")
 
             region_account = RegionAccount.query.filter_by(
