@@ -8,7 +8,7 @@ from .cases.views import (
     case_task_namespace,
     case_assessment_namespace,
 )
-from .auth.views import auth_namespace, user_management_namespace
+from .auth.views import auth_namespace, user_management_namespace, user_task_namespace
 from .regions.views import region_namespace
 from .accountfield.views import field_namespace
 from .projects.views import (
@@ -73,6 +73,7 @@ def create_app(config=config_dict["development"]):
     api.add_namespace(task_namespace)
     api.add_namespace(auth_namespace, path="/auth")
     api.add_namespace(user_management_namespace)
+    api.add_namespace(user_task_namespace)
     api.add_namespace(assessment_namespace)
     api.add_namespace(case_stage_namespace)
     api.add_namespace(case_task_namespace)

@@ -3,6 +3,8 @@ from enum import Enum
 from datetime import datetime
 from .regions import Regions
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy.dialects.postgresql import JSONB
+
 
 
 # class UserRole(Enum):
@@ -230,3 +232,53 @@ class UserPermissions(db.Model):
     @classmethod
     def get_by_ids(cls, user_id, permission_id):
         return cls.query.get_or_404((user_id, permission_id))
+
+
+class UserTaskStatus(Enum):
+    TODO = "To Do"
+    INPROGRESS = "In Progress"
+    DONE = "Done"
+    OVERDUE = "Overdue"
+
+class UserTask(db.Model):
+    __tablename__ = "user_task"
+
+    taskID = db.Column(db.Integer, primary_key=True)
+    userID = db.Column(db.Integer, db.ForeignKey("users.userID"), nullable=False)  # Direct link to the user
+    user = db.relationship("Users", backref="personal_tasks", lazy=True)  # Relationship to user
+    title = db.Column(db.String, nullable=False)
+    description = db.Column(db.String, nullable=True)
+    deadline = db.Column(db.Date, nullable=False)
+    status = db.Column(db.Enum(UserTaskStatus), default=UserTaskStatus.TODO, nullable=False)
+    completionDate = db.Column(db.Date, nullable=True)
+    checklist = db.Column(JSONB, nullable=True)
+    creationDate = db.Column(db.DateTime, default=datetime.utcnow)
+    startDate = db.Column(db.Date, default=datetime.now().date())
+
+    def is_overdue(self):
+        return self.deadline < datetime.today().date() if self.status != UserTaskStatus.DONE else False
+
+    def save(self):
+        db.session.add(self)
+        db.session.commit()
+
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+
+    @classmethod
+    def get_by_id(cls, taskID):
+        return cls.query.get_or_404(taskID)
+
+    def serialize(self):
+        return {
+            "taskID": self.taskID,
+            "title": self.title,
+            "deadline": str(self.deadline),
+            "description": self.description,
+            "status": self.status.value,
+            "completionDate": str(self.completionDate) if self.completionDate else None,
+            "checklist": self.checklist,
+            "creationDate": self.creationDate.isoformat(),
+            "startDate": self.startDate.strftime("%Y-%m-%d") if self.startDate else None,
+        }

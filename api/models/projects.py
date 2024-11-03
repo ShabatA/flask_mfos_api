@@ -652,7 +652,7 @@ class ProjectTask(db.Model):
     createdBy = db.Column(db.Integer, db.ForeignKey("users.userID"), nullable=False)
     attachedFiles = db.Column(db.String, nullable=True)
     stageID = db.Column(
-        db.Integer, db.ForeignKey("stage.stageID", ondelete="CASCADE"), nullable=False
+        db.Integer, db.ForeignKey("stage.stageID", ondelete="CASCADE")
     )
     status = db.Column(db.Enum(TaskStatus), nullable=False)
     completionDate = db.Column(db.Date, nullable=True)

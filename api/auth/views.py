@@ -3,7 +3,7 @@ from flask_restx import Resource, Namespace, fields
 from flask import request, current_app
 
 from api.models.cases import CaseTask, CaseTaskStatus, CaseUser, CasesData
-from ..models.users import Users, Role, UserPermissions, PermissionLevel
+from ..models.users import Users, Role, UserPermissions, PermissionLevel, UserTaskStatus, UserTask
 from ..models.projects import (
     ProjectUser,
     ProjectTask,
@@ -23,7 +23,8 @@ from flask_jwt_extended import (
 from werkzeug.exceptions import Conflict, BadRequest
 from ..models.regions import Regions  # Import the Region model
 from ..utils.db import db
-from datetime import timedelta
+from datetime import timedelta, datetime
+
 
 auth_namespace = Namespace("auth", description="a namespace for authentication")
 
@@ -139,6 +140,39 @@ login_model = auth_namespace.model(
     {
         "email": fields.String(required=True, description="An email"),
         "password": fields.String(required=True, description="A password"),
+    },
+)
+
+##########################Task Namespace############################################
+user_task_namespace = Namespace("User tasks", description="Namespace for managing user tasks")
+
+# Define models for request and response
+task_model = user_task_namespace.model(
+    "Task",
+    {
+        "taskID": fields.Integer(),
+        "userID": fields.Integer(required=True, description="User ID"),
+        "title": fields.String(required=True, description="Task title"),
+        "description": fields.String(description="Task description"),
+        "deadline": fields.String(required=True, description="Deadline for the task (YYYY-MM-DD)"),
+    },
+)
+
+update_task_model = user_task_namespace.model(
+    "UpdateTask",
+    {
+        "title": fields.String(description="Task title"),
+        "description": fields.String(description="Task description"),
+        "deadline": fields.String(description="Deadline for the task (YYYY-MM-DD)"),
+    },
+)
+
+task_status_model = user_task_namespace.model(
+    "TaskStatus",
+    {
+        "status": fields.String(
+            required=True, description="New task status (TODO, INPROGRESS, DONE, OVERDUE)"
+        )
     },
 )
 
@@ -1337,3 +1371,217 @@ class ReassignUserToCaseResource(Resource):
             return {
                 "message": "Internal Server Error"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+######### User Task Management ############
+
+@user_task_namespace.route("/add")
+class AddTask(Resource):
+    @user_task_namespace.expect(task_model)
+    @jwt_required()
+    def post(self):
+        """
+        Add a new task for the current user
+        """
+        data = request.get_json()
+        
+        # Get the user ID of the currently authenticated user
+        current_user_identity = get_jwt_identity()
+        user = Users.query.filter_by(username=current_user_identity).first()
+
+        if not user:
+            return {"message": "User not found"}, HTTPStatus.NOT_FOUND
+        
+        # Parse startDate if provided, else set to today's date
+        start_date = data.get("startDate")
+        if start_date:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        else:
+            start_date = datetime.utcnow().date()  # Default to today if not provided
+
+        # Create the task with the current user's ID
+        task = UserTask(
+            userID=user.userID,
+            title=data["title"],
+            description=data.get("description"),
+            deadline=datetime.strptime(data["deadline"], '%Y-%m-%d'),
+            startDate=start_date,
+        )
+        task.save()
+        return {"message": "Task created", "task": task.serialize()}, HTTPStatus.CREATED
+
+
+@user_task_namespace.route("/<int:task_id>/edit")
+class EditTask(Resource):
+    @user_task_namespace.expect(update_task_model)
+    @jwt_required()
+    def put(self, task_id):
+        """
+        Edit an existing task
+        """
+        task = UserTask.query.get(task_id)
+        if not task:
+            return {"message": "Task not found"}, HTTPStatus.NOT_FOUND
+
+        data = request.get_json()
+        
+        # Update each field if provided in the request data
+        task.title = data.get("title", task.title)
+        task.description = data.get("description", task.description)
+        
+        if "deadline" in data:
+            task.deadline = datetime.strptime(data["deadline"], '%Y-%m-%d').date()
+        
+        if "startDate" in data:
+            task.startDate = datetime.strptime(data["startDate"], '%Y-%m-%d').date()
+        
+        if "status" in data:
+            try:
+                task.status = UserTaskStatus[data["status"].upper()]
+            except KeyError:
+                return {"message": "Invalid status value"}, HTTPStatus.BAD_REQUEST
+
+        if "checklist" in data:
+            task.checklist = data["checklist"]
+
+        db.session.commit()
+        return {"message": "Task updated", "task": task.serialize()}, HTTPStatus.OK
+
+
+@user_task_namespace.route("/<int:task_id>/delete")
+class DeleteTask(Resource):
+    @jwt_required()
+    def delete(self, task_id):
+        """
+        Delete an existing task
+        """
+        task = UserTask.query.get(task_id)
+        if not task:
+            return {"message": "Task not found"}, HTTPStatus.NOT_FOUND
+
+        task.delete()
+        return {"message": "Task deleted"}, HTTPStatus.OK
+
+
+@user_task_namespace.route("/<int:task_id>/status")
+class ChangeTaskStatus(Resource):
+    @user_task_namespace.expect(task_status_model)
+    @jwt_required()
+    def patch(self, task_id):
+        """
+        Update the status of a task
+        """
+        task = UserTask.query.get(task_id)
+        if not task:
+            return {"message": "Task not found"}, HTTPStatus.NOT_FOUND
+
+        status = request.json.get("status")
+        try:
+            task.status = UserTaskStatus[status.upper()]
+            db.session.commit()
+        except KeyError:
+            return {"message": "Invalid status value"}, HTTPStatus.BAD_REQUEST
+
+        return {"message": "Task status updated", "task": task.serialize()}, HTTPStatus.OK
+
+@user_task_namespace.route("/user/<int:user_id>/tasks")
+class UserTasks(Resource):
+    @jwt_required()
+    def get(self, user_id):
+        """
+        Get all tasks for a specific user
+        """
+        user = Users.query.get(user_id)
+        if not user:
+            return {"message": "User not found"}, HTTPStatus.NOT_FOUND
+
+        tasks = UserTask.query.filter_by(userID=user_id).all()
+        task_list = [task.serialize() for task in tasks]
+        return {"tasks": task_list}, HTTPStatus.OK
+
+
+@user_task_namespace.route("/<int:task_id>")
+class GetTask(Resource):
+    @jwt_required()
+    def get(self, task_id):
+        """
+        Get a specific task by its ID
+        """
+        task = UserTask.query.get(task_id)
+        if not task:
+            return {"message": "Task not found"}, HTTPStatus.NOT_FOUND
+
+        return {"task": task.serialize()}, HTTPStatus.OK
+
+
+@user_task_namespace.route("/user/<int:user_id>/tasks/status/<string:status>")
+class FilterTasksByStatus(Resource):
+    @jwt_required()
+    def get(self, user_id, status):
+        """
+        Get tasks for a user by status (TODO, INPROGRESS, DONE, OVERDUE)
+        """
+        user = Users.query.get(user_id)
+        if not user:
+            return {"message": "User not found"}, HTTPStatus.NOT_FOUND
+
+        try:
+            status_enum = UserTaskStatus[status.upper()]
+        except KeyError:
+            return {"message": "Invalid status value"}, HTTPStatus.BAD_REQUEST
+
+        tasks = UserTask.query.filter_by(userID=user_id, status=status_enum).all()
+        task_list = [task.serialize() for task in tasks]
+        return {"tasks": task_list}, HTTPStatus.OK
+
+
+@user_task_namespace.route("/<int:task_id>/complete")
+class CompleteTask(Resource):
+    @jwt_required()
+    def post(self, task_id):
+        """
+        Mark a task as completed
+        """
+        task = UserTask.query.get(task_id)
+        if not task:
+            return {"message": "Task not found"}, HTTPStatus.NOT_FOUND
+
+        task.status = UserTaskStatus.DONE
+        task.completionDate = datetime.utcnow()
+        db.session.commit()
+
+        return {"message": "Task marked as complete", "task": task.serialize()}, HTTPStatus.OK
+
+
+def mark_overdue_tasks():
+    """
+    Mark tasks as overdue if their deadline has passed and they are not yet done.
+    """
+    overdue_tasks = UserTask.query.filter(
+        UserTask.deadline < datetime.utcnow().date(),
+        UserTask.status != UserTaskStatus.DONE
+    ).all()
+
+    for task in overdue_tasks:
+        task.status = UserTaskStatus.OVERDUE
+    db.session.commit()
+
+
+@user_task_namespace.route("/user/<int:user_id>/task-summary")
+class TaskSummary(Resource):
+    @jwt_required()
+    def get(self, user_id):
+        """
+        Get a summary of tasks by status for a specific user
+        """
+        user = Users.query.get(user_id)
+        if not user:
+            return {"message": "User not found"}, HTTPStatus.NOT_FOUND
+
+        task_summary = {
+            "TODO": UserTask.query.filter_by(userID=user_id, status=UserTaskStatus.TODO).count(),
+            "INPROGRESS": UserTask.query.filter_by(userID=user_id, status=UserTaskStatus.INPROGRESS).count(),
+            "DONE": UserTask.query.filter_by(userID=user_id, status=UserTaskStatus.DONE).count(),
+            "OVERDUE": UserTask.query.filter_by(userID=user_id, status=UserTaskStatus.OVERDUE).count(),
+        }
+        return {"task_summary": task_summary}, HTTPStatus.OK
+

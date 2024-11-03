@@ -124,6 +124,7 @@ class GetAllAssignedTasksResource(Resource):
                         "startDate": task.startDate.strftime("%Y-%m-%d") if task.startDate else None,
                         "deadline": task.deadline.strftime("%Y-%m-%d") if task.deadline else None,
                         "completionDate": task.completionDate.isoformat() if task.completionDate else None,
+                        "assignedTo": [user.username for user in task.assignedTo],
                     }
                     for task in project_tasks
                 ],
@@ -137,6 +138,9 @@ class GetAllAssignedTasksResource(Resource):
                         "stageName": task.stage.name if task.stage else None,
                         "caseName": CasesData.query.get(task.caseID).caseName,
                         "completionDate": task.completionDate.isoformat() if task.completionDate else None,
+                        "startDate": task.startDate.strftime("%Y-%m-%d") if task.startDate else None,
+                        "deadline": task.deadline.strftime("%Y-%m-%d") if task.deadline else None,
+                        "assignedTo": [user.username for user in task.assignedTo],
                     }
                     for task in case_tasks
                 ],
