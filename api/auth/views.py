@@ -1405,6 +1405,7 @@ class AddTask(Resource):
             description=data.get("description"),
             deadline=datetime.strptime(data["deadline"], '%Y-%m-%d'),
             startDate=start_date,
+            checklist=data.get("checklist", []),  # Set checklist to an empty list if not provided
         )
         task.save()
         return {"message": "Task created", "task": task.serialize()}, HTTPStatus.CREATED
