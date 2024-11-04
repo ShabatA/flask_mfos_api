@@ -69,6 +69,19 @@ fund_data_model = finance_namespace.model(
     },
 )
 
+add_fund_model = finance_namespace.model("AddFundModel", {
+    "userID": fields.Integer(required=True, description="ID of the user to whom funds are added"),
+    "currencyID": fields.Integer(required=True, description="ID of the currency for the transaction"),
+    "amount": fields.Float(required=True, description="Amount to be added to the user's budget"),
+    "notes": fields.String(required=False, description="Optional notes for the transaction"),
+})
+
+use_fund_model = finance_namespace.model("UseFundModel", {
+    "userID": fields.Integer(required=True, description="ID of the user whose budget will be deducted"),
+    "amount": fields.Float(required=True, description="Amount to be used from the user's budget"),
+    "notes": fields.String(required=False, description="Optional notes for the transaction"),
+})
+
 sub_fund_data_model = finance_namespace.model(
     "SubFinancialFundData",
     {
@@ -2974,6 +2987,144 @@ class GetReportByTag(Resource):
             return {
                 "message": f"Error getting all reports: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+#####################UserBudget######################
+@finance_namespace.route("/add_fund_to_user_budget")
+class AddFundToUserBudget(Resource):
+    @jwt_required()
+    @finance_namespace.expect(add_fund_model)  # Define this model with required fields such as userID, currencyID, amount, and notes (optional)
+    def post(self):
+        try:
+            request_data = request.json
+
+            # Retrieve the user and their budget
+            user = Users.query.get_or_404(request_data["userID"])
+            budget = UserBudget.query.filter_by(userID=user.userID).first()
+
+            # If no existing budget, create a new one
+            if not budget:
+                budget = UserBudget(
+                    userID=user.userID,
+                    currencyID=request_data["currencyID"]
+                )
+                budget.save()
+
+            # Add funds to the budget
+            budget.add_fund(request_data["amount"])
+
+            # Create a transaction record
+            transaction = UserBudgetTransaction(
+                fromBudgetID=None,
+                toBudgetID=budget.budgetId,
+                transferAmount=request_data["amount"],
+                transferType="Top-up",
+                currencyID=request_data["currencyID"],
+                notes=request_data.get("notes", "")
+            )
+            transaction.save()
+
+            return {
+                "message": "Fund added successfully.",
+                "budget_details": budget.get_fund_balance(),
+            }, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error adding fund: {str(e)}")
+            return {
+                "message": f"Error adding fund: {str(e)}"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route("/use_fund_from_user_budget")
+class UseFundFromUserBudget(Resource):
+    @jwt_required()
+    @finance_namespace.expect(use_fund_model)  # Define this model with required fields such as userID, amount, and notes (optional)
+    def post(self):
+        try:
+            request_data = request.json
+
+            # Retrieve the user's budget
+            user = Users.query.get_or_404(request_data["userID"])
+            budget = UserBudget.query.filter_by(userID=user.userID).first()
+
+            if not budget:
+                return {
+                    "message": "User budget not found."
+                }, HTTPStatus.NOT_FOUND
+
+            # Use funds from the budget
+            budget.use_fund(request_data["amount"])
+
+            # Create a transaction record
+            transaction = UserBudgetTransaction(
+                fromBudgetID=budget.budgetId,
+                toBudgetID=None,
+                transferAmount=request_data["amount"],
+                transferType="Withdrawal",
+                currencyID=budget.currencyID,
+                notes=request_data.get("notes", "")
+            )
+            transaction.save()
+
+            return {
+                "message": "Fund used successfully.",
+                "budget_details": budget.get_fund_balance(),
+            }, HTTPStatus.OK
+
+        except ValueError as e:
+            return {
+                "message": str(e)
+            }, HTTPStatus.BAD_REQUEST
+        except Exception as e:
+            current_app.logger.error(f"Error using fund: {str(e)}")
+            return {
+                "message": f"Error using fund: {str(e)}"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@finance_namespace.route("/user_budget_transaction_history/<int:user_id>")
+class UserBudgetTransactionHistory(Resource):
+    @jwt_required()
+    def get(self, user_id):
+        try:
+            user = Users.query.get_or_404(user_id)
+            budget = UserBudget.query.filter_by(userID=user.userID).first()
+
+            if not budget:
+                return {
+                    "message": "User budget not found."
+                }, HTTPStatus.NOT_FOUND
+
+            # Retrieve transaction history for the budget
+            transactions = UserBudgetTransaction.query.filter(
+                (UserBudgetTransaction.fromBudgetID == budget.budgetId) |
+                (UserBudgetTransaction.toBudgetID == budget.budgetId)
+            ).all()
+
+            transaction_history = [
+                {
+                    "transactionID": txn.transactionID,
+                    "fromBudgetID": txn.fromBudgetID,
+                    "toBudgetID": txn.toBudgetID,
+                    "transferAmount": txn.transferAmount,
+                    "transferType": txn.transferType,
+                    "currencyID": txn.currencyID,
+                    "notes": txn.notes,
+                    "transferDate": txn.transferDate.isoformat()
+                }
+                for txn in transactions
+            ]
+
+            return {
+                "message": "Transaction history retrieved successfully.",
+                "transaction_history": transaction_history
+            }, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error retrieving transaction history: {str(e)}")
+            return {
+                "message": f"Error retrieving transaction history: {str(e)}"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 
 # @finance_namespace.route('/get_all_region_accounts')
