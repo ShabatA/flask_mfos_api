@@ -1,4 +1,5 @@
 from api.config.config import Config
+from api.models.finances import UserBudget
 from flask_restx import Resource, Namespace, fields
 from flask import request, current_app
 
@@ -742,6 +743,20 @@ class AllUsers(Resource):
     @staticmethod
     def get_user_data(user):
 
+        # Fetch UserBudget data for the user
+        user_budget = UserBudget.query.filter_by(userID=user.userID).first()
+        budget_data = {}
+        
+        # If a budget exists, extract the required fields
+        if user_budget:
+            budget_data = {
+                "totalFund": user_budget.totalFund,
+                "usedFund": user_budget.usedFund,
+                "availableFund": user_budget.availableFund,
+                "currencyCode": user_budget.currency.currencyCode if user_budget.currency else None,
+            }
+
+
         if user.is_admin():
             all_projects = ProjectsData.query.all()
             all_cases = CasesData.query.all()
@@ -976,6 +991,7 @@ class AllUsers(Resource):
                 "not_started_c_tasks": not_started_c_tasks,
                 "inprogress_c_tasks": inprogress_c_tasks,
             },
+            "budget_data": budget_data,  # Include the budget data here
         }
         return user_data
 
