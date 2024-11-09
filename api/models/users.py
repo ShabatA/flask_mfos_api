@@ -1,10 +1,10 @@
 from ..utils.db import db
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timedelta
 from .regions import Regions
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.dialects.postgresql import JSONB
-
+import random
 
 
 # class UserRole(Enum):
@@ -43,7 +43,7 @@ class Users(db.Model):
     userID = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(25), index=True, nullable=False, unique=True)
     password = db.Column(db.String, nullable=False)
-    email = db.Column(db.String, nullable=False)
+    email = db.Column(db.String, nullable=False, unique=True)
     firstName = db.Column(db.String)
     lastName = db.Column(db.String)
     jobDescription = db.Column(db.String)
@@ -67,6 +67,16 @@ class Users(db.Model):
 
     def __repr__(self):
         return f"<Users {self.userID} {self.username}>"
+    
+    # Password handling methods
+    def set_password(self, password):
+        """Hash and set the password."""
+        self.password = generate_password_hash(password)
+        db.session.commit()
+    
+    def check_password(self, password):
+        """Check if the provided password matches the hashed password."""
+        return check_password_hash(self.password, password)
 
     def assign_role_and_permissions(self, role_name, permission_names):
         role = Role.query.filter_by(RoleName=role_name).first()
@@ -282,3 +292,67 @@ class UserTask(db.Model):
             "creationDate": self.creationDate.isoformat(),
             "startDate": self.startDate.strftime("%Y-%m-%d") if self.startDate else None,
         }
+
+
+class OTPRequest(db.Model):
+    __tablename__ = 'otp_requests'
+
+    id = db.Column(db.Integer, primary_key=True, index=True)
+    email = db.Column(db.String, nullable=False)
+    otp = db.Column(db.String, nullable=False)
+    expiration_time = db.Column(db.DateTime, nullable=False)
+    is_used = db.Column(db.Boolean, default=False)
+
+    def mark_as_used(self):
+        """Mark this OTP entry as used."""
+        self.is_used = True
+        db.session.commit()
+
+    @classmethod
+    def generate_otp(cls, email, expiration_minutes=5):
+        """Generate a 6-digit OTP, save it, and set an expiration time."""
+        otp = str(random.randint(100000, 999999))  # Generate a 6-digit OTP
+        expiration_time = datetime.utcnow() + timedelta(minutes=expiration_minutes)
+
+        otp_entry = cls(email=email, otp=otp, expiration_time=expiration_time)
+        db.session.add(otp_entry)
+        db.session.commit()
+        return otp  # Return the OTP to send it to the user
+    
+    @staticmethod
+    def verify_and_delete_otp(email, otp):
+        """Verify if an OTP is valid for a given email, then delete it if valid or expired."""
+        otp_entry = OTPRequest.query.filter_by(email=email, otp=otp, is_used=False).first()
+        
+        # Check if the OTP exists and is not expired
+        if otp_entry:
+            if otp_entry.expiration_time >= datetime.utcnow():
+                otp_entry.mark_as_used()
+                db.session.delete(otp_entry)
+                db.session.commit()
+                return otp_entry  # Valid OTP
+            else:
+                # Delete if expired
+                db.session.delete(otp_entry)
+                db.session.commit()
+        return None  # Return None if verification fails
+    
+    @staticmethod
+    def verify_otp(email, otp):
+        """Verify if an OTP is valid for a given email."""
+        otp_entry = OTPRequest.query.filter_by(email=email, otp=otp, is_used=False).first()
+        
+        # Check if the OTP exists and is not expired
+        if otp_entry and otp_entry.expiration_time >= datetime.utcnow():
+            return otp_entry  # Return the OTP entry instead of True
+        return None  # Return None if verification fails
+    
+    
+
+    @classmethod
+    def cleanup_expired_otps(cls):
+        """Delete expired OTP entries from the database."""
+        expired_otps = cls.query.filter(cls.expiration_time < datetime.utcnow(), cls.is_used == False).all()
+        for otp in expired_otps:
+            db.session.delete(otp)
+        db.session.commit()

@@ -12,6 +12,8 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from decimal import Decimal
 from sqlalchemy import desc
+import random
+
 
 
 class Currencies(db.Model):
@@ -513,6 +515,12 @@ class RegionAccount(db.Model):
             }
             donation_list.append(donation_dict)
         return donation_list
+
+
+
+    
+
+
 
 class UserBudget(db.Model):
     __tablename__ = "user_budget"

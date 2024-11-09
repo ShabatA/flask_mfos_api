@@ -4,7 +4,7 @@ from flask_restx import Resource, Namespace, fields
 from flask import request, current_app
 
 from api.models.cases import CaseTask, CaseTaskStatus, CaseUser, CasesData
-from ..models.users import Users, Role, UserPermissions, PermissionLevel, UserTaskStatus, UserTask
+from ..models.users import Users, Role, UserPermissions, PermissionLevel, UserTaskStatus, UserTask, OTPRequest
 from ..models.projects import (
     ProjectUser,
     ProjectTask,
@@ -25,9 +25,13 @@ from werkzeug.exceptions import Conflict, BadRequest
 from ..models.regions import Regions  # Import the Region model
 from ..utils.db import db
 from datetime import timedelta, datetime
+from ..utils.email_helpers import authenticate_gmail, send_email  # Import helper functions
+
 
 
 auth_namespace = Namespace("auth", description="a namespace for authentication")
+
+user_otp_namespace = Namespace("User OTP", description="User OTP operations")
 
 user_management_namespace = Namespace(
     "User Management",
@@ -1602,3 +1606,90 @@ class TaskSummary(Resource):
         }
         return {"task_summary": task_summary}, HTTPStatus.OK
 
+@user_otp_namespace.route('/send-otp/<string:email>', methods=['POST'])
+class SendOTP(Resource):
+    def post(self, email):
+        """
+        Send an OTP to the user's email if the email exists in the system.
+        """
+        # data = request.get_json()
+        # email = data.get('email')
+        
+        if not email:
+            return {"message": "Email is required"}, HTTPStatus.BAD_REQUEST
+
+        # Check if email exists in the Users table
+        user = Users.query.filter_by(email=email).first()
+        if not user:
+            return {"message": "Email not found"}, HTTPStatus.NOT_FOUND
+
+        otp = OTPRequest.generate_otp(email)
+        
+        subject = "Your OTP Code"
+        body = f"Your OTP code is {otp}. It is valid for 5 minutes."
+
+        service = authenticate_gmail()
+        sender_email = "info@mofs.online"  # Replace with actual sender email
+
+        email_response = send_email(service, sender_email, email, subject, body)
+        
+        return {"message": "OTP sent successfully", "email_response": email_response}, HTTPStatus.OK
+
+@user_otp_namespace.route("/user/verify-otp/<string:email>/<string:otp>")
+class VerifyOTP(Resource):
+    def post(self, email, otp):
+        """
+        Verify the OTP sent to the user's email.
+        """
+        if not email or not otp:
+            return {"message": "Email and OTP are required"}, HTTPStatus.BAD_REQUEST
+
+        # Check if email exists in the Users table
+        user = Users.query.filter_by(email=email).first()
+        if not user:
+            return {"message": "Email not found"}, HTTPStatus.NOT_FOUND
+
+        otp_entry = OTPRequest.verify_otp(email, otp)
+        
+        if otp_entry:
+            otp_entry.mark_as_used()  # Now this will work, as otp_entry is an OTPRequest instance
+            return {"message": "OTP verified successfully"}, HTTPStatus.OK
+        else:
+            return {"message": "Invalid or expired OTP"}, HTTPStatus.UNAUTHORIZED
+
+
+# Define the request model
+password_reset_model = user_otp_namespace.model('PasswordReset', {
+    'email': fields.String(required=True, description='The user email'),
+    'otp': fields.String(required=True, description='The OTP code sent to the user email'),
+    'new_password': fields.String(required=True, description='The new password for the user')
+})
+
+@user_otp_namespace.route('/user/reset-password')
+class ResetPassword(Resource):
+    @user_otp_namespace.expect(password_reset_model)
+    @user_otp_namespace.doc(description="Reset the user's password after OTP verification")
+    def post(self):
+        """
+        Reset the user's password after OTP verification.
+        """
+        data = request.get_json()
+        email = data.get('email')
+        otp = data.get('otp')
+        new_password = data.get('new_password')
+
+        if not email or not otp or not new_password:
+            return {"message": "Email, OTP, and new password are required"}, HTTPStatus.BAD_REQUEST
+
+        user = Users.query.filter_by(email=email).first()
+        if not user:
+            return {"message": "Email not found"}, HTTPStatus.NOT_FOUND
+
+        otp_entry = OTPRequest.verify_and_delete_otp(email, otp)
+        
+        if otp_entry:
+            # Use set_password to hash and store the new password securely
+            user.set_password(new_password)
+            return {"message": "Password reset successfully"}, HTTPStatus.OK
+        else:
+            return {"message": "Invalid or expired OTP"}, HTTPStatus.UNAUTHORIZED
