@@ -1,36 +1,24 @@
 import os
+import json
 import base64
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from decouple import config
 
 # Define the scopes for Gmail API
 SCOPES = ['https://www.googleapis.com/auth/gmail.send']
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-print(BASE_DIR)
 
 def authenticate_gmail():
-    """Authenticate with Gmail API and return the service object."""
-    creds = None
-    print(BASE_DIR)
+    """Authenticate with Gmail API using stored token JSON."""
+    # Load token data from the environment variable and parse it
+    token_data = json.loads(config("TOKEN_JSON"))
 
-    CREDENTIALS_FILE = os.path.join(BASE_DIR, 'credentials.json')
-    TOKEN_FILE = os.path.join(BASE_DIR, 'token.json')
-    
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-    if not creds or not creds.valid:
-        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-        auth_url, _ = flow.authorization_url(prompt='consent')
-        print("Please go to this URL and authorize access:", auth_url)
-        code = input("Enter the authorization code here: ")
-        flow.fetch_token(code=code)
-        creds = flow.credentials
-        with open(TOKEN_FILE, 'w') as token:
-            token.write(creds.to_json())
+    # Create credentials using the token data
+    creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+
     return build('gmail', 'v1', credentials=creds)
 
 def send_email(service, sender_email, recipient_email, subject, body):
