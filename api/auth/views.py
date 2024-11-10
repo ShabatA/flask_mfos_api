@@ -26,6 +26,7 @@ from ..models.regions import Regions  # Import the Region model
 from ..utils.db import db
 from datetime import timedelta, datetime
 from ..utils.email_helpers import authenticate_gmail, send_email  # Import helper functions
+from sqlalchemy import func
 
 
 
@@ -294,11 +295,11 @@ class Login(Resource):
         """
 
         data = request.get_json()
-
-        email = data.get("email")
+        email = data.get("email").lower()  # Convert input email to lowercase
         password_hash = data.get("password")
 
-        user = Users.query.filter_by(email=email).first()
+        # Use func.lower to make the email case-insensitive in the query
+        user = Users.query.filter(func.lower(Users.email) == email).first()
 
         if (user is not None) and check_password_hash(user.password, password_hash):
             access_token = create_access_token(
