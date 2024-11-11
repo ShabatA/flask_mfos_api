@@ -18,6 +18,7 @@ class ProjectCategoryCalculator:
 
     def budgetforA(self, budget_str):
         if budget_str.lower() == "available/full amount committed":
+            print("budget", budget_str)
             self.points_for_cat_a += 10
         else:
             self.points_for_cat_a += 0
@@ -26,18 +27,24 @@ class ProjectCategoryCalculator:
         important_nature = ["0", "1", "11"]
         if nature_str in important_nature:
             self.points_for_cat_a += 10
+            print("nature", nature_str)
         else:
             self.points_for_cat_a += 0
 
     def engagementforA(self, engagement):
+        engagement = engagement.strip().lower().replace("’", "'")
+        # print("before condition", engagement)
+        # "from one of the gotg's offices"
         important_engagement = ["from one of the gotg's offices", "important donor"]
         if engagement.lower() in important_engagement:
+            print("after engagement", engagement)
             self.points_for_cat_a += 10
         else:
             self.points_for_cat_a += 0
 
     def controlforA(self, control_str):
         if control_str.lower() == "i have full control":
+            print("control", control_str)
             self.points_for_cat_a += 10
         else:
             self.points_for_cat_a += 0
@@ -151,12 +158,17 @@ class ProjectCategoryCalculator:
         # look at each answer on the string list
         for answer in self.assessment_answers:
             if answer is not None:
+                print(answer)
                 # Convert the answer to lowercase for case-insensitive matching
                 answer_lower = answer.lower()
                 self.budgetforA(answer_lower)
+                # print(self.points_for_cat_a)
                 self.engagementforA(answer_lower)
+                # print(self.points_for_cat_a)
                 self.legalforA(answer_lower)
+                # print(self.points_for_cat_a)
                 self.controlforA(answer_lower)
+                
 
                 # Check each dictionary for points
                 for category_dict in [
@@ -184,8 +196,8 @@ class ProjectCategoryCalculator:
                                 total_points += points
                                 break  # Exit the inner loop once the answer is found in the current section's options
                         except:
-                            print(section)
-                            print(options)
+                            # print(section)
+                            # print(options)
                             continue
 
         # now let's process the project data
@@ -218,15 +230,15 @@ class ProjectCategoryCalculator:
         if total_points <= 10 or self.points_for_c == 20:
             self.project.category = Category.C
             self.project.save()
-            print(f"Category {self.project.category.value}")
+            # print(f"Category {self.project.category.value}")
             return
         elif self.points_for_cat_a >= 40:
             self.project.category = Category.A
             self.project.save()
-            print(f"Category {self.project.category.value}")
+            # print(f"Category {self.project.category.value}")
             return
         else:
             self.project.category = Category.B
             self.project.save()
-            print(f"Category {self.project.category.value}")
+            # print(f"Category {self.project.category.value}")
             return
