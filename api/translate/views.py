@@ -395,3 +395,207 @@ class ChangeRequestStatusResource(Resource):
             return {
                 "error": f"An error occurred while updating status: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+# @content_namespace.route("/content/case/<int:case_id>")
+# class GetContentByCaseResource(Resource):
+#     @jwt_required()
+#     @content_namespace.marshal_with(content_details_model, as_list=True)
+#     @content_namespace.doc(description="Retrieve content fields associated with a specific case ID.")
+#     def get(self, case_id):
+#         # Check if the case exists
+#         case = CasesData.query.get(case_id)
+#         if not case:
+#             return {"error": f"Case with ID {case_id} does not exist."}, HTTPStatus.NOT_FOUND
+
+#         # Retrieve translation requests linked to the specified case ID
+#         translation_requests = TranslationRequest.query.filter_by(caseID=case_id).all()
+#         if not translation_requests:
+#             return {"error": "No content found for this case ID."}, HTTPStatus.NOT_FOUND
+
+#         # Compile content details from each translation request's linked content
+#         content_list = []
+#         for request in translation_requests:
+#             content = request.content  # Access the Content associated with each TranslationRequest
+#             if content:
+#                 # Gather fields for each piece of content
+#                 for field in content.translation_contents:
+#                     content_list.append({
+#                         "field_name": field.field_name,
+#                         "original": field.original,
+#                         "translated": field.translated,
+#                         "translate": field.translate
+#                     })
+
+#         return content_list, HTTPStatus.OK
+
+@content_namespace.route("/content/case/<int:case_id>")
+class GetContentByCaseResource(Resource):
+    @jwt_required()
+    @content_namespace.marshal_with(translator_request_model, as_list=True)
+    @content_namespace.doc(description="Retrieve content fields associated with a specific case ID, along with request details.")
+    def get(self, case_id):
+        # Check if the case exists
+        case = CasesData.query.get(case_id)
+        if not case:
+            return {"error": f"Case with ID {case_id} does not exist."}, HTTPStatus.NOT_FOUND
+
+        # Retrieve translation requests linked to the specified case ID
+        translation_requests = TranslationRequest.query.filter_by(caseID=case_id).all()
+        if not translation_requests:
+            return {"error": "No content found for this case ID."}, HTTPStatus.NOT_FOUND
+
+        # Compile request and content details
+        response_data = []
+        for request in translation_requests:
+            content = request.content  # Access the Content associated with each TranslationRequest
+            if content:
+                # Gather fields for each piece of content
+                content_fields = [
+                    {
+                        "field_name": field.field_name,
+                        "original": field.original,
+                        "translated": field.translated,
+                        "translate": field.translate
+                    }
+                    for field in content.translation_contents
+                ]
+
+                # Append detailed request information to the response
+                response_data.append({
+                    "request_id": request.request_id,
+                    "status": request.status,
+                    "requested_on": request.requested_on,
+                    "completed_on": request.completed_on,
+                    "requested_by": {
+                        "user_id": request.requester.userID,
+                        "username": request.requester.username
+                    },
+                    "translator": {
+                        "user_id": request.translator.userID,
+                        "username": request.translator.username
+                    } if request.translator else None,
+                    "project_id": request.projectID,
+                    "case_id": request.caseID,
+                    "content_fields": content_fields
+                })
+
+        return response_data, HTTPStatus.OK
+
+
+
+# @content_namespace.route("/content/project/<int:project_id>")
+# class GetContentByProjectResource(Resource):
+#     @jwt_required()
+#     @content_namespace.marshal_with(content_details_model, as_list=True)
+#     @content_namespace.doc(description="Retrieve content fields associated with a specific project ID.")
+#     def get(self, project_id):
+#         # Check if the project exists
+#         project = ProjectsData.query.get(project_id)
+#         if not project:
+#             return {"error": f"Project with ID {project_id} does not exist."}, HTTPStatus.NOT_FOUND
+
+#         # Retrieve translation requests linked to the specified project ID
+#         translation_requests = TranslationRequest.query.filter_by(projectID=project_id).all()
+#         if not translation_requests:
+#             return {"error": "No content found for this project ID."}, HTTPStatus.NOT_FOUND
+
+#         # Compile content details from each translation request's linked content
+#         content_list = []
+#         for request in translation_requests:
+#             content = request.content  # Access the Content associated with each TranslationRequest
+#             if content:
+#                 # Gather fields for each piece of content
+#                 for field in content.translation_contents:
+#                     content_list.append({
+#                         "field_name": field.field_name,
+#                         "original": field.original,
+#                         "translated": field.translated,
+#                         "translate": field.translate
+#                     })
+
+#         return content_list, HTTPStatus.OK
+
+@content_namespace.route("/content/project/<int:project_id>")
+class GetContentByProjectResource(Resource):
+    @jwt_required()
+    @content_namespace.marshal_with(translator_request_model, as_list=True)
+    @content_namespace.doc(description="Retrieve content fields associated with a specific project ID, along with request details.")
+    def get(self, project_id):
+        # Check if the project exists
+        project = ProjectsData.query.get(project_id)
+        if not project:
+            return {"error": f"Project with ID {project_id} does not exist."}, HTTPStatus.NOT_FOUND
+
+        # Retrieve translation requests linked to the specified project ID
+        translation_requests = TranslationRequest.query.filter_by(projectID=project_id).all()
+        if not translation_requests:
+            return {"error": "No content found for this project ID."}, HTTPStatus.NOT_FOUND
+
+        # Compile request and content details
+        response_data = []
+        for request in translation_requests:
+            content = request.content  # Access the Content associated with each TranslationRequest
+            if content:
+                # Gather fields for each piece of content
+                content_fields = [
+                    {
+                        "field_name": field.field_name,
+                        "original": field.original,
+                        "translated": field.translated,
+                        "translate": field.translate
+                    }
+                    for field in content.translation_contents
+                ]
+
+                # Append detailed request information to the response
+                response_data.append({
+                    "request_id": request.request_id,
+                    "status": request.status,
+                    "requested_on": request.requested_on,
+                    "completed_on": request.completed_on,
+                    "requested_by": {
+                        "user_id": request.requester.userID,
+                        "username": request.requester.username
+                    },
+                    "translator": {
+                        "user_id": request.translator.userID,
+                        "username": request.translator.username
+                    } if request.translator else None,
+                    "project_id": request.projectID,
+                    "case_id": request.caseID,
+                    "content_fields": content_fields
+                })
+
+        return response_data, HTTPStatus.OK
+
+
+@content_namespace.route("/requests/translator/current")
+class CurrentTranslatorRequestsResource(Resource):
+    @jwt_required()
+    @content_namespace.marshal_with(request_details_model, as_list=True)
+    @content_namespace.doc(description="Retrieve translation requests assigned to the current authenticated translator.")
+    def get(self):
+        # Get the current authenticated user's ID
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user:
+            return {"error": "Authenticated user not found."}, HTTPStatus.UNAUTHORIZED
+
+        # Fetch translation requests assigned to the current user (translator)
+        translation_requests = TranslationRequest.query.filter_by(translator_id=current_user.userID).all()
+
+        # Format the data into a list of dictionaries
+        request_list = [
+            {
+                "request_id": req.request_id,
+                "created_by": f"{req.requester.username}" if req.requester else "Unknown",
+                "translator": f"{req.translator.username}" if req.translator else "Unassigned",
+                "status": req.status.value,
+                "requested_on": req.requested_on,
+                "project_id": req.projectID,
+                "case_id": req.caseID,
+            }
+            for req in translation_requests
+        ]
+
+        return request_list, HTTPStatus.OK
