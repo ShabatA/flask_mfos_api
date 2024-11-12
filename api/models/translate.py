@@ -17,7 +17,7 @@ class Content(db.Model):
 
     # Relationships
     translation_contents = relationship("TranslationContent", back_populates="content", cascade="all, delete-orphan")
-    translation_request = relationship("TranslationRequest", uselist=False, back_populates="content")
+    translation_request = relationship("TranslationRequest", uselist=False, back_populates="content", cascade="all, delete-orphan")
     creator = relationship("Users")
 
     def save(self):

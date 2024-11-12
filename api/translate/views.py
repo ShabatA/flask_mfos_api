@@ -69,6 +69,11 @@ class RequestTranslationResource(Resource):
         new_content = Content(created_by_id=current_user.userID)
         new_content.save()
 
+        # print("Content ID:", new_content.content_id)
+        # print("Case ID:", case_id)
+        # print("Project ID:", project_id)
+        
+
         # Add translation content fields
         fields = data.get("fields", [])
         for field_data in fields:
@@ -76,21 +81,23 @@ class RequestTranslationResource(Resource):
             original = field_data.get("original", "")
             translate = field_data.get("translate", False)
             new_content.add_translation_content(field_name=field_name, original=original, translate=translate)
-
+        # print("Fields:", fields)
         # Commit all translation contents at once
         new_content.save_translation_contents()
 
-        # Create TranslationRequest if any field is marked for translation
-        if any(field["translate"] for field in fields):
-            translation_request = TranslationRequest(
-                content=new_content,
-                requested_by_id=current_user.userID,
-                translator_id=data.get("translator_id"),
-                caseID=case_id,
-                projectID=project_id,
-                status="pending"
-            )
-            translation_request.save()
+
+        translation_request = TranslationRequest(
+            content_id=new_content.content_id,
+            requested_by_id=current_user.userID,
+            translator_id=data.get("translator_id"),
+            caseID=case_id,
+            projectID=project_id,
+            status="pending"
+        )
+        # print("Fields:", translation_request)
+        # Add translation request explicitly to the session
+        db.session.add(translation_request)
+        db.session.commit()  # Save all changes at once
 
         return {"message": "Content added successfully", "content_id": new_content.content_id}, HTTPStatus.CREATED
 
