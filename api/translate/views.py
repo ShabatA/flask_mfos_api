@@ -597,7 +597,7 @@ class CurrentTranslatorRequestsResource(Resource):
                 "request_id": req.request_id,
                 "created_by": f"{req.requester.username}" if req.requester else "Unknown",
                 "translator": f"{req.translator.username}" if req.translator else "Unassigned",
-                "status": req.status.value,
+                "status": req.status,
                 "requested_on": req.requested_on,
                 "project_id": req.projectID,
                 "case_id": req.caseID,
