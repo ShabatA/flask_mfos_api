@@ -542,7 +542,7 @@ class UserBudget(db.Model):
     totalFund = db.Column(db.Float, nullable=False, default=0)
     usedFund = db.Column(db.Float, nullable=False, default=0)
     availableFund = db.Column(db.Float, nullable=False, default=0)
-    onHoldFund = db.Column(db.Float, nullable=False, default=0)  # New field
+    # onHoldFund = db.Column(db.Float, nullable=False, default=0)  # New field
 
     currency = db.relationship("Currencies")
 
@@ -611,58 +611,58 @@ class UserBudget(db.Model):
             raise ValueError(f"Transaction failed: {str(e)}")
     
 
-    def hold_fund(self, amount, notes=''):
-        if self.availableFund < amount:
-            raise ValueError("Insufficient available funds to hold")
-        self.availableFund -= amount
-        self.onHoldFund += amount
-        # Record transaction
-        transaction = UserBudgetTransaction(
-            fromBudgetID=self.budgetId,
-            toBudgetID=None,
-            transferAmount=amount,
-            transferType="Hold",
-            currencyID=self.currencyID,
-            notes=notes
-        )
-        db.session.add(transaction)
-        db.session.commit()
+    # def hold_fund(self, amount, notes=''):
+    #     if self.availableFund < amount:
+    #         raise ValueError("Insufficient available funds to hold")
+    #     self.availableFund -= amount
+    #     self.onHoldFund += amount
+    #     # Record transaction
+    #     transaction = UserBudgetTransaction(
+    #         fromBudgetID=self.budgetId,
+    #         toBudgetID=None,
+    #         transferAmount=amount,
+    #         transferType="Hold",
+    #         currencyID=self.currencyID,
+    #         notes=notes
+    #     )
+    #     db.session.add(transaction)
+    #     db.session.commit()
 
 
-    def release_held_fund(self, amount, notes=''):
-        if self.onHoldFund < amount:
-            raise ValueError("Insufficient held funds to release")
-        self.onHoldFund -= amount
-        self.availableFund += amount
-        # Record transaction
-        transaction = UserBudgetTransaction(
-            fromBudgetID=None,
-            toBudgetID=self.budgetId,
-            transferAmount=amount,
-            transferType="Release",
-            currencyID=self.currencyID,
-            notes=notes
-        )
-        db.session.add(transaction)
-        db.session.commit()
+    # def release_held_fund(self, amount, notes=''):
+    #     if self.onHoldFund < amount:
+    #         raise ValueError("Insufficient held funds to release")
+    #     self.onHoldFund -= amount
+    #     self.availableFund += amount
+    #     # Record transaction
+    #     transaction = UserBudgetTransaction(
+    #         fromBudgetID=None,
+    #         toBudgetID=self.budgetId,
+    #         transferAmount=amount,
+    #         transferType="Release",
+    #         currencyID=self.currencyID,
+    #         notes=notes
+    #     )
+    #     db.session.add(transaction)
+    #     db.session.commit()
 
 
-    def use_held_fund(self, amount, notes=''):
-        if self.onHoldFund < amount:
-            raise ValueError("Insufficient held funds to use")
-        self.onHoldFund -= amount
-        self.usedFund += amount
-        # Record transaction
-        transaction = UserBudgetTransaction(
-            fromBudgetID=self.budgetId,
-            toBudgetID=None,
-            transferAmount=amount,
-            transferType="Use",
-            currencyID=self.currencyID,
-            notes=notes
-        )
-        db.session.add(transaction)
-        db.session.commit()
+    # def use_held_fund(self, amount, notes=''):
+    #     if self.onHoldFund < amount:
+    #         raise ValueError("Insufficient held funds to use")
+    #     self.onHoldFund -= amount
+    #     self.usedFund += amount
+    #     # Record transaction
+    #     transaction = UserBudgetTransaction(
+    #         fromBudgetID=self.budgetId,
+    #         toBudgetID=None,
+    #         transferAmount=amount,
+    #         transferType="Use",
+    #         currencyID=self.currencyID,
+    #         notes=notes
+    #     )
+    #     db.session.add(transaction)
+    #     db.session.commit()
 
 
 
