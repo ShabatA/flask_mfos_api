@@ -2808,7 +2808,6 @@ class CheckSpecificTasksForCaseResource(Resource):
 
 @case_namespace.route("/get_user/<int:caseID>", methods=["GET"])
 class GetUserByCaseID(Resource):
-    @jwt_required()
     def get(self, caseID):
         try:
             # Fetch the case by its ID
