@@ -2804,3 +2804,21 @@ class CheckSpecificTasksForCaseResource(Resource):
             return {
                 "message": "Internal Server Error"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@case_namespace.route("/get_user/<int:caseID>", methods=["GET"])
+class GetUserByCaseID(Resource):
+    @jwt_required()
+    def get(self, caseID):
+        try:
+            # Fetch the case by its ID
+            case_data = CasesData.query.get_or_404(caseID)
+            
+            # Return the user ID associated with the case
+            return {"user_id": case_data.userID}, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error fetching user for case {caseID}: {str(e)}")
+            return {
+                "message": "Error fetching user ID. Please try again later."
+            }, HTTPStatus.INTERNAL_SERVER_ERROR

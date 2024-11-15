@@ -1344,10 +1344,15 @@ class SingleFinancialFundSummaryResource(Resource):
     def get(self, fund_id, currency_conversion):
         try:
             fund = FinancialFund.query.get_or_404(fund_id)
+            print("fund")
             transfers_out = FundTransfers.query.filter_by(from_fund=fund.fundID, closed=True).all()
+            print("transfers_out")
             transfers_in = FundTransfers.query.filter_by(to_fund=fund.fundID, closed=True).all()
+            print("transfers_in")
             case_payments = CaseFundReleaseApproval.query.filter_by(fundID=fund.fundID, closed=True).all()
+            print("case_payments")
             project_payments = ProjectFundReleaseApproval.query.filter_by(fundID=fund.fundID, closed=True).all()
+            print("project_payments")	
             fund_data = {
                 "fundID": fund.fundID,
                 "fundName": fund.fundName,
