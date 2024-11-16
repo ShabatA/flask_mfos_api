@@ -608,7 +608,9 @@ class CurrentTranslatorRequestsResource(Resource):
                 "status": req.status,
                 "requested_on": req.requested_on,
                 "project_id": req.projectID,
+                "project_name": req.project.projectName if req.project else None,
                 "case_id": req.caseID,
+                "case_name": req.case.caseName if req.case else None,
             }
             for req in translation_requests
         ]
