@@ -91,7 +91,9 @@ class RequestTranslationResource(Resource):
             requested_by_id=current_user.userID,
             translator_id=data.get("translator_id"),
             caseID=case_id,
+            caseName=case.caseName if case else None,
             projectID=project_id,
+            projectName=project.projectName if project else None,
             status="pending"
         )
         # print("Fields:", translation_request)
@@ -112,6 +114,8 @@ request_details_model = content_namespace.model(
         "requested_on": fields.DateTime(description="Date and time when the request was created"),
         "project_id": fields.Integer(description="Associated project ID", nullable=True),
         "case_id": fields.Integer(description="Associated case ID", nullable=True),
+        "project_name": fields.String(description="Associated project name", nullable=True),
+        "case_name": fields.String(description="Associated case name", nullable=True),
     }
 )
 
@@ -133,7 +137,9 @@ class GetRequestsResource(Resource):
                 "status": req.status,
                 "requested_on": req.requested_on,
                 "project_id": req.projectID,
+                "project_name": req.project.projectName if req.project else None,
                 "case_id": req.caseID,
+                "case_name": req.case.caseName if req.case else None,
             }
             for req in translation_requests
         ]
@@ -159,7 +165,9 @@ class TranslatorRequestsResource(Resource):
                 "status": req.status,
                 "requested_on": req.requested_on,
                 "project_id": req.projectID,
+                "project_name": req.project.projectName if req.project else None,
                 "case_id": req.caseID,
+                "case_name": req.case.caseName if req.case else None,
             }
             for req in translation_requests
         ]

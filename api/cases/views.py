@@ -2,7 +2,7 @@ from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.exceptions import NotFound
 from http import HTTPStatus
-from api.models.finances import CaseFunds, RegionAccount
+from api.models.finances import CaseFunds, RegionAccount, UserBudget
 from api.utils.case_category_calculator import CaseCategoryCalculator
 
 from api.utils.case_requirement_processor import CaseRequirementProcessor
@@ -456,6 +456,23 @@ class CasesAddResource(Resource):
                 return {
                     "message": "Case with this name already exists"
                 }, HTTPStatus.CONFLICT
+            
+            # Get the user's budget
+            user_budget = UserBudget.query.filter_by(userID=current_user.userID).first()
+            if not user_budget:
+                return {
+                    "message": "User budget not found. Please set up your budget first."
+                }, HTTPStatus.NOT_FOUND
+            
+            # Check if user has enough available funds to hold
+            amount_required = case_data["question11"]
+            if user_budget.availableFund < amount_required:
+                return {
+                    "message": f"Insufficient funds. Available: {user_budget.availableFund}, Required: {amount_required}"
+                }, HTTPStatus.BAD_REQUEST
+
+            # Hold the funds
+            user_budget.hold_fund(amount_required, notes="Funds held for case creation")
 
             # Create a new case instance
             new_case = CasesData(
