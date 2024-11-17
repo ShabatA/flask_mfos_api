@@ -551,6 +551,7 @@ class CasesAddResource(Resource):
                     new_case.startDate.isoformat() if new_case.startDate else None
                 ),
                 "totalPoints": new_case.total_points,
+                "UserAvailableFund": user_budget.availableFund,
             }
 
             return {
