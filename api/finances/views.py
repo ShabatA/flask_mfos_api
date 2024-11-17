@@ -15,7 +15,7 @@ from datetime import datetime, date, timedelta
 from flask import jsonify, current_app
 from flask import request
 from ..models.finances import *
-from sqlalchemy import desc, func, text
+from sqlalchemy import desc, func, text, and_
 import json
 from flask import make_response
 
@@ -2820,22 +2820,60 @@ class GetAllDonorsResource(Resource):
                     .all()
                 )
                 projects_ = []
-                project_statuses = ProjectsData.query.filter_by(
-                    projectStatus="APPROVED"
+                project_statuses = ProjectsData.query.filter(
+                    ProjectsData.projectStatus == "APPROVED",                  # Approved projects only
+                    ProjectsData.status_data != None,                          # Ensure status_data exists
                 ).all()
+
+                print(str(project_statuses))
+
+                # for project_st in project_statuses:
+                #     print(f"Project ID: {project_st.projectID}, status_data: {project_st.status_data}, type: {type(project_st.status_data)}")
+
+                # for case_st in case_statuses:
+                #     print(f"Case ID: {case_st.caseID}, status_data: {case_st.status_data}, type: {type(case_st.status_data)}")
+
+
+                # for project_st in project_statuses:
+                #     try:
+                #         if project_st.status_data and "donorNames" in project_st.status_data:
+                #             if donor.donorName in project_st.status_data["donorNames"]:
+                #                 projects_.append(project_st)
+                #     except Exception as e:
+                #         print(f"Error processing project {project_st.projectID}: {e}")
+
                 for project_st in project_statuses:
-                    if project_st.status_data.data.get("donorNames") is None:
-                        continue
-                    if donor.donorName in project_st.status_data.data.get("donorNames"):
-                        projects_.append(project_st)
+                    try:
+                        if project_st.status_data and project_st.status_data.data:
+                            status_data = project_st.status_data.data
+
+                            # Check if donorNames exists and matches the donor name
+                            if "donorNames" in status_data and donor.donorName in status_data["donorNames"]:
+                                projects_.append(project_st)
+                    except Exception as e:
+                        print(f"Error processing project {project_st.projectID}: {e}")
+
 
                 cases_ = []
-                case_statuses = CasesData.query.filter_by(caseStatus="APPROVED").all()
+                # Fetch approved cases with valid status_data
+                case_statuses = CasesData.query.filter(
+                        CasesData.caseStatus == "APPROVED",
+                        # CasesData.status_data!= None,  # Correct usage
+                        CaseStatusData.data.isnot(None)  # Correct usage
+                ).all()
+
                 for case_st in case_statuses:
-                    if case_st.status_data.data.get("donorNames") is None:
-                        continue
-                    if donor.donorName in case_st.status_data.data.get("donorNames"):
-                        cases_.append(case_st)
+                    try:
+                        if case_st.case_status_data:
+                            for status in case_st.case_status_data:
+                                if status.data and "donorNames" in status.data:
+                                    if donor.donorName in status.data["donorNames"]:
+                                        cases_.append(case_st)
+                                        break
+                        else:
+                            print(f"Case ID {case_st.caseID} has no status_data.")
+                    except Exception as e:
+                        print(f"Error processing case {case_st.caseID}: {e}")
 
                 all_projects = list(set(projects + projects_))
                 all_cases = list(set(cases + cases_))

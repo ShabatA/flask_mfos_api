@@ -128,10 +128,12 @@ class RequestTranslationResource(Resource):
             case = CasesData.query.get(case_id)
             if not case:
                 return {"error": f"Case with ID {case_id} does not exist."}, HTTPStatus.NOT_FOUND
+            project = None
         elif project_id:
             project = ProjectsData.query.get(project_id)
             if not project:
                 return {"error": f"Project with ID {project_id} does not exist."}, HTTPStatus.NOT_FOUND
+            case = None
 
         # Check if a translation request already exists for the given case or project
         existing_request = TranslationRequest.query.filter_by(
@@ -179,9 +181,9 @@ class RequestTranslationResource(Resource):
             requested_by_id=current_user.userID,
             translator_id=data.get("translator_id"),
             caseID=case_id,
-            caseName=case.caseName if case else None,
+            # caseName=case.caseName if case else None,
             projectID=project_id,
-            projectName=project.projectName if project else None,
+            # projectName=project.projectName if project else None,
             status="pending"
         )
         db.session.add(translation_request)

@@ -1428,7 +1428,7 @@ class Donor(db.Model):
         lazy=True,
         cascade="all, delete-orphan",
     )
-    donations = db.relationship("Donations", backref="donors", lazy=True)
+    donations = db.relationship("Donations", back_populates='donor', overlaps="donors")
 
     def save(self):
         db.session.add(self)
@@ -1647,7 +1647,7 @@ class Donations(db.Model):
     closed = db.Column(db.Boolean, default=False)
     status = db.Column(db.String, default="Initiated")
 
-    donor = db.relationship("Donor", backref="donations_donor")
+    donor = db.relationship('Donor', back_populates='donations', overlaps="donors")
     currency = db.relationship("Currencies", backref="donations_currency")
 
     def save(self):
