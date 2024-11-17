@@ -600,6 +600,7 @@ class UserBudget(db.Model):
                 toBudgetID=to_budget.budgetId,
                 transferAmount=amount,
                 transferType=transfer_type,
+                transactionScope=TransactionScope.USER,
                 currencyID=currencyID,
                 notes=notes
             )
@@ -611,22 +612,40 @@ class UserBudget(db.Model):
             raise ValueError(f"Transaction failed: {str(e)}")
     
 
-    def hold_fund(self, amount, notes=''):
+    def hold_fund(self, amount, target_id, transaction_scope, notes=''):
+        # Map string to TransactionScope enum
+        # try:
+        #     transaction_scope = TransactionScope(transaction_scope_str.upper())
+        # except ValueError:
+        #     raise ValueError("Invalid transaction scope. Must be 'case' or 'project'.")
+
+        # Validate that the scope is either CASE or PROJECT
+        if transaction_scope not in [TransactionScope.CASE, TransactionScope.PROJECT]:
+            raise ValueError("Funds can only be held for a case or project")
+
+        # Check available funds
+        # Check available funds
         if self.availableFund < amount:
             raise ValueError("Insufficient available funds to hold")
+
+        # Deduct from available funds and add to on-hold funds
         self.availableFund -= amount
         self.onHoldFund += amount
+
         # Record transaction
         transaction = UserBudgetTransaction(
             fromBudgetID=self.budgetId,
-            toBudgetID=None,
+            toBudgetID=None,  # No user-to-user transfer
+            targetID=target_id,  # Set the caseID or projectID
             transferAmount=amount,
             transferType="Hold",
             currencyID=self.currencyID,
+            transactionScope=transaction_scope,
             notes=notes
         )
         db.session.add(transaction)
         db.session.commit()
+
 
 
     def release_held_fund(self, amount, notes=''):
@@ -2025,6 +2044,8 @@ class UserBudgetTransaction(db.Model):
     fromFundID = db.Column(
         db.Integer, db.ForeignKey("financial_fund.fundID", ondelete="SET NULL"), nullable=True
     )
+    targetID = db.Column(db.Integer, nullable=True)  # For caseID or projectID
+
     transferAmount = db.Column(db.Float, nullable=False)
     transferType = db.Column(db.String(50), nullable=False)  # E.g., "Transfer", "Top-up", "Withdrawal"
     currencyID = db.Column(
@@ -2036,6 +2057,7 @@ class UserBudgetTransaction(db.Model):
 
     from_budget = db.relationship("UserBudget", foreign_keys=[fromBudgetID])
     to_budget = db.relationship("UserBudget", foreign_keys=[toBudgetID])
+    # db.Column(db.Integer, db.ForeignKey("user_budget.budgetId", ondelete="SET NULL"), nullable=True)
     from_fund = db.relationship("FinancialFund", foreign_keys=[fromFundID])
     currency = db.relationship("Currencies")
 
