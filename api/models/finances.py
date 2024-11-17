@@ -601,6 +601,7 @@ class UserBudget(db.Model):
                 transferAmount=amount,
                 transferType=transfer_type,
                 transactionScope=TransactionScope.USER,
+                status="COMPLETED",
                 currencyID=currencyID,
                 notes=notes
             )
@@ -612,21 +613,14 @@ class UserBudget(db.Model):
             raise ValueError(f"Transaction failed: {str(e)}")
     
 
-    def hold_fund(self, amount, target_id, transaction_scope, notes=''):
-        # Map string to TransactionScope enum
-        # try:
-        #     transaction_scope = TransactionScope(transaction_scope_str.upper())
-        # except ValueError:
-        #     raise ValueError("Invalid transaction scope. Must be 'case' or 'project'.")
-
-        # Validate that the scope is either CASE or PROJECT
+    def hold_fund(self, amount, target_id, transaction_scope, notes=""):
+        # Validate transaction scope
         if transaction_scope not in [TransactionScope.CASE, TransactionScope.PROJECT]:
-            raise ValueError("Funds can only be held for a case or project")
+            raise ValueError("Funds can only be held for a case or project.")
 
-        # Check available funds
         # Check available funds
         if self.availableFund < amount:
-            raise ValueError("Insufficient available funds to hold")
+            raise ValueError("Insufficient available funds to hold.")
 
         # Deduct from available funds and add to on-hold funds
         self.availableFund -= amount
@@ -635,53 +629,72 @@ class UserBudget(db.Model):
         # Record transaction
         transaction = UserBudgetTransaction(
             fromBudgetID=self.budgetId,
-            toBudgetID=None,  # No user-to-user transfer
-            targetID=target_id,  # Set the caseID or projectID
+            toBudgetID=None,
+            targetID=target_id,
             transferAmount=amount,
-            transferType="Hold",
+            transferType="HOLD",
             currencyID=self.currencyID,
             transactionScope=transaction_scope,
-            notes=notes
+            status="PENDING",
+            notes=notes,
         )
         db.session.add(transaction)
         db.session.commit()
 
 
+    def release_held_fund(self, amount, transaction_scope, target_id, notes=""):
+        # Validate transaction scope
+        if transaction_scope not in [TransactionScope.CASE, TransactionScope.PROJECT]:
+            raise ValueError("Invalid transaction scope. Must be 'CASE' or 'PROJECT'.")
 
-    def release_held_fund(self, amount, notes=''):
+        # Check if there are sufficient held funds
         if self.onHoldFund < amount:
-            raise ValueError("Insufficient held funds to release")
+            raise ValueError("Insufficient held funds to release.")
+
+        # Find the transaction for the given target_id
+        transaction = UserBudgetTransaction.query.filter_by(
+            targetID=target_id, transactionScope=transaction_scope, status="PENDING"
+        ).first()
+
+        if not transaction:
+            raise ValueError("No pending transaction found for the specified target.")
+
+        # Release funds
         self.onHoldFund -= amount
         self.availableFund += amount
-        # Record transaction
-        transaction = UserBudgetTransaction(
-            fromBudgetID=None,
-            toBudgetID=self.budgetId,
-            transferAmount=amount,
-            transferType="Release",
-            currencyID=self.currencyID,
-            notes=notes
-        )
-        db.session.add(transaction)
+
+        # Update the transaction
+        transaction.status = "REVERSED"
+        transaction.notes = notes
+
         db.session.commit()
 
 
-    def use_held_fund(self, amount, notes=''):
-        if self.onHoldFund < amount:
-            raise ValueError("Insufficient held funds to use")
-        self.onHoldFund -= amount
-        self.usedFund += amount
-        # Record transaction
-        transaction = UserBudgetTransaction(
-            fromBudgetID=self.budgetId,
-            toBudgetID=None,
-            transferAmount=amount,
-            transferType="Use",
-            currencyID=self.currencyID,
-            notes=notes
-        )
-        db.session.add(transaction)
-        db.session.commit()
+def use_held_fund(self, amount, transaction_scope, target_id, notes=""):
+    # Validate transaction scope
+    if transaction_scope not in [TransactionScope.CASE, TransactionScope.PROJECT]:
+        raise ValueError("Invalid transaction scope. Must be 'CASE' or 'PROJECT'.")
+
+    # Check if there are sufficient held funds
+    if self.onHoldFund < amount:
+        raise ValueError("Insufficient held funds to use.")
+
+    # Find the transaction for the given target_id
+    transaction = UserBudgetTransaction.query.filter_by(
+        targetID=target_id, transactionScope=transaction_scope, status="PENDING"
+    ).first()
+
+    if not transaction:
+        raise ValueError("No pending transaction found for the specified target.")
+
+    # Use funds
+    self.onHoldFund -= amount
+    self.usedFund += amount
+
+    # Update the transaction
+    transaction.status = "COMPLETED"
+    transaction.notes = notes
+    db.session.commit()
 
 
 
@@ -2060,6 +2073,7 @@ class UserBudgetTransaction(db.Model):
     # db.Column(db.Integer, db.ForeignKey("user_budget.budgetId", ondelete="SET NULL"), nullable=True)
     from_fund = db.relationship("FinancialFund", foreign_keys=[fromFundID])
     currency = db.relationship("Currencies")
+    status = db.Column(db.String, nullable=False, default="PENDING")
 
     transactionScope = db.Column(
         db.Enum(TransactionScope), nullable=False

@@ -36,11 +36,79 @@ add_content_model = content_namespace.model(
     },
 )
 
+# @content_namespace.route("/request_translation")
+# class RequestTranslationResource(Resource):
+#     @jwt_required()
+#     @content_namespace.expect(add_content_model)
+#     @content_namespace.doc(description="Add new content with optional translation flags.")
+#     def post(self):
+#         # Get the current authenticated user
+#         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+#         if not current_user:
+#             return {"error": "Authenticated user not found."}, HTTPStatus.UNAUTHORIZED
+
+#         data = request.get_json()
+
+#         # Extract case or project ID and validate only one is provided
+#         case_id = data.get("caseID")
+#         project_id = data.get("projectID")
+#         if bool(case_id) == bool(project_id):
+#             return {"error": "Specify either caseID or projectID, not both or neither."}, HTTPStatus.BAD_REQUEST
+        
+#         # Verify case or project existence
+#         if case_id:
+#             case = CasesData.query.get(case_id)
+#             if not case:
+#                 return {"error": f"Case with ID {case_id} does not exist."}, HTTPStatus.NOT_FOUND
+#         elif project_id:
+#             project = ProjectsData.query.get(project_id)
+#             if not project:
+#                 return {"error": f"Project with ID {project_id} does not exist."}, HTTPStatus.NOT_FOUND
+
+#         # Create the main Content instance
+#         new_content = Content(created_by_id=current_user.userID)
+#         new_content.save()
+
+#         # print("Content ID:", new_content.content_id)
+#         # print("Case ID:", case_id)
+#         # print("Project ID:", project_id)
+        
+
+#         # Add translation content fields
+#         fields = data.get("fields", [])
+#         for field_data in fields:
+#             field_name = field_data.get("field_name")
+#             original = field_data.get("original", "")
+#             translate = field_data.get("translate", False)
+#             new_content.add_translation_content(field_name=field_name, original=original, translate=translate)
+#         # print("Fields:", fields)
+#         # Commit all translation contents at once
+#         new_content.save_translation_contents()
+
+
+#         translation_request = TranslationRequest(
+#             content_id=new_content.content_id,
+#             requested_by_id=current_user.userID,
+#             translator_id=data.get("translator_id"),
+#             caseID=case_id,
+#             caseName=case.caseName if case else None,
+#             projectID=project_id,
+#             projectName=project.projectName if project else None,
+#             status="pending"
+#         )
+#         # print("Fields:", translation_request)
+#         # Add translation request explicitly to the session
+#         db.session.add(translation_request)
+#         db.session.commit()  # Save all changes at once
+
+#         return {"message": "Content added successfully", "content_id": new_content.content_id}, HTTPStatus.CREATED
+
+
 @content_namespace.route("/request_translation")
 class RequestTranslationResource(Resource):
     @jwt_required()
     @content_namespace.expect(add_content_model)
-    @content_namespace.doc(description="Add new content with optional translation flags.")
+    @content_namespace.doc(description="Add or update content with optional translation flags.")
     def post(self):
         # Get the current authenticated user
         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
@@ -54,7 +122,7 @@ class RequestTranslationResource(Resource):
         project_id = data.get("projectID")
         if bool(case_id) == bool(project_id):
             return {"error": "Specify either caseID or projectID, not both or neither."}, HTTPStatus.BAD_REQUEST
-        
+
         # Verify case or project existence
         if case_id:
             case = CasesData.query.get(case_id)
@@ -65,14 +133,35 @@ class RequestTranslationResource(Resource):
             if not project:
                 return {"error": f"Project with ID {project_id} does not exist."}, HTTPStatus.NOT_FOUND
 
-        # Create the main Content instance
+        # Check if a translation request already exists for the given case or project
+        existing_request = TranslationRequest.query.filter_by(
+            caseID=case_id,
+            projectID=project_id,
+            requested_by_id=current_user.userID
+        ).first()
+
+        if existing_request:
+            # Update existing translation request fields
+            existing_request.translator_id = data.get("translator_id", existing_request.translator_id)
+            existing_request.status = data.get("status", existing_request.status)
+
+            # Update related content
+            content = Content.query.get(existing_request.content_id)
+            if content:
+                fields = data.get("fields", [])
+                for field_data in fields:
+                    field_name = field_data.get("field_name")
+                    original = field_data.get("original", "")
+                    translate = field_data.get("translate", False)
+                    content.update_translation_content(field_name, original, translate)
+                content.save_translation_contents()
+
+            db.session.commit()
+            return {"message": "Translation request updated successfully", "content_id": content.content_id}, HTTPStatus.OK
+
+        # Create a new translation request if it does not exist
         new_content = Content(created_by_id=current_user.userID)
         new_content.save()
-
-        # print("Content ID:", new_content.content_id)
-        # print("Case ID:", case_id)
-        # print("Project ID:", project_id)
-        
 
         # Add translation content fields
         fields = data.get("fields", [])
@@ -81,10 +170,9 @@ class RequestTranslationResource(Resource):
             original = field_data.get("original", "")
             translate = field_data.get("translate", False)
             new_content.add_translation_content(field_name=field_name, original=original, translate=translate)
-        # print("Fields:", fields)
+
         # Commit all translation contents at once
         new_content.save_translation_contents()
-
 
         translation_request = TranslationRequest(
             content_id=new_content.content_id,
@@ -96,12 +184,11 @@ class RequestTranslationResource(Resource):
             projectName=project.projectName if project else None,
             status="pending"
         )
-        # print("Fields:", translation_request)
-        # Add translation request explicitly to the session
         db.session.add(translation_request)
         db.session.commit()  # Save all changes at once
 
         return {"message": "Content added successfully", "content_id": new_content.content_id}, HTTPStatus.CREATED
+
 
 # Output model for translation request details
 request_details_model = content_namespace.model(

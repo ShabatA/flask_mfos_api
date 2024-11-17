@@ -1313,18 +1313,15 @@ class CaseChangeStatusResource(Resource):
         # Parse the new status from the request
         new_status = request.json.get("caseStatus")
 
-        # Begin transaction
         try:
-            # Update the case status
             case.caseStatus = new_status
             db.session.commit()
 
-            # Check for an existing transaction
+            # Find the related transaction
             transaction = UserBudgetTransaction.query.filter_by(
                 targetID=case.caseID, transactionScope=TransactionScope.CASE
             ).first()
 
-            # Handle cases with transactions
             if transaction:
                 user_budget = UserBudget.query.filter_by(userID=case.userID).first()
                 if not user_budget:
@@ -1333,19 +1330,19 @@ class CaseChangeStatusResource(Resource):
                     }, HTTPStatus.BAD_REQUEST
 
                 if new_status == "APPROVED":
-                    # Mark funds as used
+                    # Mark funds as used and update transaction status
                     user_budget.onHoldFund -= transaction.transferAmount
                     user_budget.usedFund += transaction.transferAmount
+                    transaction.status = "COMPLETED"
                     db.session.commit()
 
                 elif new_status == "REJECTED":
-                    # Return funds to available balance
+                    # Return funds to available balance and update transaction status
                     user_budget.onHoldFund -= transaction.transferAmount
                     user_budget.availableFund += transaction.transferAmount
+                    transaction.status = "REVERSED"
                     db.session.commit()
-
             else:
-                # Log that there is no transaction for this case
                 current_app.logger.info(
                     f"No transaction exists for caseID={case.caseID}. Skipping fund operations."
                 )
@@ -1387,6 +1384,109 @@ class CaseChangeStatusResource(Resource):
             return {
                 "message": f"Error changing case status: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+# @case_namespace.route("/change_status/<int:case_id>", methods=["PUT"])
+# class CaseChangeStatusResource(Resource):
+#     @jwt_required()
+#     @case_namespace.expect(
+#         case_namespace.model(
+#             "CaseStatus",
+#             {"caseStatus": fields.String(required=True, description="New case status")},
+#         )
+#     )
+#     def put(self, case_id):
+#         # Get the current user ID from the JWT token
+#         current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+#         # Get the case by ID
+#         case = CasesData.query.get(case_id)
+#         if not case:
+#             return {"message": "Case not found"}, HTTPStatus.NOT_FOUND
+
+#         # Check if the current user has permission to change the status
+#         if not (current_user.is_admin() or current_user.userID == case.userID):
+#             return {
+#                 "message": "Unauthorized. You do not have permission to change the status of this case."
+#             }, HTTPStatus.FORBIDDEN
+
+#         # Parse the new status from the request
+#         new_status = request.json.get("caseStatus")
+
+#         # Begin transaction
+#         try:
+#             # Update the case status
+#             case.caseStatus = new_status
+#             db.session.commit()
+
+#             # Check for an existing transaction
+#             transaction = UserBudgetTransaction.query.filter_by(
+#                 targetID=case.caseID, transactionScope=TransactionScope.CASE
+#             ).first()
+
+#             # Handle cases with transactions
+#             if transaction:
+#                 user_budget = UserBudget.query.filter_by(userID=case.userID).first()
+#                 if not user_budget:
+#                     return {
+#                         "message": "User budget not found for the case owner."
+#                     }, HTTPStatus.BAD_REQUEST
+
+#                 if new_status == "APPROVED":
+#                     # Mark funds as used
+#                     user_budget.onHoldFund -= transaction.transferAmount
+#                     user_budget.usedFund += transaction.transferAmount
+#                     db.session.commit()
+
+#                 elif new_status == "REJECTED":
+#                     # Return funds to available balance
+#                     user_budget.onHoldFund -= transaction.transferAmount
+#                     user_budget.availableFund += transaction.transferAmount
+#                     db.session.commit()
+
+#             else:
+#                 # Log that there is no transaction for this case
+#                 current_app.logger.info(
+#                     f"No transaction exists for caseID={case.caseID}. Skipping fund operations."
+#                 )
+
+#             # If approved, add stages for the case
+#             if new_status == "APPROVED":
+#                 CaseToStage.query.filter_by(caseID=case.caseID).delete()
+
+#                 # Add all stages for the case
+#                 stages = [
+#                     "Information Collected",
+#                     "Service Initiated",
+#                     "Case Informed",
+#                     "Service Delivered",
+#                     "Service Validated",
+#                     "Case Closed",
+#                     "Print Report",
+#                 ]
+#                 case_stages = [
+#                     CaseToStage(
+#                         case=case,
+#                         stage=CaseStage.query.filter_by(name=stage_name).first(),
+#                         started=True,
+#                     )
+#                     for stage_name in stages
+#                 ]
+
+#                 # Commit the new stages to the database
+#                 db.session.add_all(case_stages)
+#                 db.session.commit()
+
+#             return {
+#                 "message": "Case status changed successfully",
+#                 "new_status": new_status,
+#             }, HTTPStatus.OK
+
+#         except Exception as e:
+#             db.session.rollback()
+#             return {
+#                 "message": f"Error changing case status: {str(e)}"
+#             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 

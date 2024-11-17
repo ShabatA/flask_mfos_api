@@ -41,6 +41,20 @@ class Content(db.Model):
     def get_fields_to_translate(self):
         """Returns a list of TranslationContent items marked for translation."""
         return [item for item in self.translation_contents if item.translate]
+    
+    def update_translation_content(self, field_name, original, translate):
+        # Locate the specific translation field
+        translation_field = next(
+            (field for field in self.translation_contents if field.field_name == field_name), 
+            None
+        )
+        if translation_field:
+            # Update the existing translation content
+            translation_field.original = original
+            translation_field.translate = translate
+        else:
+            # Add new translation content if it does not exist
+            self.add_translation_content(field_name=field_name, original=original, translate=translate)
 
 
 class RequestStatus(PyEnum):
