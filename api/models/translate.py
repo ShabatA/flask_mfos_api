@@ -47,17 +47,37 @@ class Content(db.Model):
         Updates a specific translation field if it exists, or adds a new one if it doesn't.
         Only updates if there are changes to the existing values.
         """
-        # Locate the specific translation field by field_name
-        translation_field = self.translation_contents.filter_by(field_name=field_name).first()
+        # Iterate over translation_contents to locate the field
+        translation_field = next(
+            (field for field in self.translation_contents if field.field_name == field_name), 
+            None
+        )
 
         if translation_field:
-            # Check if any changes are needed
-            if (translation_field.original != original or translation_field.translate != translate):
+            # Check if updates are needed before making changes
+            if translation_field.original != original or translation_field.translate != translate:
                 translation_field.original = original
                 translation_field.translate = translate
         else:
             # Add a new translation field if it does not exist
             self.add_translation_content(field_name=field_name, original=original, translate=translate)
+    
+    # def update_translation_content(self, field_name, original, translate):
+    #     """
+    #     Updates a specific translation field if it exists, or adds a new one if it doesn't.
+    #     Only updates if there are changes to the existing values.
+    #     """
+    #     # Locate the specific translation field by field_name
+    #     translation_field = self.translation_contents.filter_by(field_name=field_name).first()
+
+    #     if translation_field:
+    #         # Check if any changes are needed
+    #         if (translation_field.original != original or translation_field.translate != translate):
+    #             translation_field.original = original
+    #             translation_field.translate = translate
+    #     else:
+    #         # Add a new translation field if it does not exist
+    #         self.add_translation_content(field_name=field_name, original=original, translate=translate)
 
 
 class RequestStatus(PyEnum):
