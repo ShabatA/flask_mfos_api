@@ -43,17 +43,20 @@ class Content(db.Model):
         return [item for item in self.translation_contents if item.translate]
     
     def update_translation_content(self, field_name, original, translate):
-        # Locate the specific translation field
-        translation_field = next(
-            (field for field in self.translation_contents if field.field_name == field_name), 
-            None
-        )
+        """
+        Updates a specific translation field if it exists, or adds a new one if it doesn't.
+        Only updates if there are changes to the existing values.
+        """
+        # Locate the specific translation field by field_name
+        translation_field = self.translation_contents.filter_by(field_name=field_name).first()
+
         if translation_field:
-            # Update the existing translation content
-            translation_field.original = original
-            translation_field.translate = translate
+            # Check if any changes are needed
+            if (translation_field.original != original or translation_field.translate != translate):
+                translation_field.original = original
+                translation_field.translate = translate
         else:
-            # Add new translation content if it does not exist
+            # Add a new translation field if it does not exist
             self.add_translation_content(field_name=field_name, original=original, translate=translate)
 
 
