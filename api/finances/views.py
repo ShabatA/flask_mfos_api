@@ -18,6 +18,8 @@ from ..models.finances import *
 from sqlalchemy import desc, func, text, and_
 import json
 from flask import make_response
+from sqlalchemy.orm import joinedload
+
 
 
 
@@ -2738,67 +2740,193 @@ class ClosePFundReleaseApproval(Resource):
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
+# @finance_namespace.route("/get_all_donors")
+# class GetAllDonorsResource(Resource):
+#     @jwt_required()
+#     def get(self):
+#         try:
+
+#             donors = Donor.query.all()
+
+#             donors_data = []
+#             for donor in donors:
+#                 donations = (
+#                     Donations.query.filter_by(donorID=donor.donorID)
+#                     .order_by(desc(Donations.createdAt))
+#                     .all()
+#                 )
+#                 donations_data = []
+#                 total_donation_amount = 0
+#                 latest_donation = None  # Initialize latest_donation variable
+#                 for donation in donations:
+#                     fund = FinancialFund.query.get(donation.fundID)
+#                     fund_details = {
+#                         "fundID": fund.fundID,
+#                         "fundName": fund.fundName,
+#                         "totalFund": fund.totalFund,
+#                     }
+#                     account = RegionAccount.query.get(donation.accountID)
+#                     account_details = {
+#                         "accountID": account.accountID,
+#                         "accountName": account.accountName,
+#                         "totalFund": float(account.totalFund),
+#                     }
+#                     if donation.projectID is not None:
+#                         project = ProjectsData.query.get(donation.projectID)
+#                     else:
+#                         project = None
+#                     if donation.caseID is not None:
+#                         case = CasesData.query.get(donation.caseID)
+#                     else:
+#                         case = None
+#                     donations_details = {
+#                         "donationID": donation.id,
+#                         "fund_account_details": fund_details,
+#                         "region_account_details": account_details,
+#                         "details": donation.details,
+#                         "currency": Currencies.query.get(
+#                             donation.currencyID
+#                         ).currencyCode,
+#                         "projectScope": donation.projectScope.value,
+#                         "donationType": donation.donationType.value,
+#                         "amount": donation.amount,
+#                         "allocationTags": donation.allocationTags,
+#                         "createdAt": donation.createdAt.isoformat(),
+#                         "project": project.serialize() if project else None,
+#                         "case": case.serialize() if case else None,
+#                     }
+#                     donations_data.append(donations_details)
+#                     total_donation_amount += donation.amount
+#                     if latest_donation is None or donation.createdAt > latest_donation:
+#                         latest_donation = donation.createdAt
+
+#                 # Fetch cases and projects the donor has contributed to
+#                 cases = (
+#                     CasesData.query.join(
+#                         Donations, CasesData.caseID == Donations.caseID
+#                     )
+#                     .filter(
+#                         Donations.donorID == donor.donorID, Donations.caseID.isnot(None)
+#                     )
+#                     .all()
+#                 )
+
+#                 projects = (
+#                     ProjectsData.query.join(
+#                         Donations, ProjectsData.projectID == Donations.projectID
+#                     )
+#                     .filter(
+#                         Donations.donorID == donor.donorID,
+#                         Donations.projectID.isnot(None),
+#                     )
+#                     .all()
+#                 )
+#                 projects_ = []
+#                 project_statuses = ProjectsData.query.filter(
+#                     ProjectsData.projectStatus == "APPROVED",                  # Approved projects only
+#                     ProjectsData.status_data != None,                          # Ensure status_data exists
+#                 ).all()
+
+#                 print(str(project_statuses))
+
+#                 # for project_st in project_statuses:
+#                 #     print(f"Project ID: {project_st.projectID}, status_data: {project_st.status_data}, type: {type(project_st.status_data)}")
+
+#                 # for case_st in case_statuses:
+#                 #     print(f"Case ID: {case_st.caseID}, status_data: {case_st.status_data}, type: {type(case_st.status_data)}")
+
+
+#                 # for project_st in project_statuses:
+#                 #     try:
+#                 #         if project_st.status_data and "donorNames" in project_st.status_data:
+#                 #             if donor.donorName in project_st.status_data["donorNames"]:
+#                 #                 projects_.append(project_st)
+#                 #     except Exception as e:
+#                 #         print(f"Error processing project {project_st.projectID}: {e}")
+
+#                 for project_st in project_statuses:
+#                     try:
+#                         if project_st.status_data and project_st.status_data.data:
+#                             status_data = project_st.status_data.data
+
+#                             # Check if donorNames exists and matches the donor name
+#                             if "donorNames" in status_data and donor.donorName in status_data["donorNames"]:
+#                                 projects_.append(project_st)
+#                     except Exception as e:
+#                         print(f"Error processing project {project_st.projectID}: {e}")
+
+
+#                 cases_ = []
+#                 # Fetch approved cases with valid status_data
+#                 case_statuses = CasesData.query.filter(
+#                         CasesData.caseStatus == "APPROVED",
+#                         # CasesData.status_data!= None,  # Correct usage
+#                         CaseStatusData.data.isnot(None)  # Correct usage
+#                 ).all()
+
+#                 for case_st in case_statuses:
+#                     try:
+#                         if case_st.case_status_data:
+#                             for status in case_st.case_status_data:
+#                                 if status.data and "donorNames" in status.data:
+#                                     if donor.donorName in status.data["donorNames"]:
+#                                         cases_.append(case_st)
+#                                         break
+#                         else:
+#                             print(f"Case ID {case_st.caseID} has no status_data.")
+#                     except Exception as e:
+#                         print(f"Error processing case {case_st.caseID}: {e}")
+
+#                 all_projects = list(set(projects + projects_))
+#                 all_cases = list(set(cases + cases_))
+
+#                 donor_info = donor.get_donor_info()
+#                 donor_info["totalDonationAmount"] = total_donation_amount
+#                 donor_info["donations"] = donations_data
+#                 donor_info["latestDonation"] = (
+#                     latest_donation.strftime("%d %b %Y") if latest_donation else None
+#                 )  # Format latest_donation as "20 Sept 2023"
+#                 donor_info["cases"] = ([case.serialize() for case in all_cases],)
+#                 donor_info["projects"] = [
+#                     project.serialize() for project in all_projects
+#                 ]
+#                 donors_data.append(donor_info)
+
+#             return {"donors": donors_data}, HTTPStatus.OK
+
+#         except Exception as e:
+#             current_app.logger.error(f"Error getting all donors: {str(e)}")
+#             return {
+#                 "message": f"Error getting all donors: {str(e)}"
+#             }, HTTPStatus.INTERNAL_SERVER_ERROR
+
 @finance_namespace.route("/get_all_donors")
 class GetAllDonorsResource(Resource):
     @jwt_required()
     def get(self):
         try:
-
+            # Fetch all donors
             donors = Donor.query.all()
-
             donors_data = []
+
             for donor in donors:
+                # Fetch all donations for this donor
                 donations = (
                     Donations.query.filter_by(donorID=donor.donorID)
                     .order_by(desc(Donations.createdAt))
                     .all()
                 )
-                donations_data = []
-                total_donation_amount = 0
-                latest_donation = None  # Initialize latest_donation variable
-                for donation in donations:
-                    fund = FinancialFund.query.get(donation.fundID)
-                    fund_details = {
-                        "fundID": fund.fundID,
-                        "fundName": fund.fundName,
-                        "totalFund": fund.totalFund,
-                    }
-                    account = RegionAccount.query.get(donation.accountID)
-                    account_details = {
-                        "accountID": account.accountID,
-                        "accountName": account.accountName,
-                        "totalFund": float(account.totalFund),
-                    }
-                    if donation.projectID is not None:
-                        project = ProjectsData.query.get(donation.projectID)
-                    else:
-                        project = None
-                    if donation.caseID is not None:
-                        case = CasesData.query.get(donation.caseID)
-                    else:
-                        case = None
-                    donations_details = {
-                        "donationID": donation.id,
-                        "fund_account_details": fund_details,
-                        "region_account_details": account_details,
-                        "details": donation.details,
-                        "currency": Currencies.query.get(
-                            donation.currencyID
-                        ).currencyCode,
-                        "projectScope": donation.projectScope.value,
-                        "donationType": donation.donationType.value,
-                        "amount": donation.amount,
-                        "allocationTags": donation.allocationTags,
-                        "createdAt": donation.createdAt.isoformat(),
-                        "project": project.serialize() if project else None,
-                        "case": case.serialize() if case else None,
-                    }
-                    donations_data.append(donations_details)
-                    total_donation_amount += donation.amount
-                    if latest_donation is None or donation.createdAt > latest_donation:
-                        latest_donation = donation.createdAt
 
-                # Fetch cases and projects the donor has contributed to
+                # Serialize donation details
+                donations_data = [donation.track_serialize() for donation in donations]
+
+                # Calculate total donation amount and find the latest donation date
+                total_donation_amount = sum(donation["amount"] for donation in donations_data)
+                latest_donation = max(
+                    (donation["createdAt"] for donation in donations_data), default=None
+                )
+
+                # Fetch projects and cases related to the donor
                 cases = (
                     CasesData.query.join(
                         Donations, CasesData.caseID == Donations.caseID
@@ -2819,75 +2947,17 @@ class GetAllDonorsResource(Resource):
                     )
                     .all()
                 )
-                projects_ = []
-                project_statuses = ProjectsData.query.filter(
-                    ProjectsData.projectStatus == "APPROVED",                  # Approved projects only
-                    ProjectsData.status_data != None,                          # Ensure status_data exists
-                ).all()
 
-                print(str(project_statuses))
-
-                # for project_st in project_statuses:
-                #     print(f"Project ID: {project_st.projectID}, status_data: {project_st.status_data}, type: {type(project_st.status_data)}")
-
-                # for case_st in case_statuses:
-                #     print(f"Case ID: {case_st.caseID}, status_data: {case_st.status_data}, type: {type(case_st.status_data)}")
-
-
-                # for project_st in project_statuses:
-                #     try:
-                #         if project_st.status_data and "donorNames" in project_st.status_data:
-                #             if donor.donorName in project_st.status_data["donorNames"]:
-                #                 projects_.append(project_st)
-                #     except Exception as e:
-                #         print(f"Error processing project {project_st.projectID}: {e}")
-
-                for project_st in project_statuses:
-                    try:
-                        if project_st.status_data and project_st.status_data.data:
-                            status_data = project_st.status_data.data
-
-                            # Check if donorNames exists and matches the donor name
-                            if "donorNames" in status_data and donor.donorName in status_data["donorNames"]:
-                                projects_.append(project_st)
-                    except Exception as e:
-                        print(f"Error processing project {project_st.projectID}: {e}")
-
-
-                cases_ = []
-                # Fetch approved cases with valid status_data
-                case_statuses = CasesData.query.filter(
-                        CasesData.caseStatus == "APPROVED",
-                        # CasesData.status_data!= None,  # Correct usage
-                        CaseStatusData.data.isnot(None)  # Correct usage
-                ).all()
-
-                for case_st in case_statuses:
-                    try:
-                        if case_st.case_status_data:
-                            for status in case_st.case_status_data:
-                                if status.data and "donorNames" in status.data:
-                                    if donor.donorName in status.data["donorNames"]:
-                                        cases_.append(case_st)
-                                        break
-                        else:
-                            print(f"Case ID {case_st.caseID} has no status_data.")
-                    except Exception as e:
-                        print(f"Error processing case {case_st.caseID}: {e}")
-
-                all_projects = list(set(projects + projects_))
-                all_cases = list(set(cases + cases_))
-
+                # Combine case and project data
                 donor_info = donor.get_donor_info()
-                donor_info["totalDonationAmount"] = total_donation_amount
-                donor_info["donations"] = donations_data
-                donor_info["latestDonation"] = (
-                    latest_donation.strftime("%d %b %Y") if latest_donation else None
-                )  # Format latest_donation as "20 Sept 2023"
-                donor_info["cases"] = ([case.serialize() for case in all_cases],)
-                donor_info["projects"] = [
-                    project.serialize() for project in all_projects
-                ]
+                donor_info.update({
+                    "totalDonationAmount": total_donation_amount,
+                    "latestDonation": latest_donation,
+                    "donations": donations_data,
+                    "cases": [case.serialize() for case in cases],
+                    "projects": [project.serialize() for project in projects],
+                })
+
                 donors_data.append(donor_info)
 
             return {"donors": donors_data}, HTTPStatus.OK
@@ -2897,7 +2967,6 @@ class GetAllDonorsResource(Resource):
             return {
                 "message": f"Error getting all donors: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
-
 
 @finance_namespace.route("/donors/get/single/<int:donorID>")
 class GetSingleDonorResource(Resource):
