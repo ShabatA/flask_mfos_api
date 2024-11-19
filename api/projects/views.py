@@ -504,7 +504,6 @@ class ProjectAddResource(Resource):
             return {
                 "message": "Project with this name already exists"
             }, HTTPStatus.CONFLICT
-        
 
         # Create a new project instance
         new_project = ProjectsData(
@@ -532,25 +531,16 @@ class ProjectAddResource(Resource):
         # Save the project to the database
         try:
             new_project.save()
-        
+
             # Add the current user to the ProjectUsers table for the new project
             project_user = ProjectUser(
                 projectID=new_project.projectID, userID=current_user.userID
             )
             project_user.save()
 
-            user = Users.query.get(project_user.userID)
-            user_details = {
-                "userID": user.userID,
-                "userFullName": f"{user.firstName} {user.lastName}",
-                "username": user.username,
-            }
-
-
             return {
                 "message": "Project added successfully",
                 "project_id": new_project.projectID,
-                "user": user_details,
             }, HTTPStatus.CREATED
         except Exception as e:
             current_app.logger.error(f"Error adding requirements: {str(e)}")
@@ -576,7 +566,7 @@ class ProjectAddResource(Resource):
             # Update the project fields
             existing_project.projectName = project_data["projectName"]
             existing_project.regionID = project_data["regionID"]
-            existing_project.createdBy = current_user.userID
+            existing_project.createdBy = project_data.get("userID", existing_project.userID)
             existing_project.budgetRequired = project_data["budgetRequired"]
             existing_project.budgetApproved = project_data.get("budgetApproved", 0)
             existing_project.projectScope = project_data.get("projectScope")
@@ -602,6 +592,8 @@ class ProjectAddResource(Resource):
             )
 
             existing_project.save()
+
+            
 
             return {
                 "message": "Project updated successfully",
