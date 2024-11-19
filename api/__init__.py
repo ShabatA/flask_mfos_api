@@ -19,7 +19,7 @@ from .projects.views import (
     requirements_namespace,
     activity_namespace,
 )
-from .finances.views import finance_namespace
+from .finances.views import finance_namespace, user_budget_namespace
 from .summary.views import summary_ns
 from .translate.views import content_namespace
 
@@ -85,6 +85,7 @@ def create_app(config=config_dict["development"]):
     api.add_namespace(activity_namespace)
     api.add_namespace(summary_ns)
     api.add_namespace(content_namespace)
+    api.add_namespace(user_budget_namespace)
 
     @app.shell_context_processor
     def make_shell_context():

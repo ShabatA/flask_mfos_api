@@ -28,6 +28,12 @@ finance_namespace = Namespace(
     "Finances", description="Namespace for Finances subsystem"
 )
 
+user_budget_namespace = Namespace(
+    "UserBudget", description="Namespace for User Budget subsystem"
+)
+
+
+
 currency_model = finance_namespace.model(
     "Currency",
     {
@@ -71,18 +77,7 @@ fund_data_model = finance_namespace.model(
     },
 )
 
-add_fund_model = finance_namespace.model("AddFundModel", {
-    "userID": fields.Integer(required=True, description="ID of the user to whom funds are added"),
-    "currencyID": fields.Integer(required=True, description="ID of the currency for the transaction"),
-    "amount": fields.Float(required=True, description="Amount to be added to the user's budget"),
-    "notes": fields.String(required=False, description="Optional notes for the transaction"),
-})
 
-use_fund_model = finance_namespace.model("UseFundModel", {
-    "userID": fields.Integer(required=True, description="ID of the user whose budget will be deducted"),
-    "amount": fields.Float(required=True, description="Amount to be used from the user's budget"),
-    "notes": fields.String(required=False, description="Optional notes for the transaction"),
-})
 
 sub_fund_data_model = finance_namespace.model(
     "SubFinancialFundData",
@@ -336,11 +331,7 @@ fund_transfer_model = finance_namespace.model(
     },
 )
 
-transfer_to_user_budget_model = finance_namespace.model('TransferToUserBudget', {
-    'userID': fields.Integer(required=True, description='The ID of the user'),
-    'currencyID': fields.Integer(required=True, description='The ID of the currency'),
-    'amount': fields.Float(required=True, description='The amount to transfer')
-})
+
 
 project_funds_model = finance_namespace.model(
     "ProjectFunds",
@@ -2078,152 +2069,43 @@ class GetAllFundReleaseRequests(Resource):
 
 
 
-@finance_namespace.route("/transfer_to_user_budget")
-class TransferToUserBudget(Resource):
-    @jwt_required()
-    @finance_namespace.expect(transfer_to_user_budget_model)
-    def post(self):
-        try:
+
+
+# @finance_namespace.route("/transfer_to_user_budget")
+# class TransferToUserBudget(Resource):
+#     @jwt_required()
+#     @finance_namespace.expect(transfer_to_user_budget_model)
+#     def post(self):
+#         try:
             
-            request_data = request.json
+#             request_data = request.json
 
-            user = Users.query.get_or_404(request_data["userID"])
+#             user = Users.query.get_or_404(request_data["userID"])
             
-            existing_budget = UserBudget.query.filter_by(userID=user.userID).first()
-            if not existing_budget:
-                budget = UserBudget(
-                    userID=user.userID,
-                    currencyID= request_data["currencyID"]
-                )
+#             existing_budget = UserBudget.query.filter_by(userID=user.userID).first()
+#             if not existing_budget:
+#                 budget = UserBudget(
+#                     userID=user.userID,
+#                     currencyID= request_data["currencyID"]
+#                 )
 
-                budget.save()
-                budget.add_fund(request_data['amount'])
-            else:
-                existing_budget.add_fund(request_data['amount'])
+#                 budget.save()
+#                 budget.add_fund(request_data['amount'])
+#             else:
+#                 existing_budget.add_fund(request_data['amount'])
 
-            return {
-                "message": "Transfer made successfully.",
-                "budget_details": budget.get_fund_balance(),
-            }, HTTPStatus.OK
+#             return {
+#                 "message": "Transfer made successfully.",
+#                 "budget_details": budget.get_fund_balance(),
+#             }, HTTPStatus.OK
 
-        except Exception as e:
-            current_app.logger.error(f"Error adding request: {str(e)}")
-            return {
-                "message": f"Error adding request: {str(e)}"
-            }, HTTPStatus.INTERNAL_SERVER_ERROR
-
-@finance_namespace.route('/transfer_to_user_budget2')
-class TransferToUserBudget2(Resource):
-    @jwt_required()
-    @finance_namespace.expect(user_transfer_model)
-    def post(self):
-        data = finance_namespace.payload
-
-        from_type = data.get('fromType')
-        from_id = data.get('fromID')
-        to_user_id = data.get('toUserID')
-        to_fund_id = data.get('toFundID')  # New field for transferring to a fund
-        amount = data.get('amount')
-        currency_id = data.get('currencyID')
-        transfer_type = data.get('transferType')
-        notes = data.get('notes', '')
+#         except Exception as e:
+#             current_app.logger.error(f"Error adding request: {str(e)}")
+#             return {
+#                 "message": f"Error adding request: {str(e)}"
+#             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-
-        # get the current user
-        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
-
-        # Validate request data
-        if from_type not in ['user', 'fund']:
-            return {'error': 'Invalid fromType'}, 400
-
-        try:
-            transfer_data = {}
-
-            # Transfer from Fund to User Budget
-            if from_type == 'fund' and to_user_id:
-                from_fund = FinancialFund.query.get(from_id)
-                if not from_fund:
-                    return {'error': 'Source fund not found'}, 404
-
-                to_budget = UserBudget.query.filter_by(userID=to_user_id, currencyID=currency_id).first()
-                # get username of the user
-                username = Users.query.get(to_user_id).username
-
-                if not to_budget:
-                    # Create the UserBudget if it does not exist
-                    to_budget = UserBudget(userID=to_user_id, currencyID=currency_id, totalFund=0, usedFund=0, availableFund=0)
-                    db.session.add(to_budget)
-
-                # Perform the transfer from the fund to the user budget
-                transfer_id = from_fund.transfer_to_user(to_budget, amount, currency_id, current_user.userID,  transfer_type, notes)
-
-                # Check after transfer
-                db.session.refresh(to_budget)  # Refresh to see the latest state from the DB
-                transfer_data = {
-                    'from': {
-                        'type': 'fund',
-                        'fundID': from_id,
-                        'currencyID': currency_id,
-                        'amount': from_fund.availableFund,
-                    },
-                    'to': {
-                        'type': 'user',
-                        'userID': to_user_id,
-                        'username': username,
-                        'currencyID': currency_id,
-                        'amount': to_budget.availableFund,
-                    },
-                    'amount_transferred': amount,
-                    'currencyID': currency_id,
-                    'transfer_type': transfer_type,
-                    'notes': notes,
-                    'transferID': transfer_id,
-                }
-
-            # Transfer from Fund to another Fund
-            elif from_type == 'fund' and to_fund_id:
-                from_fund = FinancialFund.query.get(from_id)
-                if not from_fund:
-                    return {'error': 'Source fund not found'}, 404
-
-                to_fund = FinancialFund.query.get(to_fund_id)
-                if not to_fund:
-                    return {'error': 'Destination fund not found'}, 404
-
-                # Perform the transfer from the fund to another fund
-                transaction_id = from_fund.transfer_to_fund(to_fund, amount, currency_id, current_user.userID, transfer_type, notes)
-
-                # Refresh to check the updated balances
-                db.session.refresh(from_fund)
-                db.session.refresh(to_fund)
-
-                transfer_data = {
-                    'from': {
-                        'type': 'fund',
-                        'fundID': from_id,
-                        'currencyID': currency_id,
-                        'amount': from_fund.availableFund,
-                    },
-                    'to': {
-                        'type': 'fund',
-                        'fundID': to_fund_id,
-                        'currencyID': currency_id,
-                        'amount': to_fund.availableFund,
-                    },
-                    'amount_transferred': amount,
-                    'currencyID': currency_id,
-                    'transfer_type': transfer_type,
-                    'notes': notes,
-                    'transferID': transaction_id,
-                }
-
-            return {'message': 'Transfer successful', 'transfer_data': transfer_data}, 200
-
-        except ValueError as ve:
-            return {'error': str(ve)}, 400
-        except Exception as e:
-            return {'error': f'An unexpected error occurred: {str(e)}'}, 500
 
 
         # except ValueError as ve:
@@ -2282,30 +2164,7 @@ class TransferToUserBudget2(Resource):
 #         except Exception as e:
 #             return {'error': f'An unexpected error occurred: {str(e)}'}, 500
 
-@finance_namespace.route("/get__all_users_budget")
-class GetAllUsersBudget(Resource):
-    @jwt_required()
-    def get(self):
-        try:
-            users = Users.query.all()
-            users_budget = []
-            for user in users:
-                user_budget = UserBudget.query.filter_by(userID=user.userID).first()
-                if user_budget:
-                    user_data = {
-                        "userID": user.userID,
-                        "userFullName": f"{user.firstName} {user.lastName}",
-                        "username": user.username,
-                        "budget": user_budget.get_fund_balance(),
-                    }
-                    users_budget.append(user_data)
-            return {"users_budget": users_budget}, HTTPStatus.OK
 
-        except Exception as e:
-            current_app.logger.error(f"Error getting users budget: {str(e)}")
-            return {
-                "message": f"Error getting users budget: {str(e)}"
-            }, HTTPStatus.INTERNAL_SERVER_ERROR
 
 @finance_namespace.route("/release_project_fund_requested")
 class ReleaseProjectFundResource(Resource):
@@ -3102,53 +2961,371 @@ class GetReportByTag(Resource):
 
 
 #####################UserBudget######################
-@finance_namespace.route("/add_fund_to_user_budget")
-class AddFundToUserBudget(Resource):
+transfer_to_user_budget_model = user_budget_namespace.model('TransferToUserBudget', {
+    'userID': fields.Integer(required=True, description='The ID of the user'),
+    'currencyID': fields.Integer(required=True, description='The ID of the currency'),
+    'amount': fields.Float(required=True, description='The amount to transfer'),
+    "notes": fields.String(required=False, description="Optional notes for the transaction"),
+})
+
+# add_fund_model = finance_namespace.model("AddFundModel", {
+#     "userID": fields.Integer(required=True, description="ID of the user to whom funds are added"),
+#     "currencyID": fields.Integer(required=True, description="ID of the currency for the transaction"),
+#     "amount": fields.Float(required=True, description="Amount to be added to the user's budget"),
+    
+# })
+
+@user_budget_namespace.route("/add_balance_to_user")
+class AddBalanceToUser(Resource):
     @jwt_required()
-    @finance_namespace.expect(add_fund_model)  # Define this model with required fields such as userID, currencyID, amount, and notes (optional)
+    @user_budget_namespace.expect(transfer_to_user_budget_model)
     def post(self):
         try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            # Check if the current user is an admin
+            if not current_user.is_admin():
+                return {
+                    "message": "Access denied. Only admins are allowed to add budgets."
+                }, HTTPStatus.FORBIDDEN
+
             request_data = request.json
 
-            # Retrieve the user and their budget
-            user = Users.query.get_or_404(request_data["userID"])
-            budget = UserBudget.query.filter_by(userID=user.userID).first()
+            # Validate required fields
+            user_id = request_data.get("userID")
+            currency_id = request_data.get("currencyID")
+            amount = request_data.get("amount")
 
-            # If no existing budget, create a new one
-            if not budget:
-                budget = UserBudget(
-                    userID=user.userID,
-                    currencyID=request_data["currencyID"]
-                )
-                budget.save()
+            if not all([user_id, currency_id, amount]):
+                return {
+                    "message": "Missing required fields: userID, currencyID, or amount."
+                }, HTTPStatus.BAD_REQUEST
+
+            # Ensure amount is a positive value
+            if amount <= 0:
+                return {
+                    "message": "Amount must be greater than zero."
+                }, HTTPStatus.BAD_REQUEST
+
+            # Retrieve the user
+            user = Users.query.get_or_404(user_id)
+
+            # Retrieve or create UserBudget for the user
+            user_budget = UserBudget.query.filter_by(userID=user.userID).first()
+
+            if not user_budget:
+                # Create a new budget if it doesn't exist
+                user_budget = UserBudget(userID=user.userID, currencyID=currency_id)
+                user_budget.save()
 
             # Add funds to the budget
-            budget.add_fund(request_data["amount"])
+            user_budget.add_fund(amount)
 
-            # Create a transaction record
+            # Log the transaction
             transaction = UserBudgetTransaction(
-                fromBudgetID=None,
-                toBudgetID=budget.budgetId,
-                transferAmount=request_data["amount"],
+                fromBudgetID=None,  # No source budget for top-up
+                toBudgetID=user_budget.budgetId,
+                transferAmount=amount,
                 transferType="Top-up",
-                currencyID=request_data["currencyID"],
-                notes=request_data.get("notes", "")
+                currencyID=currency_id,
+                notes=request_data.get("notes", f"Top-up of {amount} to {user_budget.budgetId} budget"),
+                transferDate=datetime.utcnow(),
+                transactionScope=TransactionScope.USER,
+                status="COMPLETED",
             )
             transaction.save()
 
+            # Return the updated fund balance and transaction details
             return {
-                "message": "Fund added successfully.",
-                "budget_details": budget.get_fund_balance(),
+                "message": "Transfer made successfully.",
+                "budget_details": user_budget.get_fund_balance(),
+                "transaction": {
+                    "transactionID": transaction.transactionID,
+                    "transferAmount": transaction.transferAmount,
+                    "transferType": transaction.transferType,
+                    "currencyID": transaction.currencyID,
+                    "notes": transaction.notes,
+                    "transferDate": transaction.transferDate.isoformat(),
+                    "status": transaction.status,
+                },
             }, HTTPStatus.OK
 
         except Exception as e:
-            current_app.logger.error(f"Error adding fund: {str(e)}")
+            current_app.logger.error(f"Error during transfer to user budget: {str(e)}")
             return {
-                "message": f"Error adding fund: {str(e)}"
+                "message": f"Error during transfer to user budget: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@finance_namespace.route("/use_fund_from_user_budget")
-class UseFundFromUserBudget(Resource):
+transfer_from_fund_model = user_budget_namespace.model(
+    "TransferFromFundModel",
+    {
+        "fundID": fields.Integer(required=True, description="The ID of the fund to transfer from"),
+        "userID": fields.Integer(required=True, description="The ID of the user to transfer to"),
+        "amount": fields.Float(required=True, description="The amount to transfer"),
+        "notes": fields.String(required=False, description="Optional notes for the transfer"),
+    },
+)
+
+@user_budget_namespace.route("/transfer_from_fund_to_user")
+class TransferFromFundToUser(Resource):
+    @jwt_required()
+    @user_budget_namespace.expect(transfer_from_fund_model)
+    def post(self):
+        try:
+            current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+            # Check if the current user is an admin
+            if not current_user.is_admin():
+                return {
+                    "message": "Access denied. Only admins are allowed to perform this transaction."
+                }, HTTPStatus.FORBIDDEN
+
+            request_data = request.json
+
+            # Validate required fields
+            fund_id = request_data.get("fundID")
+            user_id = request_data.get("userID")
+            amount = request_data.get("amount")
+            notes = request_data.get("notes", "")  # Optional notes
+
+            if not all([fund_id, user_id, amount]):
+                return {
+                    "message": "Missing required fields: fundID, userID, or amount."
+                }, HTTPStatus.BAD_REQUEST
+
+            # Ensure amount is a positive value
+            if amount <= 0:
+                return {
+                    "message": "Amount must be greater than zero."
+                }, HTTPStatus.BAD_REQUEST
+
+            # Retrieve the fund
+            fund = FinancialFund.query.get_or_404(fund_id)
+
+            # Check if the fund has sufficient balance
+            if fund.availableBalance < amount:
+                return {
+                    "message": "Insufficient balance in the fund."
+                }, HTTPStatus.FORBIDDEN
+
+            # Retrieve the user receiving the transfer
+            recipient_user = Users.query.get_or_404(user_id)
+
+            # Retrieve or create the recipient's budget
+            recipient_budget = UserBudget.query.filter_by(userID=recipient_user.userID).first()
+            if not recipient_budget:
+                recipient_budget = UserBudget(userID=recipient_user.userID, currencyID=fund.currencyID)
+                recipient_budget.save()
+
+            # Deduct the amount from the fund and add to the user's budget
+            fund.availableBalance -= amount
+            recipient_budget.add_fund(amount)
+
+            # Log the transaction
+            transaction = UserBudgetTransaction(
+                fromFundID=fund.fundID,  # Reference the fund as the source
+                toBudgetID=recipient_budget.budgetId,
+                transferAmount=amount,
+                transferType="Fund to User",
+                currencyID=fund.currencyID,
+                notes=notes,
+                transferDate=datetime.utcnow(),
+                transactionScope=TransactionScope.USER,
+                status="COMPLETED",
+            )
+            transaction.save()
+
+            # Return the updated fund and recipient budget details
+            return {
+                "message": "Transfer from fund to user budget completed successfully.",
+                "fund_details": {
+                    "fundID": fund.fundID,
+                    "availableBalance": fund.availableBalance,
+                },
+                "recipient_budget_details": recipient_budget.get_fund_balance(),
+                "transaction": {
+                    "transactionID": transaction.transactionID,
+                    "fromFundID": transaction.fromFundID,
+                    "toBudgetID": transaction.toBudgetID,
+                    "transferAmount": transaction.transferAmount,
+                    "transferType": transaction.transferType,
+                    "currencyID": transaction.currencyID,
+                    "notes": transaction.notes,
+                    "transferDate": transaction.transferDate.isoformat(),
+                    "status": transaction.status,
+                },
+            }, HTTPStatus.OK
+
+        except Exception as e:
+            current_app.logger.error(f"Error during transfer from fund to user: {str(e)}")
+            return {
+                "message": f"Error during transfer from fund to user: {str(e)}"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@finance_namespace.route('/transfer_to_user_budget2')
+class TransferToUserBudget2(Resource):
+    @jwt_required()
+    @finance_namespace.expect(user_transfer_model)
+    def post(self):
+        data = finance_namespace.payload
+
+        from_type = data.get('fromType')
+        from_id = data.get('fromID')
+        to_user_id = data.get('toUserID')
+        to_fund_id = data.get('toFundID')  # New field for transferring to a fund
+        amount = data.get('amount')
+        currency_id = data.get('currencyID')
+        transfer_type = data.get('transferType')
+        notes = data.get('notes', '')
+
+
+
+        # get the current user
+        current_user = Users.query.filter_by(username=get_jwt_identity()).first()
+
+        # Validate request data
+        if from_type not in ['user', 'fund']:
+            return {'error': 'Invalid fromType'}, 400
+
+        try:
+            transfer_data = {}
+
+            # Transfer from Fund to User Budget
+            if from_type == 'fund' and to_user_id:
+                from_fund = FinancialFund.query.get(from_id)
+                if not from_fund:
+                    return {'error': 'Source fund not found'}, 404
+
+                to_budget = UserBudget.query.filter_by(userID=to_user_id, currencyID=currency_id).first()
+                # get username of the user
+                username = Users.query.get(to_user_id).username
+
+                if not to_budget:
+                    # Create the UserBudget if it does not exist
+                    to_budget = UserBudget(userID=to_user_id, currencyID=currency_id, totalFund=0, usedFund=0, availableFund=0)
+                    db.session.add(to_budget)
+
+                # Perform the transfer from the fund to the user budget
+                transfer_id = from_fund.transfer_to_user(to_budget, amount, currency_id, current_user.userID,  transfer_type, notes)
+
+                # Check after transfer
+                db.session.refresh(to_budget)  # Refresh to see the latest state from the DB
+                transfer_data = {
+                    'from': {
+                        'type': 'fund',
+                        'fundID': from_id,
+                        'currencyID': currency_id,
+                        'amount': from_fund.availableFund,
+                    },
+                    'to': {
+                        'type': 'user',
+                        'userID': to_user_id,
+                        'username': username,
+                        'currencyID': currency_id,
+                        'amount': to_budget.availableFund,
+                    },
+                    'amount_transferred': amount,
+                    'currencyID': currency_id,
+                    'transfer_type': transfer_type,
+                    'notes': notes,
+                    'transferID': transfer_id,
+                }
+
+            # Transfer from Fund to another Fund
+            elif from_type == 'fund' and to_fund_id:
+                from_fund = FinancialFund.query.get(from_id)
+                if not from_fund:
+                    return {'error': 'Source fund not found'}, 404
+
+                to_fund = FinancialFund.query.get(to_fund_id)
+                if not to_fund:
+                    return {'error': 'Destination fund not found'}, 404
+
+                # Perform the transfer from the fund to another fund
+                transaction_id = from_fund.transfer_to_fund(to_fund, amount, currency_id, current_user.userID, transfer_type, notes)
+
+                # Refresh to check the updated balances
+                db.session.refresh(from_fund)
+                db.session.refresh(to_fund)
+
+                transfer_data = {
+                    'from': {
+                        'type': 'fund',
+                        'fundID': from_id,
+                        'currencyID': currency_id,
+                        'amount': from_fund.availableFund,
+                    },
+                    'to': {
+                        'type': 'fund',
+                        'fundID': to_fund_id,
+                        'currencyID': currency_id,
+                        'amount': to_fund.availableFund,
+                    },
+                    'amount_transferred': amount,
+                    'currencyID': currency_id,
+                    'transfer_type': transfer_type,
+                    'notes': notes,
+                    'transferID': transaction_id,
+                }
+
+            return {'message': 'Transfer successful', 'transfer_data': transfer_data}, 200
+
+        except ValueError as ve:
+            return {'error': str(ve)}, 400
+        except Exception as e:
+            return {'error': f'An unexpected error occurred: {str(e)}'}, 500
+
+# @finance_namespace.route("/add_fund_to_user_budget")
+# class AddFundToUserBudget(Resource):
+#     @jwt_required()
+#     @finance_namespace.expect(add_fund_model)  # Define this model with required fields such as userID, currencyID, amount, and notes (optional)
+#     def post(self):
+#         try:
+#             request_data = request.json
+
+#             # Retrieve the user and their budget
+#             user = Users.query.get_or_404(request_data["userID"])
+#             budget = UserBudget.query.filter_by(userID=user.userID).first()
+
+#             # If no existing budget, create a new one
+#             if not budget:
+#                 budget = UserBudget(
+#                     userID=user.userID,
+#                     currencyID=request_data["currencyID"]
+#                 )
+#                 budget.save()
+
+#             # Add funds to the budget
+#             budget.add_fund(request_data["amount"])
+
+#             # Create a transaction record
+#             transaction = UserBudgetTransaction(
+#                 fromBudgetID=None,
+#                 toBudgetID=budget.budgetId,
+#                 transferAmount=request_data["amount"],
+#                 transferType="Top-up",
+#                 currencyID=request_data["currencyID"],
+#                 notes=request_data.get("notes", "")
+#             )
+#             transaction.save()
+
+#             return {
+#                 "message": "Fund added successfully.",
+#                 "budget_details": budget.get_fund_balance(),
+#             }, HTTPStatus.OK
+
+#         except Exception as e:
+#             current_app.logger.error(f"Error adding fund: {str(e)}")
+#             return {
+#                 "message": f"Error adding fund: {str(e)}"
+#             }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+use_fund_model = user_budget_namespace.model("UseFundModel", {
+    "userID": fields.Integer(required=True, description="ID of the user whose budget will be deducted"),
+    "amount": fields.Float(required=True, description="Amount to be used from the user's budget"),
+    "notes": fields.String(required=False, description="Optional notes for the transaction"),
+})
+@user_budget_namespace.route("/withdrawal_fund_from_user")
+class WithdrawalFundFromUser(Resource):
     @jwt_required()
     @finance_namespace.expect(use_fund_model)  # Define this model with required fields such as userID, amount, and notes (optional)
     def post(self):
@@ -3174,7 +3351,9 @@ class UseFundFromUserBudget(Resource):
                 transferAmount=request_data["amount"],
                 transferType="Withdrawal",
                 currencyID=budget.currencyID,
-                notes=request_data.get("notes", "")
+                notes=request_data.get("notes", ""),
+                transactionScope=TransactionScope.USER,
+                status="COMPLETED",
             )
             transaction.save()
 
@@ -3193,11 +3372,13 @@ class UseFundFromUserBudget(Resource):
                 "message": f"Error using fund: {str(e)}"
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@finance_namespace.route("/user_budget_transaction_history/<int:user_id>")
+
+@user_budget_namespace.route("/user_budget_transaction_history/<int:user_id>")
 class UserBudgetTransactionHistory(Resource):
     @jwt_required()
     def get(self, user_id):
         try:
+            # Retrieve the user and their budget
             user = Users.query.get_or_404(user_id)
             budget = UserBudget.query.filter_by(userID=user.userID).first()
 
@@ -3212,11 +3393,22 @@ class UserBudgetTransactionHistory(Resource):
                 (UserBudgetTransaction.toBudgetID == budget.budgetId)
             ).all()
 
+            # Helper function to retrieve user details by budget ID
+            def get_user_by_budget_id(budget_id):
+                if budget_id is None:
+                    return None
+                budget = UserBudget.query.get(budget_id)
+                if budget:
+                    user = Users.query.get(budget.userID)
+                    return {"userID": user.userID, "username": user.username} if user else None
+                return None
+
+            # Format the transaction history
             transaction_history = [
                 {
                     "transactionID": txn.transactionID,
-                    "fromBudgetID": txn.fromBudgetID,
-                    "toBudgetID": txn.toBudgetID,
+                    "fromUser": get_user_by_budget_id(txn.fromBudgetID),  # User details for fromBudgetID
+                    "toUser": get_user_by_budget_id(txn.toBudgetID),      # User details for toBudgetID
                     "transferAmount": txn.transferAmount,
                     "transferType": txn.transferType,
                     "currencyID": txn.currencyID,
@@ -3238,145 +3430,27 @@ class UserBudgetTransactionHistory(Resource):
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
 
+@user_budget_namespace.route("/get_all_users_budget")
+class GetAllUsersBudget(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            users = Users.query.all()
+            users_budget = []
+            for user in users:
+                user_budget = UserBudget.query.filter_by(userID=user.userID).first()
+                if user_budget:
+                    user_data = {
+                        "userID": user.userID,
+                        "userFullName": f"{user.firstName} {user.lastName}",
+                        "username": user.username,
+                        "budget": user_budget.get_fund_balance(),
+                    }
+                    users_budget.append(user_data)
+            return {"users_budget": users_budget}, HTTPStatus.OK
 
-# @finance_namespace.route('/get_all_region_accounts')
-# class GetAllRegionAccount(Resource):
-#     @jwt_required()
-#     def get(self):
-#         try:
-
-#             region_accounts = RegionAccount.query.all()
-#             accounts_data = []
-
-#             for account in region_accounts:
-#                 project_funds = ProjectFunds.query.filter_by(accountID= account.accountID).all()
-#                 case_funds = CaseFunds.query.filter_by(accountID= account.accountID).all()
-#                 donations = Donations.query.filter_by(accountID=account.accountID).order_by(desc(Donations.createdAt)).all()
-#                 project_funds_data = []
-#                 case_funds_data = []
-#                 donations_data = []
-#                 for fund in project_funds:
-#                     project = ProjectsData.query.get(fund.projectID)
-#                     project_data = {'projectID': project.projectID, 'projectName': project.projectName, 'budgetApproved': project.budgetApproved,
-#                                     'category': project.category.value, 'status': project.projectStatus.value, 'startDate': project.startDate.isoformat() if project.startDate else None,
-#                                     'solution': project.solution, 'dueDate': project.dueDate.isoformat() if project.dueDate else None}
-#                     fund_details = {
-#                         'fundID': fund.fundID,
-#                         'project_details': project_data,
-#                         'fundsAllocated': fund.fundsAllocated
-#                     }
-#                     project_funds_data.append(fund_details)
-
-#                 for fund in case_funds:
-#                     case = CasesData.query.get(fund.caseID)
-#                     case_data = {'caseID': case.caseID, 'caseName': case.caseName, 'budgetApproved': case.budgetApproved,
-#                                     'category': case.category.value, 'status': case.caseStatus.value, 'startDate': case.startDate.isoformat() if case.startDate else None,
-#                                     'dueDate': case.dueDate.isoformat() if case.dueDate else None}
-#                     fund_details = {
-#                         'fundID': fund.fundID,
-#                         'case_details': case_data,
-#                         'fundsAllocated': fund.fundsAllocated
-#                     }
-#                     case_funds_data.append(fund_details)
-
-#                 for donation in donations:
-#                     fund = FinancialFund.query.get(donation.fundID)
-#                     fund_details = {'fundID': fund.fundID, 'fundName': fund.fundName, 'totalFund': fund.totalFund}
-#                     donations_details = {
-#                         'donationID': donation.id,
-#                         'fund_account_details': fund_details,
-#                         'details': donation.details,
-#                         'currency': donation.currency,
-#                         'field': donation.field,
-#                         'amount': donation.amount,
-#                         'createdAt': donation.createdAt.isoformat()
-#                     }
-#                     donations_data.append(donations_details)
-
-#                 account_details = {
-#                     'accountID': account.accountID,
-#                     'accountName': account.accountName,
-#                     'totalFund': account.totalFund,
-#                     'usedFund': account.usedFund,
-#                     'currency': account.currency,
-#                     'accountType': account.accountType,
-#                     'notes': account.notes,
-#                     'lastTransaction': account.lastTransaction.isoformat() if account.lastTransation else None,
-#                     'health_funds': account.health_funds,
-#                     'education_funds': account.education_funds,
-#                     'general_funds': account.general_funds,
-#                     'shelter_funds': account.shelter_funds,
-#                     'sponsorship_funds': account.sponsorship_funds,
-#                     'donations': donations_data,
-#                     'funded_projects': project_funds_data,
-#                     'funded_cases': case_funds_data
-#                 }
-#                 accounts_data.append(account_details)
-
-#             return {'all_accounts': accounts_data}, HTTPStatus.OK
-
-#         except Exception as e:
-#             current_app.logger.error(f"Error getting all region accounts: {str(e)}")
-#             return {'message': f'Error getting all region accounts: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
-
-# @finance_namespace.route('/get_all_financial_funds')
-# class GetAllFinancialFunds(Resource):
-#     @jwt_required()
-#     def get(self):
-#         try:
-#             fund_accounts = FinancialFund.query.all()
-#             accounts_data = []
-
-#             for fund in fund_accounts:
-#                 donations = Donations.query.filter_by(fundID=fund.fundID).order_by(desc(Donations.createdAt)).all()
-#                 donations_data = []
-#                 for donation in donations:
-#                     account = RegionAccount.query.get(donation.accountID)
-#                     account_details = {'accountID': account.accountID, 'accountName': account.accountName, 'totalFund': account.totalFund}
-#                     donations_details = {
-#                         'donationID': donation.id,
-#                         'region_account_details': account_details,
-#                         'details': donation.details,
-#                         'currency': donation.currency,
-#                         'field': donation.field,
-#                         'amount': donation.amount,
-#                         'createdAt': donation.createdAt.isoformat()
-#                     }
-#                     donations_data.append(donations_details)
-
-#                 payments = Payments.query.filter_by(from_fund=fund.fundID).order_by(desc(Payments.createdAt)).all()
-#                 payments_data = []
-#                 for payment in payments:
-#                     payment_details = {
-#                         'paymentID': payment.paymentID,
-#                         'paymentName': payment.paymentName,
-#                         'paymentMethod': payment.paymentMethod,
-#                         'notes': payment.notes,
-#                         'amount': payment.amount,
-#                         'currency': payment.currency,
-#                         'transferExpenses': payment.transferExpenses,
-#                         'exchangeRate': payment.exchangeRate,
-#                         'supportingFiles': payment.supportingFiles,
-#                         'createdAt': payment.createdAt.isoformat()
-#                     }
-#                     payments_data.append(payment_details)
-
-#                 account_details = {
-#                     'fundID': fund.fundID,
-#                     'fundName': fund.fundName,
-#                     'totalFund': fund.totalFund,
-#                     'usedFund': fund.usedFund,
-#                     'currency': fund.currency,
-#                     'accountType': fund.accountType,
-#                     'notes': fund.notes,
-#                     'createdAt': fund.createdAt.isoformat(),
-#                     'donations': donations_data,
-#                     'payments': payments_data
-#                 }
-#                 accounts_data.append(account_details)
-
-#             return {'fund_accounts': accounts_data}
-
-#         except Exception as e:
-#             current_app.logger.error(f"Error getting all financial fund accounts: {str(e)}")
-#             return {'message': f'Error getting all financial fund accounts: {str(e)}'}, HTTPStatus.INTERNAL_SERVER_ERROR
+        except Exception as e:
+            current_app.logger.error(f"Error getting users budget: {str(e)}")
+            return {
+                "message": f"Error getting users budget: {str(e)}"
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
