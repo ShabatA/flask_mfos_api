@@ -3101,7 +3101,7 @@ class TransferFromFundToUser(Resource):
             fund = FinancialFund.query.get_or_404(fund_id)
 
             # Check if the fund has sufficient balance
-            if fund.availableBalance < amount:
+            if fund.availableFund < amount:
                 return {
                     "message": "Insufficient balance in the fund."
                 }, HTTPStatus.FORBIDDEN
@@ -3116,7 +3116,7 @@ class TransferFromFundToUser(Resource):
                 recipient_budget.save()
 
             # Deduct the amount from the fund and add to the user's budget
-            fund.availableBalance -= amount
+            fund.availableFund -= amount
             recipient_budget.add_fund(amount)
 
             # Log the transaction
@@ -3138,7 +3138,7 @@ class TransferFromFundToUser(Resource):
                 "message": "Transfer from fund to user budget completed successfully.",
                 "fund_details": {
                     "fundID": fund.fundID,
-                    "availableBalance": fund.availableBalance,
+                    "availableFund": fund.availableFund,
                 },
                 "recipient_budget_details": recipient_budget.get_fund_balance(),
                 "transaction": {
