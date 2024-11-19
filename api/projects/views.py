@@ -566,7 +566,7 @@ class ProjectAddResource(Resource):
             # Update the project fields
             existing_project.projectName = project_data["projectName"]
             existing_project.regionID = project_data["regionID"]
-            existing_project.createdBy = project_data.get("userID", existing_project.userID)
+            existing_project.createdBy = project_data.get("createdBy", existing_project.createdBy)
             existing_project.budgetRequired = project_data["budgetRequired"]
             existing_project.budgetApproved = project_data.get("budgetApproved", 0)
             existing_project.projectScope = project_data.get("projectScope")
