@@ -1573,7 +1573,7 @@ class Donor(db.Model):
         donor_info["latestDonation"] = (
             latest_donation.strftime("%d %b %Y") if latest_donation else None
         )  # Format latest_donation as "20 Sept 2023"
-        donor_info["cases"] = ([case.serialize() for case in all_cases],)
+        donor_info["cases"] = [case.serialize() for case in all_cases]
         donor_info["projects"] = [project.serialize() for project in all_projects]
 
         return donor_info
