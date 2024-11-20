@@ -1525,9 +1525,13 @@ class Donor(db.Model):
             .filter(Donations.donorID == self.donorID, Donations.projectID.isnot(None))
             .all()
         )
+
         projects_ = []
         project_statuses = ProjectsData.query.filter_by(projectStatus="APPROVED").all()
         for project_st in project_statuses:
+            if project_st.status_data is None:
+                print(f"Project {project_st.projectID} has no status_data.")
+                continue
             if project_st.status_data.data.get("donorNames") is None:
                 continue
             if self.donorName in project_st.status_data.data.get("donorNames"):
@@ -1536,10 +1540,29 @@ class Donor(db.Model):
         cases_ = []
         case_statuses = CasesData.query.filter_by(caseStatus="APPROVED").all()
         for case_st in case_statuses:
+            if case_st.status_data is None:
+                print(f"Case {case_st.caseID} has no status_data.")
+                continue
             if case_st.status_data.data.get("donorNames") is None:
                 continue
             if self.donorName in case_st.status_data.data.get("donorNames"):
                 cases_.append(case_st)
+
+        # projects_ = []
+        # project_statuses = ProjectsData.query.filter_by(projectStatus="APPROVED").all()
+        # for project_st in project_statuses:
+        #     if project_st.status_data.data.get("donorNames") is None:
+        #         continue
+        #     if self.donorName in project_st.status_data.data.get("donorNames"):
+        #         projects_.append(project_st)
+
+        # cases_ = []
+        # case_statuses = CasesData.query.filter_by(caseStatus="APPROVED").all()
+        # for case_st in case_statuses:
+        #     if case_st.status_data.data.get("donorNames") is None:
+        #         continue
+        #     if self.donorName in case_st.status_data.data.get("donorNames"):
+        #         cases_.append(case_st)
 
         all_projects = list(set(projects + projects_))
         all_cases = list(set(cases + cases_))
