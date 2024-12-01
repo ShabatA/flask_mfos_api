@@ -934,11 +934,11 @@ class SubFundCreateResource(Resource):
 
             if len(fund_data["currencies"]) > 0:
                 for currency in fund_data["currencies"]:
-                    new_balance = SubFundCurrencyBalance(
-                        subFundID=new_fund.subFundID, currencyID=currency
-                    )
-                    new_balance.save()
-                    if currency != 1:
+                    # new_balance = SubFundCurrencyBalance(
+                    #     subFundID=new_fund.subFundID, currencyID=currency
+                    # )
+                    # new_balance.save()
+                    if currency:
                         balance = SubFundCurrencyBalance(
                             subFundID=new_fund.subFundID, currencyID=currency
                         )
