@@ -1181,7 +1181,7 @@ class AddDonationResource(Resource):
                         "message": "Sub-fund balance not found for the given currency."
                     }, HTTPStatus.NOT_FOUND
             
-            sub_fund_balance.save()
+            # sub_fund_balance.save()
 
             db.session.commit()
 
