@@ -1310,19 +1310,27 @@ class SingleRegionAccountSummaryResource(Resource):
     def get(self, account_id, currency_conversion):
         try:
             account = RegionAccount.query.get_or_404(account_id)
+
+            # Fetch all sub-funds related to the account
+            # sub_funds = SubFunds.query.filter_by(fundID=account.accountID).all()
+
+
+
             account_data = {
                 "accountID": account.accountID,
                 "accountName": account.accountName,
                 "lastUpdate": account.lastUpdate.isoformat(),
                 "availableCurrencies": account.get_available_currencies(),
                 "balances": account.get_fund_balance(currency_conversion),
+                # "subFundBalance": sub_fund_balance,
                 "transactions": account.get_account_transactions(),
                 "scope_percentages": account.get_scope_percentages(),
                 "scope_balances": account.get_category_balances(),
                 "donations": account.get_all_donations(),
             }
-            
             return {"account": account_data}, HTTPStatus.OK
+
+            
         except Exception as e:
             current_app.logger.error(f"Error getting account summary: {str(e)}")
             return {
@@ -1378,7 +1386,7 @@ class SingleFinancialFundSummaryResource(Resource):
                 "fundName": fund.fundName,
                 "lastUpdate": fund.lastUpdate.isoformat(),
                 "availableCurrencies": fund.get_available_currencies(),
-                "subFunds": fund.get_all_sub_funds(),
+                "subFunds": fund.get_all_sub_funds2(currency_conversion),
                 "donations": fund.get_all_donations(),
                 "transfers_out": [transfer.out_transfer_serialize(currency_conversion) for transfer in transfers_out],
                 "transfers_in": [transfer.in_transfer_serialize(currency_conversion) for transfer in transfers_in],

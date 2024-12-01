@@ -869,6 +869,7 @@ class SubFundCurrencyBalance(db.Model):
         except Exception as e:
             db.session.rollback()
             raise e
+    
 
     def delete(self):
         try:
@@ -1019,6 +1020,48 @@ class FinancialFund(db.Model):
                 "currencyID": sub_fund.currencyID,
             }
             sub_funds_info.append(sub_fund_info)
+        return sub_funds_info
+    
+    def get_all_sub_funds2(self, currencyID):
+        # get currency
+        currency = Currencies.query.get(currencyID)
+        if currencyID == 1:
+            sub_funds = self.subFunds
+            sub_funds_info = []
+            for sub_fund in sub_funds:
+                sub_fund_info = {
+                    "subFundID": sub_fund.subFundID,
+                    "fundID": sub_fund.fundID,
+                    "subFundName": sub_fund.subFundName,
+                    "accountType": sub_fund.accountType,
+                    "totalFund": sub_fund.totalFund,
+                    "usedFund": sub_fund.usedFund,
+                    "availableFund": sub_fund.availableFund,
+                    "notes": sub_fund.notes,
+                    "createdAt": sub_fund.createdAt.isoformat(),
+                    "currencyID": sub_fund.currencyID,
+                }
+                sub_funds_info.append(sub_fund_info)
+            # raise ValueError("Invalid currencyID")
+        else:
+            # get currency rate
+            currency_rate = currency.exchangeRateToUSD
+            sub_funds = self.subFunds
+            sub_funds_info = []
+            for sub_fund in sub_funds:
+                sub_fund_info = {
+                    "subFundID": sub_fund.subFundID,
+                    "fundID": sub_fund.fundID,
+                    "subFundName": sub_fund.subFundName,
+                    "accountType": sub_fund.accountType,
+                    "totalFund": sub_fund.totalFund/currency_rate,
+                    "usedFund": sub_fund.usedFund/currency_rate,
+                    "availableFund": sub_fund.availableFund/currency_rate,
+                    "notes": sub_fund.notes,
+                    "createdAt": sub_fund.createdAt.isoformat(),
+                    "currencyID": sub_fund.currencyID,
+                }
+                sub_funds_info.append(sub_fund_info)
         return sub_funds_info
 
     def get_all_donations(self):
@@ -1318,6 +1361,27 @@ class SubFunds(db.Model):
             }
 
         return {"totalFund": 0, "usedFund": 0, "availableFund": 0}
+    
+    def get_fund_balance2(self, currencyID=None):
+        if currencyID is None:
+            return {
+                "totalFund": self.totalFund,
+                "usedFund": self.usedFund,
+                "availableFund": self.availableFund,
+            }
+        else:
+            # get currency
+            currency = Currencies.query.get(currencyID)
+            if currency:
+                exchange_rate = currency.exchangeRateToUSD
+                total_fund = self.totalFund * exchange_rate
+                used_fund = self.usedFund * exchange_rate
+                available_fund = self.availableFund * exchange_rate
+                return {
+                    "totalFund": total_fund,
+                    "usedFund": used_fund,
+                    "availableFund": available_fund,
+                }
 
     def save(self):
         db.session.add(self)
