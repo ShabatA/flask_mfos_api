@@ -967,7 +967,7 @@ class FinancialFund(db.Model):
     
     def get_fund_balance(self, currencyID):
         currency = Currencies.query.get(currencyID)
-        if currencyID == 1:
+        if currencyID is None or currencyID == 1:
             return {
                 "totalFund": self.totalFund,
                 "usedFund": self.usedFund,
