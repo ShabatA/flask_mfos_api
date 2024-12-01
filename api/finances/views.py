@@ -1167,7 +1167,7 @@ class AddDonationResource(Resource):
             )
             new_donation.save()
 
-            # Update the sub-fund balance
+            # Update the sub-fund currency balance
             if sub_fund:
                 sub_fund_balance = SubFundCurrencyBalance.query.filter_by(
                     subFundID=sub_fund_id, currencyID=donation_data["currencyID"]
@@ -1180,6 +1180,17 @@ class AddDonationResource(Resource):
                     return {
                         "message": "Sub-fund balance not found for the given currency."
                     }, HTTPStatus.NOT_FOUND
+                
+                # Update the Sub Fund balance
+                # get the currency rate from dolar to the currency
+                currency = Currencies.query.get_or_404(donation_data["currencyID"])
+                exchange_rate = currency.exchangeRateToUSD
+                # convert the amount to USD
+                amount_usd = donation_data["amount"] / exchange_rate
+                sub_fund.totalFund += amount_usd
+                sub_fund.availableFund += amount_usd
+                sub_fund.save()
+
             
             # sub_fund_balance.save()
 
