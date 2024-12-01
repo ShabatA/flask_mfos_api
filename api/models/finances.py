@@ -1043,7 +1043,7 @@ class FinancialFund(db.Model):
     def get_all_sub_funds2(self, currencyID):
         # get currency
         currency = Currencies.query.get(currencyID)
-        if currencyID == 1:
+        if currencyID == 1 or currencyID is None:
             sub_funds = self.subFunds
             sub_funds_info = []
             for sub_fund in sub_funds:
