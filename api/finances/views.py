@@ -932,16 +932,15 @@ class SubFundCreateResource(Resource):
             )
             new_fund.save()
 
-            new_balance = SubFundCurrencyBalance(
-                subFundID=new_fund.subFundID, currencyID=1
-            )
-            new_balance.save()
-
             if len(fund_data["currencies"]) > 0:
                 for currency in fund_data["currencies"]:
+                    new_balance = SubFundCurrencyBalance(
+                        subFundID=new_fund.subFundID, currencyID=currency
+                    )
+                    new_balance.save()
                     if currency != 1:
                         balance = SubFundCurrencyBalance(
-                            subFundID=new_fund.subFundID, currencyID=1
+                            subFundID=new_fund.subFundID, currencyID=currency
                         )
                         balance.save()
         except Exception as e:
