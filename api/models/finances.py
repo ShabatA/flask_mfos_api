@@ -304,24 +304,55 @@ class RegionAccount(db.Model):
         transaction.save()
 
     def get_fund_balance(self, currencyID=None):
-        if currencyID is None:
+        # currecy
+        currency = Currencies.query.get(currencyID)
+        if currencyID == 1:
             return {
                 "totalFund": self.totalFund,
                 "usedFund": self.usedFund,
                 "availableFund": self.availableFund,
             }
-
-        balance = RegionAccountCurrencyBalance.query.filter_by(
-            accountID=self.accountID, currencyID=currencyID
-        ).first()
-        if balance:
-            return {
-                "totalFund": float(balance.totalFund),
-                "usedFund": float(balance.usedFund),
-                "availableFund": float(balance.availableFund),
+        else:
+            # get currency rate
+            currency_rate = currency.exchangeRateToUSD
+            return{
+                "totalFund": self.totalFund * currency_rate,
+                "usedFund": self.usedFund * currency_rate,
+                "availableFund": self.availableFund * currency_rate,
             }
+        # if currencyID is None:
+        #     return {
+        #         "totalFund": self.totalFund,
+        #         "usedFund": self.usedFund,
+        #         "availableFund": self.availableFund,
+        #     }
+        # else:
+        #     currency = Currencies.query.get(currencyID)
+        #     if currency:
+        #         # get currency rate
+        #         return{
+        #             ""
+                    
+        #         }
+        
+        # else:
+        #     currency = Currencies.query.get(currencyID)
+        #     # get currency rate
+        #     return{
+                
+        #     }
 
-        return {"totalFund": 0, "usedFund": 0, "availableFund": 0}
+        # balance = RegionAccountCurrencyBalance.query.filter_by(
+        #     accountID=self.accountID, currencyID=currencyID
+        # ).first()
+        # if balance:
+        #     return {
+        #         "totalFund": float(balance.totalFund),
+        #         "usedFund": float(balance.usedFund),
+        #         "availableFund": float(balance.availableFund),
+        #     }
+
+        # return {"totalFund": 0, "usedFund": 0, "availableFund": 0}
 
     def get_scope_percentages(self):
         if self.usedFund == 0:
