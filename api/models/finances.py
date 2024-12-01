@@ -304,55 +304,25 @@ class RegionAccount(db.Model):
         transaction.save()
 
     def get_fund_balance(self, currencyID=None):
-        # currecy
-        currency = Currencies.query.get(currencyID)
-        if currencyID == 1:
+        if currencyID is None:
             return {
                 "totalFund": self.totalFund,
                 "usedFund": self.usedFund,
                 "availableFund": self.availableFund,
             }
-        else:
-            # get currency rate
-            currency_rate = currency.exchangeRateToUSD
-            return{
-                "totalFund": self.totalFund * currency_rate,
-                "usedFund": self.usedFund * currency_rate,
-                "availableFund": self.availableFund * currency_rate,
-            }
-        # if currencyID is None:
-        #     return {
-        #         "totalFund": self.totalFund,
-        #         "usedFund": self.usedFund,
-        #         "availableFund": self.availableFund,
-        #     }
-        # else:
-        #     currency = Currencies.query.get(currencyID)
-        #     if currency:
-        #         # get currency rate
-        #         return{
-        #             ""
-                    
-        #         }
         
-        # else:
-        #     currency = Currencies.query.get(currencyID)
-        #     # get currency rate
-        #     return{
-                
-        #     }
 
-        # balance = RegionAccountCurrencyBalance.query.filter_by(
-        #     accountID=self.accountID, currencyID=currencyID
-        # ).first()
-        # if balance:
-        #     return {
-        #         "totalFund": float(balance.totalFund),
-        #         "usedFund": float(balance.usedFund),
-        #         "availableFund": float(balance.availableFund),
-        #     }
+        balance = RegionAccountCurrencyBalance.query.filter_by(
+            accountID=self.accountID, currencyID=currencyID
+        ).first()
+        if balance:
+            return {
+                "totalFund": float(balance.totalFund),
+                "usedFund": float(balance.usedFund),
+                "availableFund": float(balance.availableFund),
+            }
 
-        # return {"totalFund": 0, "usedFund": 0, "availableFund": 0}
+        return {"totalFund": 0, "usedFund": 0, "availableFund": 0}
 
     def get_scope_percentages(self):
         if self.usedFund == 0:
@@ -994,26 +964,43 @@ class FinancialFund(db.Model):
         except IntegrityError:
             db.session.rollback()
             raise ValueError("An error occurred while using funds. Please try again.")
-
-    def get_fund_balance(self, currencyID=None):
-        if currencyID is None:
+    
+    def get_fund_balance(self, currencyID):
+        currency = Currencies.query.get(currencyID)
+        if currencyID == 1:
             return {
                 "totalFund": self.totalFund,
                 "usedFund": self.usedFund,
                 "availableFund": self.availableFund,
             }
-
-        sub_fund_balance = FinancialFundCurrencyBalance.query.filter_by(
-            fundID=self.fundID, currencyID=currencyID
-        ).first()
-        if sub_fund_balance:
-            return {
-                "totalFund": sub_fund_balance.totalFund,
-                "usedFund": sub_fund_balance.usedFund,
-                "availableFund": sub_fund_balance.availableFund,
+        else:
+            # get currency rate
+            currency_rate = currency.exchangeRateToUSD
+            return{
+                "totalFund": self.totalFund * currency_rate,
+                "usedFund": self.usedFund * currency_rate,
+                "availableFund": self.availableFund * currency_rate,
             }
 
-        return {"totalFund": 0, "usedFund": 0, "availableFund": 0}
+    # def get_fund_balance(self, currencyID=None):
+    #     if currencyID is None:
+    #         return {
+    #             "totalFund": self.totalFund,
+    #             "usedFund": self.usedFund,
+    #             "availableFund": self.availableFund,
+    #         }
+
+    #     sub_fund_balance = FinancialFundCurrencyBalance.query.filter_by(
+    #         fundID=self.fundID, currencyID=currencyID
+    #     ).first()
+    #     if sub_fund_balance:
+    #         return {
+    #             "totalFund": sub_fund_balance.totalFund,
+    #             "usedFund": sub_fund_balance.usedFund,
+    #             "availableFund": sub_fund_balance.availableFund,
+    #         }
+
+    #     return {"totalFund": 0, "usedFund": 0, "availableFund": 0}
 
     def _convert_to_default_currency(self, amount, currencyID):
         # Implement the logic to convert amount to default currency using exchange rates
