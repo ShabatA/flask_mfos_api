@@ -929,6 +929,7 @@ class SubFundCreateResource(Resource):
                 subFundName=fund_data["fundName"],
                 notes=fund_data.get("notes", ""),
                 accountType=fund_data["accountType"],
+
             )
             new_fund.save()
 
@@ -1165,6 +1166,20 @@ class AddDonationResource(Resource):
 
             )
             new_donation.save()
+
+            # Update the sub-fund balance
+            if sub_fund:
+                sub_fund_balance = SubFundCurrencyBalance.query.filter_by(
+                    subFundID=sub_fund_id, currencyID=donation_data["currencyID"]
+                ).first()
+                if sub_fund_balance:
+                    sub_fund_balance.totalFund += donation_data["amount"]
+                    sub_fund_balance.availableFund += donation_data["amount"]
+                    db.session.commit()
+                else:
+                    return {
+                        "message": "Sub-fund balance not found for the given currency."
+                    }, HTTPStatus.NOT_FOUND
 
             db.session.commit()
 
