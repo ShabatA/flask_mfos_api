@@ -1047,6 +1047,11 @@ class FinancialFund(db.Model):
             sub_funds = self.subFunds
             sub_funds_info = []
             for sub_fund in sub_funds:
+                # get sub fund balance
+                # sub_fund_balance = SubFundCurrencyBalance.query.filter_by(
+                #     subFundID=sub_fund.subFundID, currencyID=currencyID
+                # ).first()
+                # for 
                 sub_fund_info = {
                     "subFundID": sub_fund.subFundID,
                     "fundID": sub_fund.fundID,
